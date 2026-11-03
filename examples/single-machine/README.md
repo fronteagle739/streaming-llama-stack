@@ -66,10 +66,18 @@ the prefill carry in the cache tail, eight-split expert reads, MTP off. Exact 10
 |---|---:|---:|
 | Max quality | 26.74 tok/s | byte-identical to the native Q8 reference |
 | Balanced, initial reference | same unbiased routing | conservative until a machine-local sweep selects an intermediate value |
-| Max speed, bias 0.35 | 46.74 tok/s | deliberate routing tradeoff: KL 0.0372, top-1 92.58% on 256 forced rows |
+| Explicit bias 0.35, historical qualified build | 46.74 tok/s | deliberate routing tradeoff: KL 0.0372, top-1 92.58% on 256 forced rows |
+| Explicit bias0.35, accepted quiet installed control | 46.2537 tok/s | exact100K recall/guard PASS; installed-build KL/top-1 unmeasured |
+| Max speed, bias 0.68, historical pre-install build | 50.12 tok/s | deliberate routing tradeoff: KL 0.137, top-1 88.3%; no installed-build GUI/timing test at this bias |
 
-Prefill is 4,573 tok/s in the latest default-only 100K run; the three-run combined
-candidate median was 4,625 tok/s. Three deployed GUI checks at bias
+The historical default-only 100K run measured prefill 4,573 tok/s; the three-run combined
+candidate median was4,625tok/s. Final accepted quiet installed control measured
+4,439.86 prefill and25.2482 Max quality tok/s; the regression investigation is
+closed by owner decision, with roughly3% residual prefill read-path difference
+unexplained and roadmap-only. The earlier installed r2 remains historical.
+The owner selected
+Max speed 0.68 on 2026-11-03 and explicitly requested no new 0.68 inference tests.
+The 0.68 historical row predates the installed build. Three historical GUI checks at bias
 0.35 stopped naturally; this is sampled evidence, not a guarantee for every prompt. Keep the pack
 on a fast NVMe volume. MTP and the RAM expert tier remain available but are off
 in these measured defaults because their tested configurations lost throughput.
@@ -85,11 +93,12 @@ The QFN example uses the qualified 3 GiB physical host budget and 6 GiB
 free-memory floor. Its 40 GiB Windows commit cap includes WDDM accounting;
 the physical-RAM guardian still applies and page-file capacity is never used.
 DSV4.1 retains its delivered 0 / 0.35 / 1.36125 points and QFN starts at
-0 / 0 / 0.35; the initial QFN Balanced value is intentionally identified as
+0 / 0 / 0.68; the initial QFN Balanced value is intentionally identified as
 uncalibrated. Numeric QFN requests still accept the full [0,8] range.
 
 Settings marked `reference-settings` are measured reference choices, not an
 automatic calibration of the current machine. Recalibrate after changing
 hardware, storage, model weights, quantisation, context, cache or kernels; see
-[CALIBRATION.md](CALIBRATION.md). A sweep must report KL/top-1, warm throughput,
-cache hits and natural generation stops before replacing local settings.
+[CALIBRATION.md](CALIBRATION.md). A new machine-local calibration sweep must report KL/top-1, warm throughput,
+cache hits and natural generation stops. The shipped 0.68 Max speed selection is
+an explicit owner override from historical 100K evidence, not a new machine calibration.

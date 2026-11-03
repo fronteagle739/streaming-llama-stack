@@ -7,7 +7,7 @@ module adds HTTP, Bearer authentication, the shared GPU lease while the engine i
 graceful shutdown. One request runs at a time (the engine holds one sequence).
 
 Quality/speed: request field `quality_speed` = "max_quality" (the full model, router bias 0), "max_speed" (bias
-0.35 toward experts already in VRAM) or a number (the bias itself); default from the config
+0.68 toward experts already in VRAM) or a number (the bias itself); default from the config
 key `qfn_quality_speed`.
 
 Sampling fields (including typical_p, repeat_penalty/repeat_last_n, presence_penalty,
@@ -30,10 +30,10 @@ import time
 
 from .config import ROOT
 
-# The QFN speed preset uses the measured lower router penalty: the DSV4.1
-# dial endpoint caused repetitive, nonterminating QFN chats. Numeric requests
-# still accept the full original bias range for explicit experiments.
-MAX_SPEED_BIAS = 0.35
+# Owner-selected Max speed uses the historical 100K bias-0.68 measurement.
+# It has no installed-build natural-stop qualification; the owner requested
+# no new inference tests. Numeric requests retain the full original range.
+MAX_SPEED_BIAS = 0.68
 EXE = 'bin/qfn-engine.exe'
 
 

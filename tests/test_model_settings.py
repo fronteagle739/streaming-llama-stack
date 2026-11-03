@@ -45,3 +45,16 @@ def test_wrong_model_profile_fails_and_numeric_request_range_remains_available()
     with pytest.raises(ValueError):model_settings.apply(dict(model_settings=profile('dsv41')),'qfn')
     assert bias_of(8,profile('qfn')) == 8
     with pytest.raises(ValueError):bias_of(float('inf'),profile('qfn'))
+
+
+def test_owner_max_speed_setting_keeps_continuous_numeric_dial():
+    from slstack.qfn_single import bias_of
+    row = profile('qfn')
+    assert row['bias']['max_speed'] == .68
+    assert row['calibration']['selection']['max_speed']['bias'] == .68
+    assert bias_of('max_speed') == .68
+    assert bias_of('max_speed', row) == .68
+    assert bias_of('max_quality', row) == 0
+    assert bias_of('balanced', row) == 0
+    for value in (0, .175, .35, .5, .68, 1.36125, 8):
+        assert bias_of(value, row) == value

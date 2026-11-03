@@ -37,7 +37,7 @@ the user. Test listeners must bind only to `127.0.0.1`.
 ## Named modes and calibration
 
 `qfn-max-quality.ps1`, `qfn-balanced.ps1`, and `qfn-max-speed.ps1` use
-`qfn.settings.json`. Initial bias values are 0, 0, and 0.35; Balanced remains
+`qfn.settings.json`. Selected bias values are 0, 0, and 0.68; Balanced remains
 the conservative unbiased choice until a local sweep qualifies another point.
 The numeric bias capability retains its full range of 0 through 8. The settings
 also record router spreads, cache seed, half-life, tile, eight-split reads, and
@@ -46,11 +46,22 @@ See `examples/single-machine/CALIBRATION.md` for the calibration script, which
 reuses the existing full-vocabulary gate and warm timing protocol and measures
 KL, top-1 agreement, throughput, cache hits and natural generation stops.
 
-Reference hardware measurements at exactly 100,000 prompt tokens were 4,573
-tokens/s prefill, 26.74 tokens/s unbiased decode and 46.74 tokens/s decode at
-bias 0.35. The biased mode deliberately changes routing: KL 0.0372 and top-1
-92.58% on 256 forced rows. Three sampled chats stopped naturally. These are
-reference measurements, not a promise for a new machine or source build.
+The final accepted quiet installed control at exactly100,000 prompt tokens
+measured4,439.86 tokens/s prefill,25.2482 unbiased decode and46.2537 decode at
+explicit bias0.35, with100 warmup and128 measured tokens per mode on the same
+sequence, MTP off/eight read parts, recall and guarded cleanup PASS.
+The historical accepted checkpoint measured4,573.37/26.7441/46.7450 and used a
+different executable. The regression investigation is closed by owner decision;
+the remaining roughly3% prefill read-path difference is unexplained and roadmap-only.
+
+Selected Max speed0.68 uses historical preinstalled-build evidence:50.1246tok/s,
+mean KL0.137320748 and top-1 agreement88.28125% over256 full-vocabulary rows.
+No new installed-build0.68 inference was run. Current installed-build KL/top-1
+are unmeasured; do not attach historical metrics to its timing row. Numeric0.35
+and its historical sampled natural-stop evidence remain available. See the
+[complete evidence table](../README.md#performance-and-quality-evidence) and
+[portable exact100K protocol](QFN_100K_REPRO.md). These are measured reference
+points, not a promise for another machine or a fresh source build.
 
 ## Format and source provenance
 

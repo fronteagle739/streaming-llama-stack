@@ -1,6 +1,6 @@
 {
   "runtime_root": "runtime/qfn-single",
-  "model": "SET_QWEN38_FLASH_NEXT_BASALT_PATH",
+  "model": "SET_QFN_SLPACK_PATH",
   "model_name": "Qwen3.8-Flash-Next",
   "port": 8088,
   "context": 100480,

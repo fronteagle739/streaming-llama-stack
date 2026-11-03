@@ -293,11 +293,11 @@
   },
   "format": "Streaming Llama Pack v1",
   "packer": "scripts/glm53f_pack.py",
-  "packer_status": "Shared-envelope writer and native-consumer format port prepared separately with 33 CPU fixtures passing; integration adoption, native build and full-model qualification pending. Not included in this QFN package.",
+  "packer_status": "Shared-envelope writer, native-reader source and certificate compatibility port published as c8363157ff451d247a0da12b99e3ae30f78274fc;33 Python component fixtures passed, including a six-section pack verified by the independent shared reader. Adoption on the GLM task branch, native rebuild/reader/runtime fixtures, full source-derived pack and inverse certificate remain pending; not supplied by the QFN importer.",
   "expected": {
     "bytes": null,
     "sha256": null,
-    "status": "Awaiting separate GLM integration adoption, native build and full source-derived pack; no full output exists"
+    "status": "Shared-format source port and Python fixtures are complete; actual GLM checkout adoption, native build/reader qualification, full source-derived pack and inverse certificate remain pending. No measured full output identity exists."
   },
   "notes": "All source tensor fields, audio/source limitations, MTP, vision and video remain the GLM native importer responsibility; no QFN geometry is applied."
 }

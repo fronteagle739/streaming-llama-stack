@@ -81,10 +81,11 @@ copies are reusable, and differing files are never overwritten.
 
 The reference native file is131,730,218,667bytes. Its recipe records all26
 payload-section hashes and the original container's historical whole-file
-hash. The expected new-envelope SHA256 is
+hash. The independently verified new-envelope SHA256 is
 `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`,
-projected from a complete original-file hash with only its12-byte envelope
-prefix changed. Its deployed readback is still pending. A portable fresh import has different provenance
+confirmed by a complete fresh file readback after only its12-byte envelope
+prefix changed. The native reader's metadata, tokenizer and MTP admission check
+also passed. A portable fresh import has different provenance
 metadata, so its identity must be recorded from its own verified output;
 neither the old hash nor the migrated reference hash is asserted for it.
 
@@ -192,3 +193,11 @@ shared-envelope writer and native-consumer format port have been prepared
 separately, with 33 CPU fixtures passing. Their integration adoption, native
 build, full-model quality and final runtime qualification remain separate
 deliverables; that separate engine code is not included in this QFN package.
+
+The separate GLM source handoff has33 CPU fixtures. Its packer command refers
+to that separate source branch; `scripts/glm53f_pack.py` is absent from this
+QFN review tree and is not a working executable route here. Native adoption,
+build, full pack/inverse/runtime qualification and expected output size/hash
+remain pending. DSV4.1 native main plus DSpark/MTP and vision output identities
+also remain unmeasured; its pinned Q4 reference is main-only. See the exact
+qualification limits in each recipe rather than substituting that reference.

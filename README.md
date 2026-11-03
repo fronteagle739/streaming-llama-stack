@@ -8,7 +8,137 @@ model runs on a machine with 32 GB of VRAM and 32 GB of system RAM. Add a
 It ships a llama.cpp fork with streaming prefill, the ds4 decode kernels for
 DeepSeek V4.1 Flash, an OpenAI-compatible API, MCP tools and the llama.cpp web UI.
 
-## Results
+## QFN and DSV4.1: recipes, modes and measured scope
+
+The recipes pin upstream Hugging Face revisions and every source-file identity.
+QFN uses Streaming Llama Pack (`.slpack`). DSV4.1 keeps its existing GGUF main,
+DSpark/MTP and vision route. Source/model licenses remain the upstream terms.
+
+| Model | Pinned source | Recipe and format |
+| --- | --- | --- |
+| QFN | [NVIDIA Qwen3.8 Flash Next NVFP4](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-NVFP4/tree/fc694b54fb0174e0913e6adf86691ef85a4ead47) | [QFN recipe](recipes/qfn-nvfp4.json), [auxiliary recipe](recipes/qfn-auxiliary.json), [format and pack commands](docs/SLPACK_RECIPES.md) |
+| DSV4.1 | [DeepSeek V4.1 Flash 1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170) | [DSV4.1 recipe](recipes/dsv41-flash.json), [GGUF converter](docs/DSV41_GGUF.md) |
+
+QFN preserves raw NVFP4 routed-expert bytes through its native relayout. Its
+dense BF16 projections were quantized to Q6_K/Q8_0 and its FP8 PLE table to Q8_0;
+MTP, vision, profiles and explicit sampler defaults come from the pinned
+compatible auxiliary container. The complete pack is not claimed lossless
+against the raw NVIDIA checkpoint. No supported fields, samplers, arithmetic
+aliases, stop behavior, numeric bias range or MTP capability were removed.
+
+### Performance and quality evidence
+
+These are separate measured checkpoints, not a matched comparison between
+models or builds. The final accepted installed row is the quiet control A2.
+It uses the same 100K fixture, MTP off, eight read parts, and 100 discarded
+warmup plus128 measured tokens for each mode on one continuing sequence.
+Recall and guarded cleanup passed. The regression investigation is closed by
+owner decision; that disposition is distinct from a proven causal model of
+every remaining difference.
+
+| Model / measured checkpoint | Prompt and decode window | Prefill tok/s | Quality decode tok/s | Biased decode tok/s | Bias |
+| --- | --- | ---: | ---: | ---: | ---: |
+| QFN historical accepted checkpoint | Exact 100K; 100 discarded +128 measured per mode, same sequence | 4,573.37 | 26.7441 | 46.7450 | 0.35 |
+| QFN installed `.slpack`, final accepted quiet control A2 | Exact 100K; same 100+128 protocol | 4,439.86 | 25.2482 | 46.2537 | 0.35 |
+| QFN historical speed point, predating the installed build | Exact 100K; same 100+128 protocol | 4150.10 | 25.5618 | 50.1246 | 0.68 |
+| DSV4.1 historical packed-FP4 decode | 100K natural-text chat prompt; 100 discarded +899 timed steps | Not qualified here | 7.39 | 24.11 | 1.36125 |
+
+The historical accepted executable differs from the installed executable.
+Following the controlled same-pack 0.35 comparison, the owner cleared the
+engine/DLL changes as the regression cause and accepted concurrent load as
+the explanation for most of the earlier gap. The installed control spread,
+range divided by mean, was1.3311% for prefill,4.4259% for quality decode, and
+1.3186% for biased decode. The final A2 was quiet under the coordinated slot;
+this does not mean the operating system had zero CPU activity.
+
+The remaining roughly3% prefill difference from the historical checkpoint
+is below the owner's action threshold. Its read-path cause remains unexplained
+and is roadmap-only. No further workspace/storage tests are planned for this
+delivery. Workspace32 remains unproven and the default remains12. The earlier
+installed 4,326.40 /25.6518 /42.8092 row is superseded as the final acceptance
+row and is retained only in historical receipts.
+
+The selected QFN Max speed setting is now **0.68**; Max quality and the current
+conservative Balanced reference use zero. The numeric 0.35 point remains
+available with its historical evidence. The 0.68 selection is delivered, but
+no new installed-build 0.68 inference or timing was run. Its historical
+full-vocabulary test at 100K measured mean KL **0.13732**, top-1 agreement
+**88.28125%** over 256 rows and 248,320 vocabulary columns, relative to unbiased
+routing. This is an intentional routing tradeoff, not a bit-identical gate.
+Current installed-build KL/top-1 remain unmeasured and queued; the accepted
+0.35 timing row does not inherit the historical quality metrics.
+
+DSV4.1's separate older **short-prompt** 384-token sweep measured KL **0.479**
+and top-1 **84.1%** at bias 1.36125, versus unbiased routing on the same GGUF.
+Those quality values are not 100K measurements and must not be attached to the
+7.39/24.11 timing pair as though they came from one arm. Current native DSV4.1
+100K prefill, KL and top-1 remain queued. No unverified 3,917-tok/s prefill claim
+is used here. DSV4.1 reference mode biases remain 0 /0.35 /1.36125, tile 4096,
+eight read parts, ultra-cone prefill (keep 2541), and ds4-decode.
+
+### Download, pack and run
+
+Replace uppercase path placeholders with caller-selected locations. Downloads,
+outputs, caches and temporary files belong on the intended data/scratch volume.
+Do not launch conversion or hashing in a reserved timing window. Set an explicit
+host budget that fits available physical RAM above the configured floor.
+
+```text
+python scripts/download_slpack_source.py --recipe recipes/qfn-nvfp4.json --out QFN_SOURCE
+python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out QFN_AUXILIARY
+python scripts/pack_slpack.py --source QFN_SOURCE --sections-from QFN_AUXILIARY_FILE --allow-legacy-base --out QFN.slpack --scratch PACK_SCRATCH --host-budget-gib 6 --runtime-floor-gib 4
+python scripts/slpack.py QFN.slpack
+qfn-engine --pack-check --model QFN.slpack
+```
+
+Both required QFN inputs are pinned. The compatible auxiliary container is
+69,685,970,297 bytes, SHA256
+`dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c`.
+The verified migrated reference is 131,730,218,667 bytes, SHA256
+`0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`.
+A fresh canonical import has different provenance metadata; its expected
+size/hash remain null until the full raw-import proof finishes. The reference
+identity is not assigned to the unmeasured fresh output.
+
+The [exact QFN 100K reproduction guide](docs/QFN_100K_REPRO.md) includes the
+pinned public novel/tokenizer, deterministic fixture builder, all commands
+and the guarded same-sequence benchmark. The fixture reproduces the measured
+400,000 bytes exactly (SHA256
+`87fb9af861237f91724d56ca9c1a29f77c0e4aadce673ff939abe8500fa6c936`).
+Its CPU protocol checks pass, including sampler forwarding and early-EOG
+failure without extension; **native qualification of the portable wrapper is
+pending**. The guide retains the 0.35 reproduction command and explains the
+selected 0.68 mode without inventing a new measurement. Continue using the
+[calibration workflow](examples/single-machine/CALIBRATION.md) for independent
+full-vocabulary KL/top-1 and sampled natural-stop qualification.
+
+```text
+python scripts/download_slpack_source.py --recipe recipes/dsv41-flash.json --out DSV_SOURCE
+python -B scripts/convert_dsv41_gguf.py --source DSV_SOURCE --ds4-tools DS4_TOOLS --component main --execute --expert-format native-fp4 --expert-layout flashinfer-sm120-mxfp8-mxfp4-v1 --dense-format q8 --out DSV_MAIN.gguf --quants-library DS4_QUANTS_LIBRARY --host-budget-gib 8 --runtime-floor-gib 4 --threads 1
+python -B scripts/convert_dsv41_gguf.py --source DSV_SOURCE --ds4-tools DS4_TOOLS --component dspark --execute --out DSV_DSPARK.gguf --quants-library DS4_QUANTS_LIBRARY --host-budget-gib 8 --runtime-floor-gib 4 --threads 1
+python -B scripts/convert_dsv41_gguf.py --source DSV_SOURCE --ds4-tools DS4_TOOLS --component vision --execute --out DSV_VISION.gguf --host-budget-gib 8 --runtime-floor-gib 4 --threads 1
+powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mode max_quality -Context 262k
+powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mode max_speed -Context 262k
+```
+
+The DSV commands describe the supported conversion and launch route; they do
+not reproduce the historical 100K decode receipt automatically. Its exact
+historical fixture/benchmark command and a current matched 100K prefill,
+quality and speed qualification remain required. Preserve all main,
+DSpark/MTP and vision outputs. The recipe's 518,596,067,328-byte Q4 main-only
+reference, SHA256
+`2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`,
+is not the native-FP4 result or a complete auxiliary identity. Native main,
+DSpark/MTP and vision output identities remain null pending full conversion
+and qualification receipts.
+
+GLM's shared-format source port and 33 CPU fixtures are a separate branch
+handoff. Its `scripts/glm53f_pack.py` route is not present in this QFN review
+tree. Native adoption/build, full packing, inverse verification, runtime
+qualification and output size/hash remain pending. This package is not claimed
+to provide complete measured three-model download/pack/verify/run reproduction.
+
+## Other historical results
 
 DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM, plus an optional
 512 GB Mac Studio M3 Ultra for decode. Every figure below is **real text**: *I Promessi
@@ -25,7 +155,6 @@ figures are retired.
 | Model file | Prompt | Prefill (prompt clock) | Launch to first token | Decode, Max quality | Decode, Max speed |
 |---|---:|---:|---:|---:|---:|
 | Packed FP4 (tensor-core-native layout) | 200K | **43.2 s = 4,632 tok/s** | 47.2 s | **7.6-7.9 tok/s** | **22.7 tok/s** |
-| Packed FP4 | 100K | **25.5 s = 3,917 tok/s** | 28.7 s | - | - |
 | Q4_K/Q8_0 | 200K | 59.6 s = 3,356 tok/s | 63.9 s | 7.5 tok/s | 17.8 tok/s |
 
 Before this release the same FP4 200K prompt took 76.2 s (2,623 tok/s), and 100K took

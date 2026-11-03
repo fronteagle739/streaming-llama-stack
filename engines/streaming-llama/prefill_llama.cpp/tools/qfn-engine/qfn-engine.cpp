@@ -323,9 +323,10 @@ struct qfn_engine::impl {
     ggml_qfn_service_control * service_control_d = nullptr;
     cudaExternalSemaphore_t service_semaphore = nullptr; // provider-owned
     cudaGraph_t service_graph = nullptr;
-    // SM120 cuBLAS recommended workspace. Shared only by serialized model graphs,
-    // admitted before cache sizing and retained until every parent has retired.
-    static constexpr size_t service_blas_bytes = 12ull << 20;
+    // Shared only by serialized model graphs, admitted before cache sizing and
+    // retained until every parent retires. Keep12MiB as the qualified control;
+    // CUDA13.2 recommends32MiB on SM12x, subject to isolated qualification.
+    size_t service_blas_bytes = 12ull << 20;
     void * service_blas = nullptr;
     cudaGraphExec_t service_exec = nullptr;
     std::vector<cudaGraphNode_t> service_waits;
@@ -3320,6 +3321,15 @@ struct qfn_engine::impl {
     // ------------------------------------------------------------------------------------------ decode v3
     void prepare_future_service() {
         if (!v3_future || service_exec) return;
+        if (const char * value = std::getenv("QFN_FUTURE_BLAS_WORKSPACE_MIB")) {
+            char * end = nullptr;
+            const long mib = std::strtol(value, &end, 10);
+            require(*value && end && !*end && mib >= 1 && mib <= 256,
+                    "QFN_FUTURE_BLAS_WORKSPACE_MIB must be an integer from1 to256");
+            service_blas_bytes = size_t(mib) << 20;
+        }
+        log("[qfn] future service persistent cuBLAS workspace: %zu MiB; admitted before cache sizing, retained across warm parents\n",
+                service_blas_bytes >> 20);
         require(hp->n_layer > 0 && hp->n_layer <= 64 &&
                 uint64_t(hp->n_expert_used) * DEC_NMAX <= GGML_QFN_SERVICE_MAX,
                 "QFN_FUTURE_SERVICE: layer/selection geometry exceeds checked descriptor; refusing truncation");

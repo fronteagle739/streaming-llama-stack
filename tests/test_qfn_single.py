@@ -79,7 +79,7 @@ def test_chat_non_streaming_and_streaming(tmp_path):
         r = post(server, dict(messages=[dict(role='user', content='hi')], quality_speed='max_speed'))
         assert r.status == 200
         reply = json.loads(r.read())
-        assert reply['choices'][0]['message']['content'] == 'Hello bias=0.35'
+        assert reply['choices'][0]['message']['content'] == 'Hello bias=0.68'
         assert reply['choices'][0]['message']['reasoning_content'] == 'think'
         assert reply['usage']['total_tokens'] == 8
         r = post(server, dict(messages=[dict(role='user', content='hi')], stream=True))
@@ -131,7 +131,7 @@ def test_sampler_fields_reach_engine_unchanged(tmp_path, streaming, fields):
         server.server_close()
 
 
-@pytest.mark.parametrize('mode,expected', [('max_quality', 0), ('balanced', .12), ('max_speed', .35), (8, 8)])
+@pytest.mark.parametrize('mode,expected', [('max_quality', 0), ('balanced', .12), ('max_speed', .68), (8, 8)])
 def test_machine_settings_reach_chat_without_changing_samplers(tmp_path, mode, expected):
     settings = json.loads((qfn_single.ROOT/'examples/single-machine/qfn.settings.json').read_text())
     settings['bias']['balanced'] = .12

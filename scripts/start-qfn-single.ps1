@@ -5,7 +5,7 @@
 #   -Config my.local.json      local paths/ports/budgets (default: my.local.json in the clone, if present)
 #   -Port 8088                 HTTP port of the API
 #   -Context 100480            engine context (KV, index caches and the prefill carry are sized from it)
-#   -MaxSpeed                  router bias 0.35 toward experts already in VRAM (Max speed); otherwise Max quality
+#   -MaxSpeed                  router bias 0.68 toward experts already in VRAM (Max speed); otherwise Max quality
 #   -Preload                   load the engine at start instead of on the first request
 #   -Stop                      ask the running stack to shut down gracefully (POST /v1/stack/shutdown)
 param(

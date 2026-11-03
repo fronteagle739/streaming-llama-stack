@@ -519,7 +519,13 @@
     "sha256": null,
     "status": "Native conversion output identity unmeasured; Q4 reference is not a native-FP4 output hash",
     "q4_reference_bytes": 518596067328,
-    "q4_reference_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f"
+    "q4_reference_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f",
+    "q4_reference_scope": "Existing Q4_K experts/Q8_0 dense main GGUF only; does not identify native-FP4 output or its DSpark/MTP and vision sidecars.",
+    "missing_measurements": [
+      "Full source-derived native-FP4 main GGUF byte count and SHA256",
+      "DSpark/MTP and vision output byte counts and SHA256 identities for the same conversion",
+      "Completed source-to-output verification receipts binding all three component outputs"
+    ]
   },
   "components": [
     "main",
