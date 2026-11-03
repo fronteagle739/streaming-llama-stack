@@ -48,6 +48,20 @@ The recipe selects the one required container, rather than alternative model
 files in the upstream repository. MTP, vision, profiles and sampler defaults
 remain byte-preserved or explicitly resolved under the documented precedence.
 
+Use Python 3.12.10 with NumPy 2.5.0, `regex` 2026.5.9 and `psutil` 7.2.2 to
+reproduce the recorded environment. Install the pinned
+[packing requirements](../requirements-pack.txt) in an isolated environment:
+
+```text
+python -m venv .venv-pack
+.venv-pack/Scripts/python -m pip install -r requirements-pack.txt
+```
+
+On POSIX use `.venv-pack/bin/python` for the install command. For every
+subsequent Python example, use this environment's interpreter in place of
+`python`; activation or changes to the runtime environment are unnecessary.
+Dependency versions are semantic inputs to the expected pack identity.
+
 ```text
 python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out AUXILIARY_DIR
 python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out AUXILIARY_DIR --verify-only
@@ -72,9 +86,8 @@ active sampler default or source tensor fails instead of being omitted.
 
 The source importer and quantizers are vendored under
 [`scripts/slpack_qfn_source`](../scripts/slpack_qfn_source/UPSTREAM.json), with
-their original MIT notice and source hashes. Their required Python dependencies
-are NumPy, `regex` and the existing guardian's `psutil` dependency. The format
-and default provenance strings identify the new tool. Profile references in
+their original MIT notice and source hashes. The format and default provenance
+strings identify the new tool. Profile references in
 new metadata use a relative content identity. The original `OUTPUT.slpack.profile`
 sidecar is retained alongside `profiles/PROFILE_SHA256.profile`; existing exact
 copies are reusable, and differing files are never overwritten.
@@ -85,9 +98,25 @@ hash. The independently verified new-envelope SHA256 is
 `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`,
 confirmed by a complete fresh file readback after only its12-byte envelope
 prefix changed. The native reader's metadata, tokenizer and MTP admission check
-also passed. A portable fresh import has different provenance
-metadata, so its identity must be recorded from its own verified output;
-neither the old hash nor the migrated reference hash is asserted for it.
+also passed. The complete fresh raw-import verification passed on 2026-11-03:
+all 25 pinned source files were authenticated again, all 26 sections
+were regenerated, all expert inverse and HC8 checks passed, and the entire
+reference was independently read back. Its canonical output identity is:
+
+| Output scope | Bytes | SHA256 |
+| --- | --- | --- |
+| Default fresh import, canonical provenance policy1 | 131,730,218,740 | `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92` |
+| Historical-provenance reference, new envelope | 131,730,218,667 | `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe` |
+
+Compare the completed output verifier's byte count and SHA256 with
+`expected.portable_import` in the recipe. This expected identity applies to
+the pinned source and auxiliary, default model name/dense encoding and no MTP
+replacement. All nonmetadata payloads match the historical reference's section
+inventory. Canonical metadata is 8,101,620 bytes with SHA256
+`d9de7e38aed8db5b44236365f7d40f95cc70f8f9c78397a86dc405069b2cf4d1`.
+Its 73 additional bytes account for the output-length difference; the changed
+metadata digest and length also change the envelope. No second full model was
+materialized for this proof.
 
 Both required weight inputs are pinned: the original NVIDIA snapshot and the
 historical auxiliary artifact. The former missing auxiliary source dependency
@@ -105,10 +134,11 @@ output basenames therefore do not alter pack bytes. Model name, dense encoding,
 an optional MTP replacement, source contents and tool/dependency versions
 remain semantic inputs. Unknown profile runtime arguments fail explicitly.
 
-The historical reference retains its original provenance payload. A complete
-fresh import has not yet been regenerated and hashed; its size/hash remain
-null in `expected.portable_import`. The migrated reference's131,730,218,667-byte
-identity is not assigned to that unmeasured result.
+The historical reference retains its original provenance payload. Fresh
+canonical metadata changes exactly seven fields: format, version, converter
+tool and the four documented source/profile path fields. No fields were
+removed. The recipe keeps the reference identity and canonical import identity
+separate, including their different metadata-section hashes.
 
 The complete raw importer can calculate its exact new identity without a second
 full model copy:
@@ -136,11 +166,17 @@ both small profile aliases, logs and receipts remain available. Any section or
 metadata mismatch prevents a successful receipt and expected identity.
 
 The small fixture validates the virtual hash against a materialized canonical
-file, both main/MTP HC8 readback and corrupt-reference rejection. A full real
-raw-import verification is still pending archive completion and scheduler/RAM
-admission. Budget6GiB with at least4GiB physical headroom; historical conversion
-peaked around3.8GB, which is an estimate for admission rather than a measured
-peak for this mode. Plan roughly133GB source authentication reads, another
+file, both main/MTP HC8 readback and corrupt-reference rejection. The complete
+real verification passed with 6 GiB host/commit caps and a 4 GiB free-physical-RAM
+floor. Both nested guards exited successfully and confirmed cleanup; the outer
+tree's paging telemetry closed. The inner guard recorded a 4,049,231,872-byte
+peak RSS and 6,699,986,944-byte minimum available RAM. Bounded outer-tree paging
+observation peaked at 4 KiB under the unchanged 64 MiB limit; kernel ETW attribution
+was unavailable, so this does not establish zero physical pagefile I/O.
+
+Admit a 6 GiB job only with at least 10 GiB initially available physical RAM and
+retain the 4 GiB runtime floor. The observed peak is evidence for that run, not a
+guarantee for other machines. Plan roughly 133 GB source authentication reads, another
 full source conversion read, the inherited auxiliary reads and fingerprints,
 about2.3GB HC8 readback authentication, and one132GB reference pass. A fresh
 full auxiliary download verification adds70GB of reads. No full-size model

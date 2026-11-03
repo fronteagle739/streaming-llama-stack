@@ -1,0 +1,4 @@
+# QFN canonical import verification used Python 3.12.10 and these versions.
+numpy==2.5.0
+regex==2026.5.9
+psutil==7.2.2

@@ -83,6 +83,16 @@ outputs, caches and temporary files belong on the intended data/scratch volume.
 Do not launch conversion or hashing in a reserved timing window. Set an explicit
 host budget that fits available physical RAM above the configured floor.
 
+QFN packing was verified with Python3.12.10, NumPy2.5.0, `regex`2026.5.9 and
+`psutil`7.2.2. Install [requirements-pack.txt](requirements-pack.txt) in an
+isolated environment before packing, and use that interpreter for the QFN
+Python commands below (POSIX uses `.venv-pack/bin/python`):
+
+```text
+python -m venv .venv-pack
+.venv-pack/Scripts/python -m pip install -r requirements-pack.txt
+```
+
 ```text
 python scripts/download_slpack_source.py --recipe recipes/qfn-nvfp4.json --out QFN_SOURCE
 python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out QFN_AUXILIARY
@@ -96,9 +106,15 @@ Both required QFN inputs are pinned. The compatible auxiliary container is
 `dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c`.
 The verified migrated reference is 131,730,218,667 bytes, SHA256
 `0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe`.
-A fresh canonical import has different provenance metadata; its expected
-size/hash remain null until the full raw-import proof finishes. The reference
-identity is not assigned to the unmeasured fresh output.
+The complete raw import regenerated all26 sections, inverse/HC8 checks and
+canonical metadata after freshly authenticating all25 source files, then read
+back the entire reference. The verified canonical output is131,730,218,740bytes,
+SHA256 `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
+Its metadata is73bytes longer and changes exactly seven declared provenance
+fields while retaining every field. All25 nonmetadata payloads remain identical
+to the historical reference. The proof calculated the exact output identity
+without writing a second full model. Both memory guards closed successfully;
+bounded paging observation is not a claim of zero physical paging I/O.
 
 The [exact QFN 100K reproduction guide](docs/QFN_100K_REPRO.md) includes the
 pinned public novel/tokenizer, deterministic fixture builder, all commands

@@ -6,8 +6,14 @@
   importer, pinned NVIDIA and auxiliary recipes, full source/section identities,
   canonical provenance, inverse checks and explicit memory supervision. Preserve
   dense quantization provenance, MTP, vision, profiles, sampler defaults and all
-  supported runtime controls. The complete pack is not described as raw-source
-  lossless; a fresh canonical output size/hash is still pending full raw proof.
+  supported runtime controls. Complete raw-source-plus-pinned-auxiliary proof
+  passed: all25 source pins/all26 regenerated sections, inverse/HC8 and complete
+  reference readback. Canonical131,730,218,740bytes has SHA256
+  `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
+  Seven declared provenance fields retain every metadata field; no second full
+  model copy was written. Pin Python3.12.10/NumPy2.5.0/regex2026.5.9/psutil7.2.2
+  through requirements-pack.txt. Dense/PLE quantization and the explicit
+  auxiliary dependency remain; the complete pack is not raw-source lossless.
 - Add the audited exact 100K public-text fixture reconstruction and portable
   guarded stdio timing wrapper. The 400,000-byte token fixture matches exactly.
   Three CPU-only protocol cases pass; native wrapper performance qualification

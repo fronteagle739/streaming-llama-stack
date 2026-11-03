@@ -185,15 +185,31 @@
   "expected": {
     "bytes": 131730218667,
     "sha256": "0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe",
-    "status": "Reference identity projected from fully hashed original plus exact12byte envelope change; deployed full readback pending. Fresh portable-import provenance differs and needs its own output identity.",
+    "status": "Historical-provenance reference verified by complete fresh readback after the exact 12-byte envelope change, and independently read in full during successful raw-import verification. Its 26 section identities remain the reference below; fresh canonical imports use expected.portable_import.",
     "historical_container_sha256": "91bbce3986731425d54f77678d95d3cf16041348374d3ee3983e850bdd91cf20",
     "portable_import": {
-      "bytes": null,
-      "sha256": null,
-      "status": "Full raw-import verification remains pending archive completion and memory/I/O admission. Canonical provenance policy1 removes physical directory/output basenames while preserving every metadata field; successful complete regeneration plus verified reference projection is required before recording an identity.",
+      "bytes": 131730218740,
+      "sha256": "195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92",
+      "status": "VERIFIED 2026-11-03: all 25 pinned raw-source files authenticated, all 26 sections regenerated with the same importer, expert inverse and HC8 checks passed, and the reference independently read in full. The exact canonical output identity was calculated without materializing a second full model. Applies to the default model name/dense encoding and pinned auxiliary, without an MTP replacement.",
       "canonical_metadata_policy": 1,
       "verification_mode": "scripts/pack_slpack.py --verify-against REFERENCE.slpack",
-      "creates_second_full_model_copy": false
+      "creates_second_full_model_copy": false,
+      "verified_source_files": 25,
+      "verified_sections": 26,
+      "nonmetadata_payloads_match_reference": true,
+      "reference_full_readback_sha256": "0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe",
+      "meta": {
+        "offset": 131722117120,
+        "bytes": 8101620,
+        "sha256": "d9de7e38aed8db5b44236365f7d40f95cc70f8f9c78397a86dc405069b2cf4d1"
+      },
+      "environment": {
+        "python": "3.12.10",
+        "numpy": "2.5.0",
+        "regex": "2026.5.9",
+        "psutil": "7.2.2",
+        "requirements": "requirements-pack.txt"
+      }
     },
     "payload_sections": [
       {
