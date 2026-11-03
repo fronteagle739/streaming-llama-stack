@@ -36,8 +36,22 @@ explicit sampler defaults. The new converter retains this composition and
 checks compatibility. It does not substitute raw NVIDIA MTP/vision weights
 for the delivered auxiliaries.
 
+The exact default auxiliary input is now available through a separate
+[pinned dependency recipe](../recipes/qfn-auxiliary.json). Its
+[upstream source attribution](https://huggingface.co/jesdga/Qwen3.8-Flash-Next-Basalt/tree/a229744b82e18c3e12057ab944062c0c713c7006)
+identifies the unmodified historical container. Its69,685,970,297-byte file has
+SHA256 `dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c`.
+That immutable upstream LFS identity matches the independently full-hashed
+auxiliary input. The current moving branch has a different artifact; use the
+recipe's exact revision. Pin discovery downloaded metadata only, not weights.
+The recipe selects the one required container, rather than alternative model
+files in the upstream repository. MTP, vision, profiles and sampler defaults
+remain byte-preserved or explicitly resolved under the documented precedence.
+
 ```text
-python scripts/pack_slpack.py --source SOURCE_DIR --sections-from AUXILIARY.slpack --out QFN.slpack --scratch PACK_SCRATCH --host-budget-gib 6 --runtime-floor-gib 4
+python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out AUXILIARY_DIR
+python scripts/download_slpack_source.py --recipe recipes/qfn-auxiliary.json --out AUXILIARY_DIR --verify-only
+python scripts/pack_slpack.py --source SOURCE_DIR --sections-from AUXILIARY_FILE --allow-legacy-base --out QFN.slpack --scratch PACK_SCRATCH --host-budget-gib 6 --runtime-floor-gib 4
 python scripts/slpack.py QFN.slpack
 qfn-engine --pack-check --model QFN.slpack
 ```
@@ -72,13 +86,20 @@ prefix changed. Its deployed readback is still pending. A portable fresh import 
 metadata, so its identity must be recorded from its own verified output;
 neither the old hash nor the migrated reference hash is asserted for it.
 
-**Reproduction limitation:** the precise inherited auxiliary pack currently has
-no pinned distributable download recipe. Its required section sizes/hashes
-are recorded, and the converter requires it explicitly. Without that input,
-NVIDIA's download alone cannot reproduce the historical full file. No
-raw-checkpoint-only full-file reproducibility claim is made. Resolving that
-missing public auxiliary source recipe is marked `BLOCKED-OWNER` in the QFN
-recipe, rather than inventing a URL, weights or output hash.
+Both required weight inputs are pinned: the original NVIDIA snapshot and the
+historical auxiliary artifact. The former missing auxiliary source dependency
+is resolved. NVIDIA's download alone does not contain the inherited tuned
+auxiliaries, so no raw-checkpoint-only full-file reproduction claim is made.
+
+**Determinism boundary:** a fresh import uses the new format/version/tool
+metadata and relative profile references. The historical reference retains its
+original absolute profile provenance inside its unchanged metadata payload.
+Source-directory, auxiliary-file and profile-output basenames, `--name`, dense
+encoding and an optional MTP replacement are additional explicit inputs. Use
+the same inputs, basenames, options and tool/dependency versions for repeatable
+fresh imports. A full fresh import has not yet been generated and hashed; its
+size/hash remain null in `expected.portable_import`. The migrated reference's
+131,730,218,667-byte identity is not assigned to that unmeasured result.
 
 For a locally archived original NVFP4 container, a complete native relayout can
 be regenerated and checked without writing another full copy:

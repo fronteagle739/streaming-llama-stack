@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "model": "qfn-auxiliary",
+  "source": {
+    "repo": "jesdga/Qwen3.8-Flash-Next-Basalt",
+    "revision": "a229744b82e18c3e12057ab944062c0c713c7006",
+    "url": "https://huggingface.co/jesdga/Qwen3.8-Flash-Next-Basalt/tree/a229744b82e18c3e12057ab944062c0c713c7006",
+    "scope": "Selected immutable upstream auxiliary artifact, not every alternative model in that repository",
+    "files": [
+      {
+        "name": "Qwen3.8-FN-GSQ-RCO-Q2_0.basalt",
+        "bytes": 69685970297,
+        "hash_algorithm": "sha256",
+        "hash": "dee4ae542817d73e4f7a56c448ef97cb7bb47ef92b8b2c5b7721ec0e8c25f76c"
+      }
+    ],
+    "total_bytes": 69685970297
+  },
+  "attribution": "Unmodified upstream legacy container; its source repository and artifact name are retained for attribution and exact dependency identification. The generated model format is Streaming Llama Pack.",
+  "use": {
+    "packer": "scripts/pack_slpack.py",
+    "argument": "--sections-from",
+    "required_flag": "--allow-legacy-base",
+    "roles": ["mtp/*", "vision/*", "profile", "sampling defaults"],
+    "verification": "Pinned Hugging Face LFS size/SHA256 match the independently full-hashed original auxiliary file; verify the supplied file with download_slpack_source.py --verify-only before packing."
+  },
+  "weights_downloaded_for_pin_discovery": false
+}
