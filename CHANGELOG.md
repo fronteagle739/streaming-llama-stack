@@ -18,43 +18,41 @@
 - Set QFN Max speed to bias 0.68 while retaining numeric intermediate values.
 - Document QFN and DeepSeek V4.1 source links, pinned revisions, pack/run commands
   and verification in [the recipes guide](docs/SLPACK_RECIPES.md).
-- Keep GLM's separately qualified source-format handoff distinct from runnable
-  support in this tree: native adoption/build/pack/inverse/runtime/output identity
-  remain pending. DeepSeek native main/auxiliary output identities also remain
-  unmeasured. Complete three-model qualification is not claimed.
+- GLM is not supported yet.
 
 ### Performance and quality
 
 Hardware: RTX 5090 with 32 GB VRAM, 32 GB system RAM and fast local
-DirectStorage NVMe storage. Rates are tokens/s. Each decode cell lists quality
-and speed throughput; speed bias applies to the speed endpoint, while quality
-and prefill use unbiased routing. KL is relative to unbiased routing and top-1
-is agreement. A dash means no measurement is available.
+DirectStorage NVMe storage. Rates are tokens/s. Bias applies to decode;
+prefill uses unbiased routing. KL is relative to unbiased routing and top-1
+is agreement. A dash means no matching measurement is available.
 
 #### QFN
 
-| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| Prompt length | Bias | Prefill | Decode | KL | Top-1 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100,000 | 0.35 | 4,440 | 25.25 / 46.25 | — | — |
-| 100,000 | 0.68 | 4,150.10 | 25.56 / 50.12 | 0.13732 | 88.28125% |
+| 100,000 | 0 | 4,440 | 25.25 | 0 | 100.0% |
+| 100,000 | 0.35 | 4,440 | 46.25 | 0.0372 | 92.6% |
+| 100,000 | 0.68 | 4,150 | 50.12 | 0.137 | 88.3% |
 
 #### DeepSeek V4.1
 
-| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| Prompt length | Bias | Prefill | Decode | KL | Top-1 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100,000 | unrecorded | — | 7.39 / 24.11 | — | — |
-| 384 | 1.36125 | — | — | 0.479 | 84.1% |
+| 100,000 | 0 | — | — | — | — |
+| 100,000 | 0.35 | — | — | — | — |
+| 100,000 | 1.36125 | — | — | — | — |
 
 QFN timing uses 100 discarded warmup tokens and 128 measured tokens per mode
-on one continuing sequence, MTP off and eight read parts. The 100K DeepSeek
-decode window discards 100 tokens and measures 899; its 384-token quality
-measurement is separate. QFN named modes use 0 / 0 / 0.68; numeric intermediate
-values, including 0.35, remain available. DeepSeek modes use 0 / 0.35 / 1.36125.
+on one continuing sequence, MTP off and eight read parts. Full-vocabulary
+quality comparisons use the same forced continuation against bias zero.
+QFN named modes use 0 / 0 / 0.68; numeric intermediate values, including 0.35,
+remain available. DeepSeek modes use 0 / 0.35 / 1.36125.
 
 Reproduce QFN's exact fixture and timing protocol with the
 [100K guide](docs/QFN_100K_REPRO.md), and use the
 [calibration workflow](examples/single-machine/CALIBRATION.md) for KL/top-1.
 The portable timing wrapper has exact-fixture and CPU protocol checks;
-native wrapper qualification remains pending. The precise DeepSeek 100K
-fixture/benchmark command and native prefill/100K KL/top-1 measurements remain
-queued. Its 384-token quality values do not establish 100K quality.
+native wrapper qualification remains pending. DeepSeek's matching current-stack
+100K measurements are unavailable; no short-prompt result substitutes for them.
+
