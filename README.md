@@ -125,7 +125,7 @@ powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mod
 
 The DSV commands describe the supported conversion and launch route; they do
 not reproduce the 100K decode receipt automatically. Its exact
-exact fixture/benchmark command and a current matched 100K prefill,
+fixture/benchmark command and a current matched 100K prefill,
 quality and speed qualification remain required. Preserve all main,
 DSpark/MTP and vision outputs. The recipe's 518,596,067,328-byte Q4 main-only
 reference, SHA256
