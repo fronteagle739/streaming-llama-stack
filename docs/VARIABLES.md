@@ -86,11 +86,11 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llamadecode-cpu-fp4-threads` | rtx-llama: `12` | Worker threads of the packed FP4 CPU expert pool (LLAMADECODE_HOST_MODE=cpu\|mix), 1-32. Default 12: weights are read once from the locked RAM tier, so the pool is memory-bandwidth bound (measured 0.34 ms per expert at 12 threads, 0.30 at 16, 0.43 at 6 on dual-channel DDR5). |
 | `--llamadecode-engram-read-align` | Explicit runtime value | E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes. |
 | `--llamadecode-engram-scan` | Explicit runtime value | PAIRFIX: Engram read geometry. auto (default) reads a dense prompt row set as large sequential extents (gap-tolerant merge, the same rows and bytes copied) when bytes / LLAMADECODE_ENGRAM_SCAN_GBPS beats requests / LLAMADECODE_ENGRAM_IOPS; 0 keeps one random read per row; 1 forces the scan. Measured 200K real text: 2.97M random reads in 26.7 s -> 24K x 8 MiB reads in 17 s, logits bit-identical. |
-| `--llamadecode-engram-scan-depth` | Explicit runtime value | PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it). |
-| `--llamadecode-engram-scan-gap-kib` | Explicit runtime value | PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster. |
-| `--llamadecode-engram-scan-gbps` | Explicit runtime value | PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume). |
-| `--llamadecode-engram-scan-kib` | Explicit runtime value | PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4). |
-| `--llamadecode-engram-scan-rings` | Explicit runtime value | PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume. |
+| `--llamadecode-engram-scan-depth` | qfn-engine: `64` | PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it). QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena. |
+| `--llamadecode-engram-scan-gap-kib` | qfn-engine: `64` | PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster. QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena. |
+| `--llamadecode-engram-scan-gbps` | qfn-engine: `15` | PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume). QFN retains the same automatic selector, with measured wide scan defaults at 100K; random geometry remains available. |
+| `--llamadecode-engram-scan-kib` | qfn-engine: `4096` | PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4). QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena. |
+| `--llamadecode-engram-scan-rings` | qfn-engine: `1` | PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume. |
 | `--llamadecode-engram-whole-prompt` | Explicit runtime value | PAIRFIX: 1 (default) makes the early Engram load cover every sweep of a multi-sweep prompt; later sweeps reuse those rows (no Engram reads). The slstack planner admits the whole prompt's rows outside the sweep-capacity search, within physical RAM. 0 restores one load per sweep. |
 | `--llamadecode-host-async` | Explicit runtime value | Single-engine RAM expert tier data movement. 0 = original synchronous copies (stream drain per expert, uploads finish before the DirectStorage batch); 1 = VRAM-to-RAM copy-in on its own non-blocking stream with batched D2H and one event; 2 = also submit the DirectStorage batch first and upload RAM hits on a separate H2D stream while it is in flight (per-expert wait); 3 = as 2 with one event per stream. Byte-identical expert data in every level. |
 | `--llamadecode-host-cache-admit` | rtx-llama: `1` | Single-engine bounded RAM admission. Observe 32 scalar layer passes, select frequently evicted experts, then fill at most one payload per selected key until the next prefill. 0 retains an empty admitted tier for zero-hit overhead qualification; it never changes router scores at quality bias 0. |
@@ -107,7 +107,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--llama-dsv41-cast-vector` | rtx-llama: `1` | LLAMA_DSV41_CAST_VECTOR: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--llama-dsv41-cuda-graphs` | Explicit runtime value | Explicit streamed layer CUDA capture/update/replay experiment; requires compiled graph support and GGML_CUDA_DISABLE_GRAPHS=0; bounded one executable, no unsupported eager fallback. Production default remains eager. |
 | `--llama-dsv41-engram-gpu-decode` | Explicit runtime value | Upload the original 264-byte Engram rows and decode them on the GPU (bit-identical to the host decode, checked by the tile finite validator). Default enabled on the direct pinned tile path; 0 keeps the host decode and F32 upload. |
-| `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
+| `--llama-dsv41-engram-prompt-overlap` | rtx-llama: `1`; qfn-engine: `1` | LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan |
 | `--flashinfer-batch-tokens` | Explicit runtime value | Opt-in ABI4 stored-MXFP4 expert chunk size, default4096. Encoder layers0-19 may widen to8192/16384; layer20 and the cone retain4K. Attention/router GEMMs stay4K; existing fused gather/MXFP8 quantization is reused. Exact provider/graph/physical admission remains mandatory;16K has only adapter qualification. |
 | `--dsv41-fused-hc` | rtx-llama: `2` | SM120 hc=4,20-iteration Sinkhorn:2(default) imports the DeepSeek fused algorithm with bit-exact native arithmetic;0 original graph;1 official rounding experiment. Other HC settings keep the original graph. |
 | `--llama-dsv41-get-rows-scalar` | Explicit runtime value | CUDA GET_ROWS of one-element F32/F16 rows (the indexer's streaming top-k value and ID gathers): one thread per gathered element instead of one 256-thread block per element. Identical values (same index, same cast). Default 1; 0 keeps the generic kernel. |
@@ -136,6 +136,13 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--pip-cache-dir` | ds4-win: `{runtime_root}/cache/pip_cache_dir`; mac-ds4: `{runtime_root}/cache/pip_cache_dir`; rtx-llama: `{runtime_root}/cache/pip_cache_dir`; image: `{runtime_root}/cache/pip_cache_dir`; video: `{runtime_root}/cache/pip_cache_dir`; studio: `{runtime_root}/cache/pip_cache_dir`; mlx-serve: `{runtime_root}/cache/pip_cache_dir`; mac-mlx: `{runtime_root}/cache/pip_cache_dir`; mac-llama: `{runtime_root}/cache/pip_cache_dir`; mac-mference: `{runtime_root}/cache/pip_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--pythondontwritebytecode` | ds4-win: `1`; mac-ds4: `1`; rtx-llama: `1`; image: `1`; video: `1`; studio: `1`; mlx-serve: `1`; mac-mlx: `1`; mac-llama: `1`; mac-mference: `1` | Keep inference offline and avoid global cache/bytecode writes. |
 | `--pythonpath` | ds4-win: `{library_pythonpath}`; mac-ds4: `{library_pythonpath}`; rtx-llama: `{library_pythonpath}`; image: `{library_pythonpath}`; video: `{library_pythonpath}`; studio: `{library_pythonpath}`; mlx-serve: `{library_pythonpath}`; mac-mlx: `{library_pythonpath}`; mac-llama: `{library_pythonpath}`; mac-mference: `{library_pythonpath}` | The stack and its vendored engine module paths. |
+| `--qfn-mmq-stream-k` | Explicit runtime value | 0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ;1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported. |
+| `--qfn-moe-chunk` | Explicit runtime value | Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly. |
+| `--qfn-moe-pass` | Explicit runtime value | 0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden. |
+| `--qfn-fused-expert-reduce` | Explicit runtime value | Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path. |
+| `--qfn-paired-gdn` | Explicit runtime value | Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; default off, refuses unsupported layouts, retains original scalar/reference path and all sampling/state capabilities. |
+| `--qfn-prefill-release-cache` | Explicit runtime value | 0/1: independently release the VRAM decode slab before prefill and restore identical capacity/prompt-ranked entries from the experts pack afterward. Unset follows QFN_MOE_PASS. Reload/reseed time counts toward TTFT; no capacity reduction fallback. |
+| `--qfn-v3-eager-op-trace` | Explicit runtime value | Optional eager-operation trace for QFN v3 diagnostics. Requires QFN_V3_CUDA_GRAPH=0 explicitly; capture is never silently disabled to permit tracing. |
 | `--studio-comfyui-path` | ds4-win: `{comfyui_models}`; mac-ds4: `{comfyui_models}`; rtx-llama: `{comfyui_models}`; image: `{comfyui_models}`; video: `{comfyui_models}`; studio: `{comfyui_models}`; mlx-serve: `{comfyui_models}` | User-selected existing ComfyUI model folder; checkpoints and LoRAs remain in place. |
 | `--studio-cosmos-python` | ds4-win: `{studio_python}`; mac-ds4: `{studio_python}`; rtx-llama: `{studio_python}`; image: `{studio_python}`; video: `{studio_python}`; studio: `{studio_python}`; mlx-serve: `{studio_python}` | Pinned media runtime Python. |
 | `--studio-cosmos-windows-path` | ds4-win: `{streaming_root}`; mac-ds4: `{streaming_root}`; rtx-llama: `{streaming_root}`; image: `{streaming_root}`; video: `{streaming_root}`; studio: `{streaming_root}`; mlx-serve: `{streaming_root}` | Vendored streaming engine source directory. |
@@ -161,6 +168,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--xdg-cache-home` | ds4-win: `{runtime_root}/cache/xdg_cache_home`; mac-ds4: `{runtime_root}/cache/xdg_cache_home`; rtx-llama: `{runtime_root}/cache/xdg_cache_home`; image: `{runtime_root}/cache/xdg_cache_home`; video: `{runtime_root}/cache/xdg_cache_home`; studio: `{runtime_root}/cache/xdg_cache_home`; mlx-serve: `{runtime_root}/cache/xdg_cache_home`; mac-mlx: `{runtime_root}/cache/xdg_cache_home`; mac-llama: `{runtime_root}/cache/xdg_cache_home`; mac-mference: `{runtime_root}/cache/xdg_cache_home` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-global-cache-dir` | ds4-win: `{runtime_root}/cache/zig_global_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_global_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_global_cache_dir`; image: `{runtime_root}/cache/zig_global_cache_dir`; video: `{runtime_root}/cache/zig_global_cache_dir`; studio: `{runtime_root}/cache/zig_global_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_global_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_global_cache_dir`; mac-llama: `{runtime_root}/cache/zig_global_cache_dir`; mac-mference: `{runtime_root}/cache/zig_global_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
 | `--zig-local-cache-dir` | ds4-win: `{runtime_root}/cache/zig_local_cache_dir`; mac-ds4: `{runtime_root}/cache/zig_local_cache_dir`; rtx-llama: `{runtime_root}/cache/zig_local_cache_dir`; image: `{runtime_root}/cache/zig_local_cache_dir`; video: `{runtime_root}/cache/zig_local_cache_dir`; studio: `{runtime_root}/cache/zig_local_cache_dir`; mlx-serve: `{runtime_root}/cache/zig_local_cache_dir`; mac-mlx: `{runtime_root}/cache/zig_local_cache_dir`; mac-llama: `{runtime_root}/cache/zig_local_cache_dir`; mac-mference: `{runtime_root}/cache/zig_local_cache_dir` | Runtime-local cache/temp directory; no model download is performed. |
+| `--qfn-native-nvfp4-share-gu-input` | Explicit runtime value | Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending. |
 
 Budget placeholders use the admitted child budget: `{host_budget_bytes}`, `{host_budget_mb}`, `{physical_floor_bytes}` (admission) and `{runtime_floor_bytes}` (runtime). `{host_budget_gib}` and `{min_available_gib}` use GiB. User overrides are literal strings, including JSON and braces.
 
@@ -1999,6 +2007,78 @@ CUDA_PATH: advanced engine setting; built-in default retained
 
 Scope: image, video. Class: advanced.
 
+Source: `engines/qfn-basalt-nvfp4/attention-parity.py:91`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+def abi_checks():
+    import os
+    home=Path(os.environ.get('CUDA_PATH','C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'))
+    directories=[os.add_dll_directory(str(p)) for p in (home/'bin',home/'bin/x64') if p.is_dir()]
+    try:
+        path=HERE.parent.parent/'bin/qfn-basalt-nvfp4.dll';before=hashlib.sha256(path.read_bytes()).hexdigest()
+        lib=C.CDLL(str(path));abi,_,query,run=bind_api(lib);assert abi()==1
+```
+
+Source: `engines/qfn-basalt-nvfp4/calibrated-parity.py:77`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+
+def abi_checks():
+    home=Path(__import__('os').environ.get('CUDA_PATH','C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'))
+    dirs=[__import__('os').add_dll_directory(str(p)) for p in (home/'bin',home/'bin/x64') if p.is_dir()]
+    try:
+        lib=C.CDLL(str(HERE.parent.parent/'bin/qfn-basalt-nvfp4.dll'))
+        abi,_,query,run=bind_api(lib);assert abi()==1
+```
+
+Source: `engines/qfn-basalt-nvfp4/mmq-parity.py:295`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+    # Reuse the old host-only checks; no context, device query or prepare.
+    result=base.abi_checks()
+    home=Path(__import__('os').environ.get('CUDA_PATH','C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'))
+    dirs=[__import__('os').add_dll_directory(str(p)) for p in (home/'bin',home/'bin/x64') if p.is_dir()]
+    try:
+        lib=C.CDLL(str(HERE.parent.parent/'bin/qfn-basalt-nvfp4.dll'))
+        abi,_,query,_=bind_api(lib);assert abi()==1
+```
+
+Source: `engines/qfn-basalt-nvfp4/parity.py:125`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+    # Loading cudart imports does not initialize a CUDA context. Only these two
+    # exports run: pure host ABI/query; never prepare/run/a CUDA runtime function.
+    home = Path(os.environ.get("CUDA_PATH", "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2"))
+    paths = [p for p in (home / "bin", home / "bin/x64") if p.is_dir()]
+    directories = [os.add_dll_directory(str(p)) for p in paths]
+    try:
+        lib = C.CDLL(str(HERE.parent.parent / "bin/qfn-basalt-nvfp4.dll"))
+```
+
+Source: `engines/qfn-basalt-nvfp4/parity.py:154`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+class CUDA:
+    def __init__(self):
+        home = Path(os.environ.get("CUDA_PATH", "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2"))
+        candidates = sorted((home / "bin").glob("cudart64_*.dll")) + sorted((home / "bin/x64").glob("cudart64_*.dll"))
+        if len(candidates) != 1:
+            raise RuntimeError(f"Need exactly one CUDA runtime: {candidates}")
+        self.dll_dir = os.add_dll_directory(str(candidates[0].parent))
+```
+
+Source: `engines/qfn-basalt-nvfp4/qsa-parity.py:54`. Unset read: 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'.
+
+```text
+    # Pure host shape/alignment failures are checked before any runtime call.
+    directories=[]
+    home=Path(__import__('os').environ.get('CUDA_PATH','C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2'))
+    for p in (home/'bin',home/'bin/x64'):
+        if p.is_dir(): directories.append(__import__('os').add_dll_directory(str(p)))
+    try:
+        lib=C.CDLL(str(HERE.parent.parent/'bin/qfn-basalt-nvfp4.dll'))
+```
+
 Source: `vendor/engines/cosmos_windows/weight_streaming/ds_backend.py:32`. Unset read: None.
 
 ```text
@@ -3049,7 +3129,7 @@ DS4_BENCH_REQUIRE_CACHED_API: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:15481`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15529`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         !responses_reasoning_state_preserved;
@@ -8573,18 +8653,6 @@ DS4_CUDA_MMQ_Q81_PERSISTENT: advanced engine setting; built-in default retained
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_cuda.cu:1135`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-                    "ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\n");
-        } else if (g_n_gpus > 1 &&
-                   getenv("DS4_CUDA_MMQ_Q81_PERSISTENT") != NULL) {
-            fprintf(stderr,
-                    "ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\n");
-        } else {
-            int device = 0;
-```
-
 Source: `engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -8597,7 +8665,7 @@ Source: `engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356`. Unset read: NULL from getenv;
             fprintf(stderr, "ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; "
 ```
 
-Source: `engines/ds4-win/ds4_cuda.cu:1993`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_cuda.cu:1135`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                     "ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\n");
@@ -8619,6 +8687,18 @@ Source: `engines/ds4-win/cuda/mmq/ds4_mmq.cu:362`. Unset read: NULL from getenv;
         cudaError_t err = cudaMalloc(&g_q81_scratch_ptr, bytes);
         if (err != cudaSuccess) {
             fprintf(stderr, "ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; "
+```
+
+Source: `engines/ds4-win/ds4_cuda.cu:1993`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                    "ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\n");
+        } else if (g_n_gpus > 1 &&
+                   getenv("DS4_CUDA_MMQ_Q81_PERSISTENT") != NULL) {
+            fprintf(stderr,
+                    "ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\n");
+        } else {
+            int device = 0;
 ```
 
 ### DS4_CUDA_MMQ_X_MAX
@@ -11039,18 +11119,6 @@ DS4_CUDA_NO_DIRECT_IO: advanced engine setting; built-in default retained
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_cuda.cu:4413`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
-
-```text
-        }
-#if defined(__linux__) && defined(O_DIRECT)
-        if (getenv("DS4_CUDA_NO_DIRECT_IO") == NULL) {
-            char proc_path[64];
-            snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
-            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);
-            if (direct_fd >= 0) {
-```
-
 Source: `engines/ds4-mac/cuda/mmq/ds4_repack.cu:72`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
@@ -11063,10 +11131,10 @@ Source: `engines/ds4-mac/cuda/mmq/ds4_repack.cu:72`. Unset read: NULL from geten
         if (direct_fd >= 0) {
 ```
 
-Source: `engines/ds4-win/ds4_cuda.cu:9510`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_cuda.cu:4413`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
-#endif
+        }
 #if defined(__linux__) && defined(O_DIRECT)
         if (getenv("DS4_CUDA_NO_DIRECT_IO") == NULL) {
             char proc_path[64];
@@ -11085,6 +11153,18 @@ Source: `engines/ds4-win/cuda/mmq/ds4_repack.cu:88`. Unset read: NULL from geten
         snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", m.fd);
         int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);
         if (direct_fd >= 0) {
+```
+
+Source: `engines/ds4-win/ds4_cuda.cu:9510`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+#endif
+#if defined(__linux__) && defined(O_DIRECT)
+        if (getenv("DS4_CUDA_NO_DIRECT_IO") == NULL) {
+            char proc_path[64];
+            snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
+            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);
+            if (direct_fd >= 0) {
 ```
 
 ### DS4_CUDA_NO_EXACT_SCORE_SPLIT_DECODE
@@ -18869,7 +18949,7 @@ DS4_DEBUG_LEVERS: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:18434`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:18482`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     s.enable_cors = cfg.enable_cors;
@@ -18887,7 +18967,7 @@ DS4_DEBUG_LEVERS_FILE: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:17348`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:17396`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool server_debug_levers_enabled(const server *s) {
@@ -22899,9 +22979,9 @@ Source: `engines/ds4-win/ds4_dstorage.cpp:64`. Unset read: NULL from getenv; the
 
 DirectStorage request split for each expert read: default 8 parts; 0 or 1 disables splitting, 2..64 selects the part count.
 
-Scope: ds4-win, rtx-llama. Class: advanced.
+Scope: ds4-win, rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6697`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // split into read_parts equal 4 KiB-unit subreads.
@@ -22911,6 +22991,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
         const uint32_t p = (uint32_t) (v <= 1 ? 1 : std::min<long>(v, 64));
         fprintf(stderr, "LLAMADECODE_MISS_READ_PARTS read_parts=%u source=%s\n", p, e && *e ? "DS4_DS_READ_PARTS" : "ds4-default");
         return p;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4478`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        // expert-miss extents: one DirectStorage request per extent part (a 1.32 MiB expert is one request,
+        // >= 256 KiB as the RAID measurements require); the fetcher's default splits into 8 parts
+        if (!std::getenv("DS4_DS_READ_PARTS")) _putenv_s("DS4_DS_READ_PARTS", "8");
+        require(p->pack.open(opts.model, err), err);
+        p->hp = &p->pack.hp;
+        // Native-packed NVFP4 decode default, the DSV4.1 method: packed-vector FP4 kernels on the bytes prefill streams,
+        // one model graph and one service graph per token. Explicit settings win; MTP keeps the segmented path.
 ```
 
 ### DS4_DS_SELFTEST
@@ -26939,7 +27031,7 @@ DS4_KV_CANARY_FAIL_TEST: upstream engine control; no launcher default is imposed
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:16993`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:17041`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
  * computed exactly as in a release build, so both share cache entries. */
@@ -26951,7 +27043,7 @@ static bool server_canary_forced_failure(char *err, size_t err_len) {
 }
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25519`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25567`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * verdict releases waiters with the cache off. */
@@ -26963,7 +27055,7 @@ Source: `engines/ds4-mac/ds4_server.c:25519`. Unset read: Wrapper/conditional de
     setenv("DS4_KV_CANARY_FAIL_TEST", "1", 1);
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25521`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25569`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     unsetenv("DS4_KV_CANARY_FAIL_TEST");
@@ -26975,7 +27067,7 @@ Source: `engines/ds4-mac/ds4_server.c:25521`. Unset read: Wrapper/conditional de
                 strstr(herr, "DS4_KV_CANARY_FAIL_TEST"));
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25523`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25571`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     setenv("DS4_KV_CANARY_FAIL_TEST", "0", 1);
@@ -26987,7 +27079,7 @@ Source: `engines/ds4-mac/ds4_server.c:25523`. Unset read: Wrapper/conditional de
     s.batched_mode = false;
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25574`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     TEST_ASSERT(server_canary_forced_failure(herr, sizeof(herr)) &&
@@ -27017,7 +27109,7 @@ static bool kv_cache_ladder_enabled(void) {
 typedef struct {
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25861`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:25909`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
      * inside the 32768 dense window scores 32768/4096 = 8x and outranks the
@@ -27029,7 +27121,7 @@ Source: `engines/ds4-mac/ds4_server.c:25861`. Unset read: NULL from getenv; the 
     TEST_ASSERT(dir != NULL);
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25862`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25910`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * 2x cold anchor, so the old expectation inverts. */
@@ -27041,7 +27133,7 @@ Source: `engines/ds4-mac/ds4_server.c:25862`. Unset read: Wrapper/conditional de
     if (!dir) { if (ladder_prev) setenv("DS4_KV_LADDER", ladder_prev, 1); else unsetenv("DS4_KV_LADDER"); return; }
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25866`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25914`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     char *dir = mkdtemp(tmpl);
@@ -27053,7 +27145,7 @@ Source: `engines/ds4-mac/ds4_server.c:25866`. Unset read: Wrapper/conditional de
     const char *incoming_text = "system: hello world\nuser: prompt";
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25910`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25958`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     free(cold_path);
@@ -27065,7 +27157,7 @@ Source: `engines/ds4-mac/ds4_server.c:25910`. Unset read: Wrapper/conditional de
 static void test_kv_cache_eviction_keeps_smaller_context_prefix(void) {
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:25911`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:25959`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     rmdir(dir);
@@ -47153,7 +47245,7 @@ Source: `engines/ds4-mac/ds4_cli.c:1625`. Unset read: NULL from getenv; the lite
                 ds4_token_eos(engine), cfg->gen.temperature, 0,
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:15934`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15982`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             !(thinking.inside && s->serial_reasoning && ds4_engine_is_deepseek41(s->engine)) &&
@@ -47165,7 +47257,7 @@ Source: `engines/ds4-mac/ds4_server.c:15934`. Unset read: NULL from getenv; the 
                 .top_p=top_p,.min_p=min_p,.rng=rng,.ignore_eos=j->req.ignore_eos,
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:15949`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15997`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                    max_tokens - completion >= 2 && !j->req.ignore_eos &&
@@ -47609,7 +47701,7 @@ DS4_NATIVE_FRONTIER: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:516`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:517`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                         ds4_nf_config **out, char *err, size_t cap) {
@@ -47621,7 +47713,7 @@ Source: `engines/ds4-mac/ds4_native_frontier.inc:516`. Unset read: Wrapper/condi
         ds4_engine_has_mtp(engine) || opt->directional_steering_file || opt->load_slice ||
 ```
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:693`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:694`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                         ds4_nf_config **out,char *err,size_t cap) {
@@ -47651,7 +47743,7 @@ DS4_NATIVE_FRONTIER_DEADLINE_SECONDS: advanced engine setting; built-in default 
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:541`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:542`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_MIN_TOKENS",&c->minimum_tokens,1,1048575) ||
@@ -47669,7 +47761,7 @@ DS4_NATIVE_FRONTIER_DIRECTORY: advanced engine setting; built-in default retaine
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
      * file; never infer that this Mac's local install token is accepted there. */
@@ -47687,7 +47779,7 @@ DS4_NATIVE_FRONTIER_IPV4: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:523`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:524`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         opt->tp.role != DS4_TP_NONE || opt->distributed.role != DS4_DISTRIBUTED_NONE)
@@ -47705,7 +47797,7 @@ DS4_NATIVE_FRONTIER_MAX_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:541`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         !ds4_nf_env_uint("DS4_NATIVE_FRONTIER_PORT",&port,1,65535) ||
@@ -47723,7 +47815,7 @@ DS4_NATIVE_FRONTIER_MIN_TOKENS: advanced engine setting; built-in default retain
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:539`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:540`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if (!ds4_nf_pair_token(token_file,c->token) ||
@@ -47741,7 +47833,7 @@ DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:526`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:527`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     /* Activation may provision the already paired RTX credential in a private
@@ -47759,7 +47851,7 @@ DS4_NATIVE_FRONTIER_PORT: advanced engine setting; built-in default retained
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:538`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:539`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     c->dirfd=-1; uint32_t port;
@@ -47777,7 +47869,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION: advanced engine setting; built-in default ret
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:528`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *token_file=ds4_nf_env("DS4_NATIVE_FRONTIER_PAIR_TOKEN_FILE");
@@ -47795,7 +47887,7 @@ DS4_NATIVE_FRONTIER_QUALIFICATION_SHA256: advanced engine setting; built-in defa
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:529`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *directory=ds4_nf_env("DS4_NATIVE_FRONTIER_DIRECTORY");
@@ -47813,7 +47905,7 @@ DS4_NATIVE_FRONTIER_RENDERER_SHA256: advanced engine setting; built-in default r
 
 Scope: mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_native_frontier.inc:530`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_native_frontier.inc:531`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     const char *qualification=ds4_nf_env("DS4_NATIVE_FRONTIER_QUALIFICATION");
@@ -47831,7 +47923,7 @@ Explicit diagnostic path for raw full-vocabulary logits on slstack-qualification
 
 Scope: mac-ds4. Class: runtime.
 
-Source: `engines/ds4-mac/ds4_server.c:15900`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15948`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;
@@ -47843,7 +47935,7 @@ Source: `engines/ds4-mac/ds4_server.c:15900`. Unset read: NULL from getenv; the 
                     if(qf && fclose(qf))written=false;
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:17725`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:17773`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     }
@@ -56033,7 +56125,7 @@ DS4_SERVER_BATCH_LOG: advanced engine setting; built-in default retained
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:15055`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15096`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     int *n_accepted = xmalloc((size_t)s->slot_count * sizeof(*n_accepted));
@@ -56075,7 +56167,7 @@ DS4_SERVER_DECODE_COALESCE_US: advanced engine setting; built-in default retaine
 
 Scope: ds4-win, mac-ds4. Class: advanced.
 
-Source: `engines/ds4-mac/ds4_server.c:15032`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/ds4-mac/ds4_server.c:15073`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static long server_decode_coalesce_us(void) {
@@ -57995,7 +58087,7 @@ bool ds4_gpu_deepseek41_vision_attn_flash(void) {
 
 ```
 
-Source: `engines/ds4-mac/ds4_server.c:18155`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/ds4-mac/ds4_server.c:18203`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             c.engine.quality = true;
@@ -58361,30 +58453,6 @@ Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the select
 
 Scope: mac-mlx. Class: advanced.
 
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:143`. Unset read: None.
-
-```text
-                restore.append(lambda limit=old: mx.set_cache_limit(limit))
-            elif experiment == "unbounded_cache":
-                old = os.environ.get("DSV41_BOUNDED_CACHE")
-                os.environ["DSV41_BOUNDED_CACHE"] = "0"
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:144`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            elif experiment == "unbounded_cache":
-                old = os.environ.get("DSV41_BOUNDED_CACHE")
-                os.environ["DSV41_BOUNDED_CACHE"] = "0"
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-```
-
 Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103`. Unset read: '0'.
 
 ```text
@@ -58431,6 +58499,30 @@ def test_compressor_missing_history_fails(model, monkeypatch):
     mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)
     lc = cache[0].layers[2]
     with pytest.raises(ValueError, match="no longer retained"):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:143`. Unset read: None.
+
+```text
+                restore.append(lambda limit=old: mx.set_cache_limit(limit))
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:144`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "unbounded_cache":
+                old = os.environ.get("DSV41_BOUNDED_CACHE")
+                os.environ["DSV41_BOUNDED_CACHE"] = "0"
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
 ```
 
 ### DSV41_CACHE_STEP
@@ -58547,30 +58639,6 @@ Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the s
 
 Scope: mac-mlx. Class: advanced.
 
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:174`. Unset read: None.
-
-```text
-                language._v41_expert_select = mx.compile(namespace[node.name])
-                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
-                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
-                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
-            elif experiment == "compile_hc":
-                old = hc.COMPILE_POST
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:175`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
-                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
-                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
-            elif experiment == "compile_hc":
-                old = hc.COMPILE_POST
-                hc.COMPILE_POST = True
-```
-
 Source: `vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
@@ -58665,6 +58733,30 @@ Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:1
     up.num_experts = 8
     mlp = SimpleNamespace(training=False, up_proj=up,
                           gate_proj=lambda x, ids, **kw: np.ones_like(x),
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:174`. Unset read: None.
+
+```text
+                language._v41_expert_select = mx.compile(namespace[node.name])
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:175`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+                restore.append(lambda f=original_select: setattr(language, "_v41_expert_select", f))
+                old = os.environ.get("DSV41_COMPILE_PRIMITIVES")
+                os.environ["DSV41_COMPILE_PRIMITIVES"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_COMPILE_PRIMITIVES", None) if old is None else os.environ.__setitem__("DSV41_COMPILE_PRIMITIVES", old))
+            elif experiment == "compile_hc":
+                old = hc.COMPILE_POST
+                hc.COMPILE_POST = True
 ```
 
 ### DSV41_COMPILE_SPARSE_ATTN
@@ -58989,30 +59081,6 @@ Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the select
 
 Scope: mac-mlx. Class: advanced.
 
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:147`. Unset read: None.
-
-```text
-                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
-            elif experiment == "metal_sinkhorn":
-                importlib.reload(hc)
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:148`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-            elif experiment == "fast_rms_norm":
-                old = os.environ.get("DSV41_FAST_RMS_NORM")
-                os.environ["DSV41_FAST_RMS_NORM"] = "1"
-                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
-            elif experiment == "metal_sinkhorn":
-                importlib.reload(hc)
-                original = language._hc_split_sinkhorn_ops
-```
-
 Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221`. Unset read: '0'.
 
 ```text
@@ -59047,6 +59115,30 @@ Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36`. 
     mx.eval(actual, expected)
     # Native reduction order can put a BF16 result on the adjacent rounding
     # value. The real QAT model is separately held to the long retrieval gate.
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:147`. Unset read: None.
+
+```text
+                restore.append(lambda: os.environ.pop("DSV41_BOUNDED_CACHE", None) if old is None else os.environ.__setitem__("DSV41_BOUNDED_CACHE", old))
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/runtime_profile.py:148`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+            elif experiment == "fast_rms_norm":
+                old = os.environ.get("DSV41_FAST_RMS_NORM")
+                os.environ["DSV41_FAST_RMS_NORM"] = "1"
+                restore.append(lambda: os.environ.pop("DSV41_FAST_RMS_NORM", None) if old is None else os.environ.__setitem__("DSV41_FAST_RMS_NORM", old))
+            elif experiment == "metal_sinkhorn":
+                importlib.reload(hc)
+                original = language._hc_split_sinkhorn_ops
 ```
 
 ### DSV41_FFN_DOWN_BF16
@@ -63864,7 +63956,7 @@ GGML_CUDA_DISABLE_FUSION: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5787`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5904`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -63906,7 +63998,7 @@ Source: `engines/ds4-win/cuda/mmq/common.cuh:1208`. Unset read: NULL from getenv
 };
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1249`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1263`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     bool is_enabled() const {
@@ -63918,7 +64010,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh
     }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6331`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6482`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // use ggml_backend_cuda_graphs_disable_push/pop for scoped runtime control.
@@ -63996,7 +64088,7 @@ GGML_CUDA_ENABLE_UNIFIED_MEMORY: advanced engine setting; built-in default retai
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:850`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:866`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     ggml_cuda_set_device(device);
@@ -64008,7 +64100,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
             CUDA_CHECK(cudaMemAdvise(*ptr, size, hipMemAdviseSetCoarseGrain, device));
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7319`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7587`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -64038,7 +64130,7 @@ GGML_CUDA_GRAPH_OPT: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6420`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6688`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -64056,7 +64148,7 @@ GGML_CUDA_NO_PINNED: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2147`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2163`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -64068,7 +64160,7 @@ static void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7351`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7619`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     ggml_backend_cuda_device_get_memory(dev, &props->memory_free, &props->memory_total);
@@ -64086,7 +64178,7 @@ GGML_CUDA_NO_VMM: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1326`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1342`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // past the initial reserve, blocking dynamic n_ubatch resize. The
@@ -64098,7 +64190,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
 #if defined(GGML_USE_VMM)
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6796`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7064`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if(!ggml_backend_is_cuda(backend))return false;
@@ -64116,7 +64208,7 @@ GGML_CUDA_REGISTER_HOST: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6694`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6962`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -64128,7 +64220,7 @@ bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size) {
 #if CUDART_VERSION >= 11010 || defined(GGML_USE_MUSA) || defined(GGML_USE_HIP)
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6717`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6985`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -64758,7 +64850,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cann/ggml-cann.
                 dev_ctx->description                       = aclrtGetSocName();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8043`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8325`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (!initialized) {
@@ -67875,7 +67967,7 @@ KMP_BLOCKTIME: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3787`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3871`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             //}
@@ -67887,7 +67979,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
                 _putenv_s("KMP_BLOCKTIME", "200"); // 200ms
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3791`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3875`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                 // this is less aggressive than setting the wait policy to active, but should achieve similar results in most cases
@@ -67899,7 +67991,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
             }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3793`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3877`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                 _putenv_s("KMP_BLOCKTIME", "200"); // 200ms
@@ -69374,7 +69466,7 @@ DirectStorage heap residency control; preserve backend admission requirements.
 
 Scope: ds4-win, rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2637`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2644`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -69390,9 +69482,9 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
 
 Producer early Engram loader: reads submitted per batch (1-4096, default 256, at most half the small-read budget).
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:340`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:361`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_small=uint32_t(std::min<uint64_t>(depth,(per-large_slot)/(small_slot+large_slot/16)));
@@ -69426,9 +69518,9 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:464
 
 Producer early Engram loader: queue depth per I/O ring (32-4096, default 1024).
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:329`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:350`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         early_mode=true;prior=std::move(prior_cache);
@@ -69442,9 +69534,9 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_EARLY
 
-Producer Engram prompt load: auto (default) starts it before the first weight fetch when the predicted load fits the gap, else at sweep start; 1 always early; 0 at sweep start; pause loads Engram alone and holds the weight stream for layers >= 1 until it ends.
+Producer Engram prompt load: auto (default) starts it before the first weight fetch when the predicted load fits the gap, else at sweep start; 1 always early; 0 at sweep start; pause loads Engram alone and holds the weight stream for layers >= 1 until it ends. QFN defaults to 1: cold-open or prompt-arrival load, joined at the first PLE layer.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:40`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -69462,7 +69554,7 @@ bool llama_dsv41_engram_whole_prompt(){
 
 Producer early Engram loader: modelled storage request rate used by the auto decision, requests/s in [1000, 1e8].
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:51`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -69480,9 +69572,9 @@ void llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pas
 
 Producer prefill: low sets a low DirectStorage priority hint for Engram table reads; the default normal priority is measured faster (low priority starves the reads).
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:198`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:199`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DirectStorage streaming only if LLAMADECODE_ENGRAM_IO_PRIORITY=low (measured: low priority starves
@@ -69494,7 +69586,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:491`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:512`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                          engram_read_alignment(),storage.LogicalBytesPerSector,storage.PhysicalBytesPerSectorForPerformance);
@@ -69510,7 +69602,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 E13 experiment: Engram direct-read alignment, 4096 bytes (default) or opt-in 512 bytes. The 512-byte arm requires compatible logical sector geometry and preserves all row bytes.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:33`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -69528,12 +69620,12 @@ static uint32_t engram_read_alignment(){
 
 Producer early Engram loader: number of I/O rings (1-8, default 4).
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:328`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:349`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
-        prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
+    void configure_early(uint64_t admitted,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache){
         early_mode=true;prior=std::move(prior_cache);
         early_rings=env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8);
         const uint32_t depth=env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096);
@@ -69546,9 +69638,9 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 PAIRFIX: Engram read geometry. auto (default) reads a dense prompt row set as large sequential extents (gap-tolerant merge, the same rows and bytes copied) when bytes / LLAMADECODE_ENGRAM_SCAN_GBPS beats requests / LLAMADECODE_ENGRAM_IOPS; 0 keeps one random read per row; 1 forces the scan. Measured 200K real text: 2.97M random reads in 26.7 s -> 24K x 8 MiB reads in 17 s, logits bit-identical.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:362`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:383`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // reads take 26 s, while both 101 GB tables stream in ~10-13 s.
@@ -69562,11 +69654,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_DEPTH
 
-PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it).
+PAIRFIX: read slots per Engram scan ring (default 64, 2-256); reduced to fit the Engram host admission, never silently (LLAMADECODE_ENGRAM_GEOMETRY reports it). QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:386`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:407`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         const bool want=forced||geometry_scan_s<geometry_random_s;
@@ -69580,11 +69672,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_GAP_KIB
 
-PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster.
+PAIRFIX: Engram scan merge tolerance in KiB (default 64): rows whose sectors are at most this far apart share one read; measured 200K real text 120 GB read vs 201 GB straight through, 2 s faster. QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:374`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:395`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         // of 64 slots (cand6, 43.17 s) matches the bench optimum: on this RAID one
@@ -69598,11 +69690,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_GBPS
 
-PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume).
+PAIRFIX: sequential read rate the Engram scan decision assumes, GB/s (default 15; measured 15-22 on the RTX model volume). QFN retains the same automatic selector, with measured wide scan defaults at 100K; random geometry remains available.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:375`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:396`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // queue at QD64 beats several queues for 256 KiB+ random reads.
@@ -69616,11 +69708,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 ### LLAMADECODE_ENGRAM_SCAN_KIB
 
-PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4).
+PAIRFIX: largest Engram scan extent in KiB (default 1024, 256-32768, multiple of 4). QFN defaults: four scan rings, four 32 MiB large-read slots per ring, 1 MiB merge gap; measured to remove the 100K layer-1 read wait with the same 512 MiB large-slot arena.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:366`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:387`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         require(!e||!*e||off||forced||!std::strcmp(e,"auto"),"LLAMADECODE_ENGRAM_SCAN must be 0, 1 or auto");
@@ -69636,9 +69728,9 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefet
 
 PAIRFIX: IoRings used by the Engram scan (default 1, 1-8); one queue at QD64 measured fastest for 256 KiB+ random reads on the RTX model volume.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:385`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:406`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         geometry_scan_s=std::max(double(geometry_scan_bytes)/(gbps*1e9),double(geometry_scan_requests)/llama_dsv41_engram_early_iops());
@@ -70022,7 +70114,7 @@ Debug only: 1 fills unrouted expert bytes with 0xFF to prove they are never read
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3403`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3420`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // does not write (unrouted experts and padding) becomes 0xFF, i.e. NaN
@@ -73274,7 +73366,7 @@ LLAMA_CUBLAS_TF32: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1504`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1518`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // causing layer-major multi-ubatch to diverge through 26 layers.
@@ -73292,7 +73384,7 @@ LLAMA_CUDA_FUSION_COUNTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5605`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5685`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_fusion_counts_enabled() {
@@ -73310,7 +73402,7 @@ LLAMA_CUDA_FUSION_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5164`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5244`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_lid_fusion_trace_enabled() {
@@ -73328,7 +73420,7 @@ LLAMA_CUDA_MMQ_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3321`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3337`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
@@ -73342,11 +73434,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
 
 ### LLAMA_CUDA_OP_PROFILE
 
-LLAMA_CUDA_OP_PROFILE: advanced engine setting; built-in default retained
+Enable synchronized CUDA operation timings for diagnostics; changes execution timing and is not a production throughput arm.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8089`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8371`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     static std::once_flag s_profile_init;
@@ -73356,6 +73448,18 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
             g_op_profile_enabled = true;
             const char *nodes=getenv("LLAMA_CUDA_OP_PROFILE_NODES");g_node_profile_enabled=nodes&&nodes[0]=='1';
             std::atexit(cuda_op_profile_dump);
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:127`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    double phase_embedding_ms = 0, phase_ple_ms = 0;
+    void profile_begin() {
+        const char * e = std::getenv("LLAMA_CUDA_OP_PROFILE");
+        phase_profile = e && e[0] == '1';
+        phase_graphs = phase_nodes = 0;
+        phase_embedding_ms = phase_ple_ms = 0;
+    }
 ```
 
 ### LLAMA_CUDA_OP_PROFILE_DUMP_EACH
@@ -73378,11 +73482,11 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:7775`. 
 
 ### LLAMA_CUDA_OP_PROFILE_NODES
 
-LLAMA_CUDA_OP_PROFILE_NODES: advanced engine setting; built-in default retained
+Split enabled CUDA operation profiling by semantic node, operand origins and shapes; requires LLAMA_CUDA_OP_PROFILE=1.
 
-Scope: rtx-llama. Class: advanced.
+Scope: rtx-llama, qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8092`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:8374`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (env && env[0] == '1') {
@@ -73424,7 +73528,7 @@ LLAMA_CUDA_PACE_EVERY_N: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:589`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:605`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // stays low and coherence holds. Goal: recover the 533->~685 @20k gap.
@@ -73442,7 +73546,7 @@ LLAMA_CUDA_PACE_SLEEP_US: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:601`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // ~29.3s -> ~678 @20k. Default 0 = original cudaEventSync behavior.
@@ -73460,7 +73564,7 @@ LLAMA_CUDA_REUSE_EVENTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:545`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:561`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 // reuses it (eval_cb is single-threaded on the compute thread). Default off.
@@ -73478,7 +73582,7 @@ LLAMA_CUDA_TENSOR_SET_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1609`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1625`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -73496,7 +73600,7 @@ LLAMA_CUDA_TRACE_BUFFER_ALLOC: advanced engine setting; built-in default retaine
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1706`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1722`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // to identify per-request leaks. Gated on env to not spam regular runs.
@@ -73514,7 +73618,7 @@ LLAMA_CUDA_TRACE_DEVICE_MALLOC: advanced engine setting; built-in default retain
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:876`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:892`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         g_cuda_device_malloc_bytes.fetch_add((int64_t) size, std::memory_order_relaxed);
@@ -73532,7 +73636,7 @@ LLAMA_CUDA_TRACE_GRAPHS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1439`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1453`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // Phase 316d (2026-05-04): log every Nth insert with key + map size
@@ -73808,7 +73912,7 @@ LLAMA_DLM_REMAINDER_TIMERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:433`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:449`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -73952,7 +74056,7 @@ LLAMA_DSA_KIDX_STORE_DIAG: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3652`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3668`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void ggml_cuda_diag_set_rows(ggml_backend_cuda_context & ctx, const ggml_tensor * dst) {
@@ -74462,7 +74566,7 @@ Explicit streamed layer CUDA capture/update/replay experiment; requires compiled
 
 Scope: rtx-llama. Class: qualified.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1240`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh:1254`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // Streamed layers legitimately change tensor bindings on every tile.
@@ -74474,7 +74578,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/common.cuh
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:24`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:34`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -74640,7 +74744,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:789
 
 LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP: qualified preset/runtime setting; override for a different memory or arithmetic plan
 
-Scope: rtx-llama. Class: preset.
+Scope: rtx-llama, qfn-engine. Class: preset.
 
 Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-sweep.cpp:731`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
@@ -74714,13 +74818,25 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             }}
 ```
 
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4471`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            if (!std::getenv(setting.first)) _putenv_s(setting.first, setting.second);
+        }
+        if (const char * e = std::getenv("LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP")) {
+            require(!std::strcmp(e, "0") || !std::strcmp(e, "1"), "LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP must be 0 or 1");
+            p->ple_prompt_overlap = !std::strcmp(e, "1");
+        }
+        (void) llama_dsv41_engram_early_enabled(); // validate even before a request arrives
+```
+
 ### LLAMA_DSV41_ENGRAM_SUBMIT_BATCH
 
 LLAMA_DSV41_ENGRAM_SUBMIT_BATCH: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:248`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-engram-prefetch.cpp:249`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         size_t next_row=0;uint32_t next_table=0;UINT_PTR sequence=0;
@@ -74738,13 +74854,13 @@ LLAMA_DSV41_EXPERT_FULL_K_GRID: advanced engine setting; built-in default retain
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id_common.cuh:4085`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id_common.cuh:4165`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // exactly, so every interval starts/ends on a complete K tile. The old XY
     // launch above cannot be enabled on modern CUDA (device branch omitted).
     const char *full_k_env=std::getenv("LLAMA_DSV41_EXPERT_FULL_K_GRID");
-    const bool full_k=type==GGML_TYPE_Q4_K&&full_k_env&&!std::strcmp(full_k_env,"1")&&
+    const bool full_k=!args.use_stream_k||(type==GGML_TYPE_Q4_K&&full_k_env&&!std::strcmp(full_k_env,"1")&&
         GGML_CUDA_CC_IS_NVIDIA(cc)&&ggml_cuda_highest_compiled_arch(cc)>=GGML_CUDA_CC_VOLTA&&
         args.ids_dst&&args.expert_bounds&&args.nchannels_x==384&&args.nchannels_y==384&&
         args.nsamples_x==1&&args.nsamples_y==1&&args.ncols_max>0&&args.ncols_max<=16384&&
@@ -75986,7 +76102,7 @@ LLAMA_DSV4_LID_FUSE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5245`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5325`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // fusion off, CUDA runs the same math Metal does.
@@ -76760,7 +76876,7 @@ LLAMA_DSV4_WF_CKSUM: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6213`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6235`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // every other layer-selective mechanism; the surviving gap is upload fidelity of specific
@@ -76832,7 +76948,7 @@ LLAMA_DS_FACTORY_STAGING_MB: advanced engine setting; built-in default retained
 
 Scope: rtx-llama, studio. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2525`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2532`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     {
@@ -76862,7 +76978,7 @@ LLAMA_DS_STAGING_MB: advanced engine setting; built-in default retained
 
 Scope: image, rtx-llama, studio, video. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2234`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2241`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     }
@@ -76874,7 +76990,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
     }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2660`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     if (!wf->ds_direct_mode) {
@@ -80288,7 +80404,7 @@ LLAMA_MMQ_ID_ADAPTIVE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:145`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:146`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         int64_t ne00, int64_t ne01, int64_t ne02, int64_t ne12,
@@ -80306,7 +80422,7 @@ LLAMA_MMQ_ID_ADAPTIVE_FORCE_TILE: advanced engine setting; built-in default reta
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:152`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:153`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     }
@@ -80324,7 +80440,7 @@ LLAMA_MMQ_ID_ADAPTIVE_TRACE: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:204`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:205`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     }
@@ -80342,7 +80458,7 @@ LLAMA_MMQ_ID_COL_HISTO: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:761`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:766`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     {
@@ -80360,7 +80476,7 @@ LLAMA_MOE_GROUPED_EXPERTS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4744`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4824`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -82934,7 +83050,7 @@ LLAMA_PREFILL_LAYER_DIR: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2586`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2593`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -82946,7 +83062,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
             int opened = 0;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3174`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3191`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             char layer_path[512];
@@ -83864,7 +83980,7 @@ LLAMA_PREFILL_STAGING_SYNC: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7066`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:7334`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool ggml_cuda_staging_sync_enabled(void) {
@@ -85094,7 +85210,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-backend.cpp:172
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1137`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1153`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // DIAG: log every cudaMalloc from this pool. Useful to see how many
@@ -85106,7 +85222,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1236`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1252`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DIAG: log every VMM pool growth so we can see if warm-up
@@ -85490,7 +85606,7 @@ LLAMA_WF_ASYNC_DRAIN: advanced engine setting; built-in default retained
 
 Scope: image, rtx-llama, video. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3373`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3390`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // without the OP_PROFILE crutch -> ~685 @20k. Forces copy_stream on.
@@ -85610,7 +85726,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-prefill-stream.cpp:
     // otherwise gpu_buf_a would be left null with no WF to provide the heap.
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4502`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4519`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // R3 DS-DIRECT gate (default-off == today's exact behavior). Set BEFORE any mode-specific init.
@@ -85628,7 +85744,7 @@ LLAMA_WF_DS_DIRECT_DIAG: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5524`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5546`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 return nullptr;
@@ -85646,7 +85762,7 @@ OPUS22 experiment, default 256. DirectStorage factory staging size in MiB for th
 
 Scope: rtx-llama. Class: qualified.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2536`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2543`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // 512 MiB stays inside the producer's existing 512 MiB per-tier
@@ -85664,7 +85780,7 @@ LLAMA_WF_DS_PREFETCH_PCT: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2643`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2650`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // Prefetch heap sized to the full layer (single D2D). If VRAM-tight, LLAMA_WF_DS_PREFETCH_PCT can shrink it.
@@ -85682,7 +85798,7 @@ OPUS22 experiment, unset by default (about layer/1000 bytes per DirectStorage re
 
 Scope: rtx-llama. Class: qualified.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4474`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4491`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     }
@@ -85712,7 +85828,7 @@ OPUS22 experiment, unset by default (DirectStorage chooses its submit threads). 
 
 Scope: rtx-llama. Class: qualified.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2481`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // heuristic): the existing TEST submit-thread profile selected by
@@ -85730,7 +85846,7 @@ LLAMA_WF_DS_USE_COPY_STREAM: advanced engine setting; built-in default retained
 
 Scope: image, rtx-llama, video. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3363`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3380`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // alternative; it didn't fix the bottleneck (see commit bb4ae84b).
@@ -85772,7 +85888,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-context.cpp:6912`. 
         char * end = nullptr;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:732`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:739`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     wf->expert_cache_initialized = true;
@@ -85790,7 +85906,7 @@ LLAMA_WF_EXPERT_CACHE_RAM_MB: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:733`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:740`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     if (wf->required_dstorage) return;
@@ -85808,7 +85924,7 @@ LLAMA_WF_EXPERT_PREFETCH: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3826`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3843`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     wf->expert_prefetch_initialized = true;
@@ -85826,7 +85942,7 @@ LLAMA_WF_EXPERT_PREFETCH_DIST: advanced engine setting; built-in default retaine
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3841`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3858`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
     }
@@ -85844,7 +85960,7 @@ LLAMA_WF_EXPERT_PREFETCH_N: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3840`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:3857`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
         return;
@@ -86186,7 +86302,7 @@ LLAMA_WF_LOCKFREE_READY: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6258`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6280`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static bool wf_lockfree_ready_enabled() {
@@ -86204,7 +86320,7 @@ LLAMA_WF_M3_DIAG: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5466`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -86258,7 +86374,7 @@ LLAMA_WF_PERSIST_FACTORY: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2508`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2515`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     {
@@ -86276,7 +86392,7 @@ LLAMA_WF_PERSIST_INFRA: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2222`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2229`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -86312,7 +86428,7 @@ LLAMA_WF_PREFETCH_PCT: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4660`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:4677`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // Set desired size here; actual allocation happens in wf_allocate_prefetch().
@@ -86366,7 +86482,7 @@ LLAMA_WF_RELAY_LARGE_LAYER: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5576`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5598`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                    // for A/B. Root-cause: sol-xhigh a0e284dc.
@@ -86384,7 +86500,7 @@ LLAMA_WF_SPAN_DUMP: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5137`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:5159`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // placement uses padded gpu_offsets — any overhang is silently dropped/under-copied.
@@ -86402,7 +86518,7 @@ LLAMA_WF_TEST_DS_PLACED: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:1762`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:1769`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void wf_selftest_ds_placed(wf_context * wf) {
@@ -86420,7 +86536,7 @@ LLAMA_WF_TEST_DUAL_BUF: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:1664`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:1671`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void wf_selftest_dual_buffer(ID3D12Device * dev) {
@@ -86438,7 +86554,7 @@ LLAMA_WF_TEST_DUAL_HEAPS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2005`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2012`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void wf_selftest_dual_heaps(wf_context * wf) {
@@ -86456,7 +86572,7 @@ LLAMA_WF_WARM_INTEROP: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2979`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2996`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 static void wf_warm_ds_interop(wf_context * wf) {
@@ -90844,18 +90960,6 @@ Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected 
 
 Scope: mac-mlx. Class: advanced.
 
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    args = parser.parse_args()
-    if args.kv_bits:
-        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
-    if args.max_context and args.kv_bits == 8:
-        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
-        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
-    args.func(args)
-```
-
 Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86`. Unset read: None.
 
 ```text
@@ -90866,6 +90970,18 @@ Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86`. Unset read: None.
 
 
 class Model(nn.Module):
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    args = parser.parse_args()
+    if args.kv_bits:
+        os.environ["MLX_MIMO_KV_BITS"] = str(args.kv_bits)
+    if args.max_context and args.kv_bits == 8:
+        os.environ["MLX_MIMO_CAPACITY_TOKENS"] = str(args.max_context)
+        os.environ["MLX_MIMO_CAPACITY_LIMIT"] = str(int(getattr(args, "wired_limit_mb", 0) or 0) * 2**20)
+    args.func(args)
 ```
 
 ### MLX_MPI_LIBNAME
@@ -95002,30 +95118,6 @@ Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the se
 
 Scope: mac-mlx. Class: advanced.
 
-Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421`. Unset read: Assigned by the runtime; see literal consumer.
-
-```text
-    require_gpu: bool,
-):
-    os.environ["MLX_VLM_PIPELINE_LAYERS"] = pipeline_layers
-    model_path = get_model_path(model)
-    group = _PipelineGroup(rank, size)
-
-    raw_config = json.loads((Path(model_path) / "config.json").read_text())
-```
-
-Source: `vendor/mac-mlx/mlx_vlm/models/text_only.py:118`. Unset read: None.
-
-```text
-        self.pipeline_size = group.size()
-        n_layers = len(core.layers)
-        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
-            "MLX_PIPELINE_LAYERS", ""
-        )
-        if raw_counts:
-            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
-```
-
 Source: `vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951`. Unset read: None.
 
 ```text
@@ -95048,6 +95140,30 @@ Source: `vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40`. Unset read: None.
         )
         if raw_counts:
             counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/models/text_only.py:118`. Unset read: None.
+
+```text
+        self.pipeline_size = group.size()
+        n_layers = len(core.layers)
+        raw_counts = os.environ.get("MLX_VLM_PIPELINE_LAYERS") or os.environ.get(
+            "MLX_PIPELINE_LAYERS", ""
+        )
+        if raw_counts:
+            counts = [int(part.strip()) for part in raw_counts.split(",") if part.strip()]
+```
+
+Source: `vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421`. Unset read: Assigned by the runtime; see literal consumer.
+
+```text
+    require_gpu: bool,
+):
+    os.environ["MLX_VLM_PIPELINE_LAYERS"] = pipeline_layers
+    model_path = get_model_path(model)
+    group = _PipelineGroup(rank, size)
+
+    raw_config = json.loads((Path(model_path) / "config.json").read_text())
 ```
 
 Source: `vendor/mac-mlx/mlx_vlm/server/cli.py:53`. Unset read: ''.
@@ -95554,13 +95670,55 @@ N_GPU_LAYERS: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
+### OMP_NUM_THREADS
+
+Standard host CPU-library thread count; inherited host limits are preserved across engines; an explicit override must be a positive integer. The NVFP4 parity harness defaults to one when unset.
+
+Scope: host. Class: advanced.
+
+Source: `engines/qfn-basalt-nvfp4/parity.py:17`. Unset read: '1'.
+
+```text
+
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1].parent
+```
+
+Source: `engines/qfn-basalt-nvfp4/qsa-parity.py:10`. Unset read: '1'.
+
+```text
+from pathlib import Path
+os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
+os.environ.setdefault('OMP_NUM_THREADS','1')
+import numpy as np
+import parity as base
+
+D,H,R,TOP=128,4,4,512
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:22`. Unset read: '1'.
+
+```text
+
+os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
+os.environ.setdefault('OMP_NUM_THREADS','1')
+import numpy as np
+
+HERE=Path(__file__).resolve().parent
+STACK=HERE.parents[2]
+```
+
 ### OMP_WAIT_POLICY
 
 OMP_WAIT_POLICY: advanced engine setting; built-in default retained
 
 Scope: rtx-llama. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3782`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3866`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -95572,7 +95730,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:
 
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3784`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cpu/ggml-cpu.c:3868`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             //if (!getenv("OMP_WAIT_POLICY")) {
@@ -95618,6 +95776,48 @@ Source: `vendor/engines/cosmos_windows/curate_dataset.py:139`. Unset read: ''.
     ap.add_argument('--reasoner-port', type=int, default=9200)
     ap.add_argument('--frames', type=int, default=4, help='frames sampled per video for the VLM')
     ap.add_argument('--min-relevance', type=float, default=0.0, help='drop items below this (0 = keep all)')
+```
+
+### OPENBLAS_NUM_THREADS
+
+Standard host CPU-library thread count; inherited host limits are preserved across engines; an explicit override must be a positive integer. The NVFP4 parity harness defaults to one when unset.
+
+Scope: host. Class: advanced.
+
+Source: `engines/qfn-basalt-nvfp4/parity.py:16`. Unset read: '1'.
+
+```text
+import time
+
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+```
+
+Source: `engines/qfn-basalt-nvfp4/qsa-parity.py:9`. Unset read: '1'.
+
+```text
+import os
+from pathlib import Path
+os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
+os.environ.setdefault('OMP_NUM_THREADS','1')
+import numpy as np
+import parity as base
+
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:21`. Unset read: '1'.
+
+```text
+import traceback
+
+os.environ.setdefault('OPENBLAS_NUM_THREADS','1')
+os.environ.setdefault('OMP_NUM_THREADS','1')
+import numpy as np
+
+HERE=Path(__file__).resolve().parent
 ```
 
 ### OPENROUTER_API_KEY
@@ -95954,6 +96154,756 @@ Source: `vendor/engines/cosmos_windows/reasoner_prefill_stream.py:365`. Unset re
         return _export(args.model, args.device, args.prompt, args.out)
     if args.mode == 'decode':
         return _decode(args.model, args.device, args.in_prefix, args.max_new_tokens)
+```
+
+### QFN_APPEND_DECODE_MAX
+
+QFN maximum appended suffix length processed through token decode rather than layer-major prefill.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-serve.cpp:543`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    srv.defaults = json::parse(qfn_merge_sampling_defaults(model_defaults.dump(),defaults));
+    srv.tmpls = common_chat_templates_init(nullptr, chat_template, bos_text, eos_text);
+    if (const char * am = std::getenv("QFN_APPEND_DECODE_MAX"); am && *am) srv.append_decode_max = (size_t) std::atoll(am);
+    emit({ {"ok", true}, {"event", "ready"}, {"n_ctx", opt.n_ctx}, {"n_vocab", eng.hparams().n_vocab},
+           {"load_seconds", secs_since(t0)} });
+
+    // stdin reader: "cancel" acts at once (the running op checks it per token); everything else queues
+```
+
+### QFN_CARRY_BF16
+
+QFN opt-in BF16 carry; unset preserves F32 carry.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:927`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        ggml_init_params ip = { (8 * nl + 16) * ggml_tensor_overhead(), nullptr, true };
+        sctx = ggml_init(ip);
+        { const char * cb = std::getenv("QFN_CARRY_BF16"); carry_bf16 = cb && *cb == '1'; }
+        kcache.assign(nl, nullptr); vcache.assign(nl, nullptr); idx_raw.assign(nl, nullptr); idx_pool.assign(nl, nullptr);
+        gdn_state.assign(nl, nullptr); conv_state.assign(nl, nullptr);
+        const int64_t conv_ch = (int64_t) hp->ssm_state * hp->ssm_group * 2 + (int64_t) hp->ssm_state * hp->ssm_dt_rank;
+        for (uint32_t il = 0; il < nl; ++il) {
+```
+
+### QFN_DECODE_V3
+
+QFN opt-in decode-v3 execution path.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4491`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            if (!std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR") && !(residual && *residual == '1')) _putenv_s("QFN_NATIVE_NVFP4_DECODE_VECTOR", "1");
+            const char * mtp = std::getenv("QFN_MTP");
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+                _putenv_s("QFN_V3_CUDA_GRAPH", "1");
+            }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4492`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            const char * mtp = std::getenv("QFN_MTP");
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+                _putenv_s("QFN_V3_CUDA_GRAPH", "1");
+            }
+        }
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4522`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            if (m && *m && *m != '0') p->load_mtp(); // owner default off; --mtp 1 remains fully supported
+        }
+        if (const char * v3 = std::getenv("QFN_DECODE_V3")) {
+            p->v3_replay = std::strcmp(v3, "replay") == 0;
+            p->v3_on = p->v3_replay || std::strcmp(v3, "1") == 0;
+        }
+        if (const char * future = std::getenv("QFN_V3_FUTURE_SERVICE")) {
+```
+
+### QFN_DUMP_CARRY
+
+QFN diagnostic per-layer carry digest output.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4351`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        {
+            static const bool cone = [] { const char * e = std::getenv("QFN_PREFILL_CONE"); return !(e && *e == '0'); }();
+            const bool dump = std::getenv("QFN_DUMP_CARRY") && *std::getenv("QFN_DUMP_CARRY") == '1';
+            pf_keep_from = !cone || mtp_ok || dump || req.all_top1 ? p0 : (req.full_from >= 0 ? std::min(req.full_from, n - 1) : n - 1);
+        }
+        for (uint32_t il = 0; il < hp->n_layer; ++il) {
+            if (!ple_joined && hp->is_ple(il)) {
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4376`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            }
+            if (cbuf) seed_layer(il, bank);
+            if (const char * dd = std::getenv("QFN_DUMP_CARRY"); dd && *dd == '1') {
+                // layer-by-layer check against the reference tool's DUMP l_last lines
+                std::vector<float> r;
+                const int kt = std::getenv("QFN_DUMP_TOKENS") ? std::atoi(std::getenv("QFN_DUMP_TOKENS")) : 4;
+                for (int64_t t = p0; t < std::min<int64_t>(n, p0 + kt); ++t) {
+```
+
+### QFN_DUMP_LAYER
+
+QFN diagnostic layer whose graph intermediates are logged.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1633`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    std::vector<std::pair<std::string, ggml_tensor *>> dbg_list;
+    void dbg(gctx & g, uint32_t il, ggml_tensor * t, const char * name) {
+        if (dump_layer == -2) { const char * d = std::getenv("QFN_DUMP_LAYER"); dump_layer = d && *d ? std::atoi(d) : -1; }
+        if ((int) il != dump_layer || t->type != GGML_TYPE_F32) return;
+        ggml_tensor * c = ggml_cont(g.ctx, t);
+        ggml_set_output(c);
+        ggml_build_forward_expand(g.gf, c);
+```
+
+### QFN_DUMP_TOKENS
+
+QFN number of token carry rows included in diagnostic output.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4379`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                // layer-by-layer check against the reference tool's DUMP l_last lines
+                std::vector<float> r;
+                const int kt = std::getenv("QFN_DUMP_TOKENS") ? std::atoi(std::getenv("QFN_DUMP_TOKENS")) : 4;
+                for (int64_t t = p0; t < std::min<int64_t>(n, p0 + kt); ++t) {
+                    carry_row(t, r);
+                    double sum = 0, l2 = 0;
+                    for (float x : r) { sum += x; l2 += (double) x * x; }
+```
+
+### QFN_EXACT_SPLIT
+
+QFN exact token-split matmul control for multi-token decode.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2616`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }
+        const bool snap = snapshots && n > 1;
+        static const bool exact_env = [] { const char * e = std::getenv("QFN_EXACT_SPLIT"); return e && *e == '1'; }();
+        split_tokens = n > 1 && (snap || exact_env);
+        std::vector<int32_t> slots((size_t) (K * nt)), sel((size_t) (K * nt));
+        for (uint32_t il = 0; il <= hp->n_layer; ++il) {
+            const double tb = now_ms();
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        auto * G = new v3graph();
+        G->n = n; G->bias = bias; G->snap = snap; G->logical_policy = verify_active; G->nbp = n > 1 ? 2 : 1;
+        static const bool exact_env = [] { const char * e = std::getenv("QFN_EXACT_SPLIT"); return e && *e == '1'; }();
+        split_tokens = n > 1 && (snap || exact_env);
+        const int64_t E = hp->n_embd, HC = hp->hc, K = hp->n_expert_used, nt = n, R = hp->kpool;
+        ggml_init_params ip = { 65536 * ggml_tensor_overhead() + ggml_graph_overhead_custom(65536, false), nullptr, true };
+        G->ctx = ggml_init(ip);
+```
+
+### QFN_FUSED_HC
+
+QFN opt-in fused hyper-connection kernels; unset preserves the unfused graph.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1194`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Qualified at 100K: fused HC is the default; QFN_FUSED_HC=0 retains the reference path.
+    bool fused_hc() const {
+        static const bool on = [] { const char * e = std::getenv("QFN_FUSED_HC"); return !e || *e == '1'; }();
+        return on;
+    }
+
+    ggml_tensor * hc_combine(gctx & g, ggml_tensor * residual, ggml_tensor * block_out, ggml_tensor * inject) {
+```
+
+### QFN_GRAPH_RESERVE_MIB
+
+QFN graph VRAM reserve used when admitting the decode expert cache, in MiB.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1864`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        size_t free_b = 0, total_b = 0;
+        require(cudaMemGetInfo(&free_b, &total_b) == cudaSuccess, "cannot query VRAM");
+        const char * gr = std::getenv("QFN_GRAPH_RESERVE_MIB");
+        const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;
+        uint64_t avail = free_b > graph_reserve + opt.vram_margin + (64u << 10) ? free_b - graph_reserve - opt.vram_margin - (64u << 10) : 0;
+        const char * rc = std::getenv("QFN_PREFILL_RELEASE_CACHE");
+        // Without MTP the carry lives in the slab's tail: the same memory serves prefill and then decode, so nothing
+```
+
+### QFN_MMQID_Q2_0
+
+QFN opt-in Q2_0 routed MMQ-ID dispatch; built-in arithmetic and dispatch retained when unset.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/mmq_id.cu:875`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // QFNSTREAM: the grouped Q2_0 path is opt-in (QFN_MMQID_Q2_0=1) until it is qualified against the CPU reference
+    if (type == GGML_TYPE_Q2_0) {
+        static const bool q2_0_on = [] { const char * e = getenv("QFN_MMQID_Q2_0"); return e && e[0] == '1'; }();
+        if (!q2_0_on) return false;
+    }
+
+    switch (type) {
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-op-test.cpp:290`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    };
+    auto g = run(bp.cuda, build, fill);
+    const char * grouped = std::getenv("QFN_MMQID_Q2_0");
+    for (int p = 0; p < 3; ++p) {
+        const auto & a = g.outs[p < 2 ? p : 4];
+        const auto & b = g.outs[p < 2 ? p + 2 : 5];
+        const bool identical = a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0;
+```
+
+### QFN_MMQ_STREAM_K
+
+0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ;1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/qfn-mmq-stream-k.cuh:11`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+inline bool qfn_mmq_stream_k_enabled() {
+    static const bool enabled = [] {
+        const char * value = std::getenv("QFN_MMQ_STREAM_K");
+        if (!value) return true;
+        GGML_ASSERT(std::strcmp(value, "0") == 0 || std::strcmp(value, "1") == 0);
+        return std::strcmp(value, "0") != 0;
+    }();
+```
+
+### QFN_MOE_CHUNK
+
+Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4294`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        require(!mp || !*mp || std::strcmp(mp, "0") == 0 || std::strcmp(mp, "1") == 0, "QFN_MOE_PASS must be 0 or 1");
+        moe_pass = mp && *mp == '1';
+        const char * mc = std::getenv("QFN_MOE_CHUNK");
+        require(!mc || !*mc || moe_pass, "QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk");
+        const char * rc = std::getenv("QFN_PREFILL_RELEASE_CACHE");
+        require(!rc || !*rc || std::strcmp(rc, "0") == 0 || std::strcmp(rc, "1") == 0, "QFN_PREFILL_RELEASE_CACHE must be 0 or 1");
+        const bool release_cache = rc && *rc ? *rc == '1' : moe_pass;
+```
+
+### QFN_MOE_PASS
+
+0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4291`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }
+        if (cbuf) reset_cache();
+        const char * mp = std::getenv("QFN_MOE_PASS");
+        require(!mp || !*mp || std::strcmp(mp, "0") == 0 || std::strcmp(mp, "1") == 0, "QFN_MOE_PASS must be 0 or 1");
+        moe_pass = mp && *mp == '1';
+        const char * mc = std::getenv("QFN_MOE_CHUNK");
+        require(!mc || !*mc || moe_pass, "QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk");
+```
+
+### QFN_MTP
+
+QFN MTP drafter control; unset or 0 defaults to off (owner 2026-11-02); --mtp 1 or QFN_MTP=1 enables full drafting/sampler support.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4490`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            const char * residual = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
+            if (!std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR") && !(residual && *residual == '1')) _putenv_s("QFN_NATIVE_NVFP4_DECODE_VECTOR", "1");
+            const char * mtp = std::getenv("QFN_MTP");
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+                _putenv_s("QFN_V3_CUDA_GRAPH", "1");
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4519`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        {
+            // the drafter and its snapshots take their VRAM before the expert cache sizes itself from what is left
+            const char * m = std::getenv("QFN_MTP");
+            if (m && *m && *m != '0') p->load_mtp(); // owner default off; --mtp 1 remains fully supported
+        }
+        if (const char * v3 = std::getenv("QFN_DECODE_V3")) {
+            p->v3_replay = std::strcmp(v3, "replay") == 0;
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-main.cpp:219`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            const auto value = next();
+            if (value != "0" && value != "1") throw std::runtime_error("--mtp must be 0 or 1");
+            _putenv_s("QFN_MTP", value.c_str());
+        }
+        else if (a == "--serve") serve = true;
+        else if (a == "--port") serve_port = std::atoi(next().c_str());
+        else if (a == "--vocab-gguf") vocab_gguf = next();
+```
+
+### QFN_MTP_DRAFTS
+
+QFN number of proposed MTP draft tokens per verification round.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2930`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        alloc_snapshots();
+        alloc_verify_state(); // admitted before the cache is sized; never shrinks an explicit capacity
+        if (const char * d = std::getenv("QFN_MTP_DRAFTS"); d && *d) mtp_drafts = std::max(0, std::min(DEC_NMAX - 1, std::atoi(d)));
+        mtp_ok = true;
+        log("[qfn] MTP drafter: %zu-token draft head, 512 resident experts (%.0f MiB), %d drafts per step\n",
+            draft_ids.size(), (ggml_backend_buffer_get_size(mbuf) + ggml_backend_buffer_get_size(mexp_buf)) / 1048576.0, mtp_drafts);
+    }
+```
+
+### QFN_MTP_PROBE
+
+QFN MTP diagnostic probe and layer dump control.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3082`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // the first row pairs with the residual before p0: h_last (zeros at position 0); carry rows before p0
+            // may be stale (decoded tokens never write carry)
+            const char * pr = std::getenv("QFN_MTP_PROBE");
+            std::vector<int32_t> arg;
+            if (pr && *pr == '1') mtp_probe_out = &arg;
+            mtp_run(seq.data() + t0, (int) m, t0, dl, t0 - 1, t0 == p0, (t0 == p0 && p0 > 0) ? h_last.data() : nullptr);
+            mtp_probe_out = nullptr;
+```
+
+### QFN_NATIVE_NVFP4_DECODE_RESIDUAL
+
+Experimental two-component gate/up/down activation quantization for short native-packed NVFP4 mode6 (nt1..4, including short final prefill); default0 retains original arithmetic. Reuses grouped FP4 GEMMs, adds products before SwiGLU/globals, uses extra persistent scratch and may reduce cache slots. Long prefill unchanged; short non-mode6 with1 fails. Both fused-mid schedules supported; numerical/performance qualification pending.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:63`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static const int value=[](){
+        char option[8]{};SetLastError(ERROR_SUCCESS);
+        const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_DECODE_RESIDUAL",option,sizeof(option));
+        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;
+        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be exactly 0 or 1 before admission\n");return -1;
+    }();return value;
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554`. Unset read: '0'.
+
+```text
+                        help='Equal gate/up globals, eager/captured changes; compare full output hashes across explicit policy0/1 receipts')
+    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()
+    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')
+    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')
+    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')
+    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')
+    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                "QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be 0 or 1");
+        const bool shared_gu = shared_gu_env && !std::strcmp(shared_gu_env, "1");
+        const char * residual_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
+        require(!residual_env || !std::strcmp(residual_env, "0") || !std::strcmp(residual_env, "1"),
+                "QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1");
+        const bool residual = residual_env && !std::strcmp(residual_env, "1");
+        const char * vector_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR");
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }
+        if (p->pack.native_nvfp4_packed && p->opt.nvfp4_decode_mode == 6) {
+            const char * residual = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
+            if (!std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR") && !(residual && *residual == '1')) _putenv_s("QFN_NATIVE_NVFP4_DECODE_VECTOR", "1");
+            const char * mtp = std::getenv("QFN_MTP");
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+```
+
+### QFN_NATIVE_NVFP4_DECODE_VECTOR
+
+Opt-in DSV packed FP4 fused vector decode with dynamic Q8_1 activations and original QFN UE4M3 per16 weight scales/tails; requires explicit native-packed decode mode6, conflicts with FP4 residual activations. Both fused-mid schedules retained. No expert weight inversion; persistent activation scratch. Default0 pending full100K numerical/performance and sampler qualification.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:72`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static const int value=[](){
+        char option[8]{};SetLastError(ERROR_SUCCESS);
+        const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_DECODE_VECTOR",option,sizeof(option));
+        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;
+        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_DECODE_VECTOR must be exactly 0 or 1 before admission\n");return -1;
+    }();return value;
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555`. Unset read: '0'.
+
+```text
+    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()
+    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')
+    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')
+    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')
+    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')
+    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')
+    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+                "QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1");
+        const bool residual = residual_env && !std::strcmp(residual_env, "1");
+        const char * vector_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR");
+        require(!vector_env || !std::strcmp(vector_env, "0") || !std::strcmp(vector_env, "1"),
+                "QFN_NATIVE_NVFP4_DECODE_VECTOR must be 0 or 1");
+        const bool vector_decode = vector_env && !std::strcmp(vector_env, "1");
+        for (const auto & e : pack.experts) nvfp4 = nvfp4 || e.is_nvfp4();
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4489`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        if (p->pack.native_nvfp4_packed && p->opt.nvfp4_decode_mode == 6) {
+            const char * residual = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
+            if (!std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR") && !(residual && *residual == '1')) _putenv_s("QFN_NATIVE_NVFP4_DECODE_VECTOR", "1");
+            const char * mtp = std::getenv("QFN_MTP");
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+```
+
+### QFN_NATIVE_NVFP4_FUSED_MID
+
+Short native-packed NVFP4 mode6 fused SwiGLU/down pack; independent calibrated gate/up/down scales retained.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:36`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static const int value=[](){
+        char option[8]{};SetLastError(ERROR_SUCCESS);
+        const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_FUSED_MID",option,sizeof(option));
+        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0; // measured: the short schedule is slower in prefill, decode unchanged
+        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_FUSED_MID must be exactly 0 or 1 before admission\n");return -1;
+    }();return value;
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575`. Unset read: '0'.
+
+```text
+    result=dict(status='IN-PROGRESS',qualification='Synthetic layout/arithmetic only; whole-model KL/top1/recall pending',
+                host_fixture_data_budget_bytes=1536*2**20,gpu_allocation_budget_bytes=12*2**30,
+                short_mode6_fused_mid=os.environ.get('QFN_NATIVE_NVFP4_FUSED_MID','0'),
+                source_sha256_before=hashes(),native_cases=[],compatibility_cases=[])
+    if args.residual_self_test:
+        result.update(test_arm='residual-self-test',short_mode6_residual=residual_flag,residual_cases=[])
+    if args.vector_self_test:
+```
+
+### QFN_FUSED_EXPERT_REDUCE
+
+Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4451`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    try {
+        p->opt = opts;
+        if (const char * e = std::getenv("QFN_FUSED_EXPERT_REDUCE")) {
+            require(!std::strcmp(e, "0") || !std::strcmp(e, "1"), "QFN_FUSED_EXPERT_REDUCE must be 0 or 1");
+            p->fused_expert_reduce = !std::strcmp(e, "1");
+        }
+        p->log("[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\n", int(p->fused_expert_reduce));
+```
+
+### QFN_NATIVE_NVFP4_GROUP_PARALLEL
+
+Native-packed NVFP4 long mode6 route grouping: 0 retains original warp scan, 1 selects stable CTA256 contiguous-token grouping with fixed 2 KiB shared storage. Flag1 refuses long requests (nt>4) in modes0..5 at workspace/run admission instead of ignoring the policy. Short requests retain every existing supported mode and compact/vector path. Full route/tail validation retained. Experimental; CUDA grouping arrays and whole-model numeric/performance qualification required before default promotion.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:45`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static const int value=[](){
+        char option[8]{};SetLastError(ERROR_SUCCESS);
+        const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_GROUP_PARALLEL",option,sizeof(option));
+        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;
+        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_GROUP_PARALLEL must be exactly 0 or 1 before admission\n");return -1;
+    }();return value;
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:583`. Unset read: '0'.
+
+```text
+    if args.grouping_self_test:
+        result.update(test_arm='grouping-self-test',grouping_cases=[],
+                      grouping_policy=os.environ.get('QFN_NATIVE_NVFP4_GROUP_PARALLEL','0'))
+    if args.share_gu_input_self_test:
+        result.update(test_arm='share-gu-input-self-test',shared_gu_policy=shared_gu_flag,shared_gu_cases=[])
+    c=None;primary=None
+    def save():receipt.write_text(json.dumps(result,indent=2)+'\n')
+```
+
+### QFN_PAIRED_GDN
+
+Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; default off, refuses unsupported layouts, retains original scalar/reference path and all sampling/state capabilities.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4457`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        p->log("[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\n", int(p->fused_expert_reduce));
+        if (const char * e = std::getenv("QFN_LFU_HALF_LIFE"); e && *e) p->opt.lfu_half_life = (float) std::atof(e);
+        if (const char * e = std::getenv("QFN_PAIRED_GDN")) {
+            require(!std::strcmp(e, "0") || !std::strcmp(e, "1"), "QFN_PAIRED_GDN must be 0 or 1");
+            p->paired_gdn = !std::strcmp(e, "1");
+        }
+        // Shared Engram settings, QFN-scoped measured queue defaults.
+```
+
+### QFN_PREFILL_RELEASE_CACHE
+
+0/1: independently release the VRAM decode slab before prefill and restore identical capacity/prompt-ranked entries from the experts pack afterward. Unset follows QFN_MOE_PASS. Reload/reseed time counts toward TTFT; no capacity reduction fallback.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1867`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;
+        uint64_t avail = free_b > graph_reserve + opt.vram_margin + (64u << 10) ? free_b - graph_reserve - opt.vram_margin - (64u << 10) : 0;
+        const char * rc = std::getenv("QFN_PREFILL_RELEASE_CACHE");
+        // Without MTP the carry lives in the slab's tail: the same memory serves prefill and then decode, so nothing
+        // is freed or reloaded at the handoff and the prefill seeds the hot experts from its banks.
+        // Explicit slot counts select the same slab layout as automatic sizing; they only fix its capacity.
+        const bool tail_carry = !restoring && !mtp_ok && !(rc && *rc == '1');
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4296`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        const char * mc = std::getenv("QFN_MOE_CHUNK");
+        require(!mc || !*mc || moe_pass, "QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk");
+        const char * rc = std::getenv("QFN_PREFILL_RELEASE_CACHE");
+        require(!rc || !*rc || std::strcmp(rc, "0") == 0 || std::strcmp(rc, "1") == 0, "QFN_PREFILL_RELEASE_CACHE must be 0 or 1");
+        const bool release_cache = rc && *rc ? *rc == '1' : moe_pass;
+        if (release_cache) release_cache_for_prefill();
+        alloc_carry();
+```
+
+### QFN_RAM_TIER_GIB
+
+QFN optional exclusive host RAM expert victim tier, in GiB; unset retains its built-in disabled default.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2124`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+
+    void alloc_ram_tier() {
+        const char * g = std::getenv("QFN_RAM_TIER_GIB");
+        const double gib = g && *g ? std::atof(g) : 0.0;
+        ram_of.assign((size_t) hp->n_layer * hp->n_expert, -1);
+        if (gib <= 0) return;
+        const uint64_t blob = pack.experts[0].blob;
+```
+
+### QFN_V3_BELL_MS
+
+QFN decode-v3 expert-miss doorbell service deadline in milliseconds.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3738`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        bell_h->req = -1; bell_h->ack = -1; bell_h->error = 0;
+        // bounded below the Windows GPU timeout (TDR, 2 s by default) so a stuck host cannot reset the shared GPU
+        { const char * t = std::getenv("QFN_V3_BELL_MS"); bell_h->timeout_ms = t && *t ? std::max(1, std::min(1500, std::atoi(t))) : 500; }
+        if (v3_future) {
+            require(service_exec && service_h && service_control_h && !v3_replay,
+                    "QFN_FUTURE_SERVICE: explicit mode unavailable; no alternate decode fallback");
+            if (!side) require(cudaStreamCreateWithFlags(&side, cudaStreamNonBlocking) == cudaSuccess,
+```
+
+### QFN_V3_CUDA_GRAPH
+
+QFN opt-in static decode-v3 CUDA graph replay.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4058`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        };
+        st.stage_ms += now_ms() - ts;
+        static const bool v3_cuda_graph = [] { const char * e = std::getenv("QFN_V3_CUDA_GRAPH"); return e && *e == '1'; }();
+        for (uint32_t attempt = 0; ; ++attempt) {
+            require(attempt < hp->n_layer + 1, "QFNV3OPT replay exhausted n_layer + 1 attempts");
+            bell_h->error = 0;
+            if (v3_replay) require(cudaMemsetAsync(replay_miss_latch, 0, sizeof(int32_t), stream()) == cudaSuccess,
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4494`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+                _putenv_s("QFN_V3_CUDA_GRAPH", "1");
+            }
+        }
+        p->admit_qsa_indexer(); // independent of expert format; before CUDA/model allocations
+        p->admit_nvfp4(); // DLL/ABI/format/workspace validation precedes CUDA and model allocations
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            require(!p->v3_future || (p->v3_on && !p->v3_replay),
+                    "QFN_V3_FUTURE_SERVICE1 requires QFN_DECODE_V3=1; no replay/eager substitution");
+            const char * capture = std::getenv("QFN_V3_CUDA_GRAPH");
+            require(!p->v3_future || (capture && !std::strcmp(capture, "1")),
+                    "QFN_V3_FUTURE_SERVICE1 requires QFN_V3_CUDA_GRAPH1");
+        }
+        p->prepare_future_service(); // graph/fence/mappings admitted before automatic cache sizing
+```
+
+### QFN_V3_EAGER_OP_TRACE
+
+Optional eager-operation trace for QFN v3 diagnostics. Requires QFN_V3_CUDA_GRAPH=0 explicitly; capture is never silently disabled to permit tracing.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5727`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    qfn_eager_node_trace(cudaStream_t s, const ggml_tensor * n, int i) : stream(s), node(n), index(i) {
+        static const bool requested = [] {
+            const char * value = std::getenv("QFN_V3_EAGER_OP_TRACE");
+            return value && std::strcmp(value, "1") == 0;
+        }();
+        if (!requested) return;
+        cudaStreamCaptureStatus status;
+```
+
+### QFN_V3_FUTURE_SERVICE
+
+Explicit CPU-only DirectStorage future service for V3 decode; requires QFN_DECODE_V3=1 and QFN_V3_CUDA_GRAPH=1; default off; two actual graph submissions per token.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4493`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+            if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
+                _putenv_s("QFN_DECODE_V3", "1");
+                _putenv_s("QFN_V3_FUTURE_SERVICE", "1");
+                _putenv_s("QFN_V3_CUDA_GRAPH", "1");
+            }
+        }
+        p->admit_qsa_indexer(); // independent of expert format; before CUDA/model allocations
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4526`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            p->v3_on = p->v3_replay || std::strcmp(v3, "1") == 0;
+        }
+        if (const char * future = std::getenv("QFN_V3_FUTURE_SERVICE")) {
+            require(!std::strcmp(future, "0") || !std::strcmp(future, "1"), "QFN_V3_FUTURE_SERVICE must be 0 or 1");
+            p->v3_future = !std::strcmp(future, "1");
+            require(!p->v3_future || (p->v3_on && !p->v3_replay),
+                    "QFN_V3_FUTURE_SERVICE1 requires QFN_DECODE_V3=1; no replay/eager substitution");
+```
+
+### QFN_V3_GRAPH_TRACE
+
+Actual CUDA graph capture/rebuild/replay counters and recursive kernel-node submission counts; diagnostic only.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4294`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+static bool ggml_cuda_qfn_graph_trace() {
+    static const bool enabled = [] {
+        const char * value = std::getenv("QFN_V3_GRAPH_TRACE");
+        return value && std::strcmp(value, "1") == 0;
+    }();
+    return enabled;
+}
 ```
 
 ### QUANTIZED_KV_START
@@ -102974,4 +103924,256 @@ Source: `vendor/engines/cosmos_windows/weight_streaming/zimage_backend.py:43`. U
         from cosmos_windows import mem_guard
     except Exception:
         mem_guard = None
+```
+
+### QFN_VRAM_RESERVE_MIB
+
+Physical VRAM kept free at the QFN decode handoff, in MiB; default 128 as DSV4.1.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1877`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            uint64_t nv_free = 0;
+            require(nvml_free_bytes(nv_free), "the decode cache sizing needs NVML physical free VRAM");
+            const char * rs = std::getenv("QFN_VRAM_RESERVE_MIB");
+            const char * mg = std::getenv("QFN_VRAM_MARGIN_MIB");
+            const uint64_t keep = ((rs && *rs ? (uint64_t) std::atoll(rs) : 128ull) + (mg && *mg ? (uint64_t) std::atoll(mg) : (restoring ? 512ull : 1100ull))) << 20;
+            avail = nv_free > keep + (64u << 10) ? nv_free - keep - (64u << 10) : 0;
+            log("[qfn] decode handoff VRAM: NVML free %.2f GiB (CUDA free %.2f GiB), kept %.2f GiB\n",
+```
+
+### QFN_VRAM_MARGIN_MIB
+
+Decode-graph growth margin beside the QFN handoff reserve, in MiB.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            require(nvml_free_bytes(nv_free), "the decode cache sizing needs NVML physical free VRAM");
+            const char * rs = std::getenv("QFN_VRAM_RESERVE_MIB");
+            const char * mg = std::getenv("QFN_VRAM_MARGIN_MIB");
+            const uint64_t keep = ((rs && *rs ? (uint64_t) std::atoll(rs) : 128ull) + (mg && *mg ? (uint64_t) std::atoll(mg) : (restoring ? 512ull : 1100ull))) << 20;
+            avail = nv_free > keep + (64u << 10) ? nv_free - keep - (64u << 10) : 0;
+            log("[qfn] decode handoff VRAM: NVML free %.2f GiB (CUDA free %.2f GiB), kept %.2f GiB\n",
+                nv_free / 1073741824.0, free_b / 1073741824.0, keep / 1073741824.0);
+```
+
+### QFN_CACHE_RELOAD_PCT
+
+Percentage of each layer cache share seeded by the QFN prefill or reload; default 100.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2060`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            return h[a] != h[b] ? h[a] > h[b] : prank(a) < prank(b); });
+        // The seed may fill only part of the slab: each seeded byte is a copy on the compute stream; misses fill the rest.
+        static const uint32_t reload_pct = [] { const char * e = std::getenv("QFN_CACHE_RELOAD_PCT"); return e && *e ? (uint32_t) std::atoi(e) : 100u; }();
+        const uint32_t count = std::min((uint32_t) ((uint64_t) quota * reload_pct / 100), NE);
+        uint64_t bytes = 0;
+        if (reload && count) {
+            // Reuse QFN's bounded direct-extent loader and DSV4.1's prompt
+```
+
+### QFN_AFFINITY_LOGIT
+
+1 keeps the earlier QFN logit-unit residency bias instead of the DSV4.1 probability penalty.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            // DSV4.1 cache affinity: the penalty applies to router probabilities, per-layer calibrated.
+            // QFN_AFFINITY_LOGIT=1 keeps the earlier logit-unit bias.
+            static const bool logit_units = [] { const char * e = std::getenv("QFN_AFFINITY_LOGIT"); return e && *e == '1'; }();
+            choose = logit_units ? ggml_add(ctx, logits, ggml_scale(ctx, r, bias))
+                                 : ggml_add(ctx, probs, ggml_scale(ctx, r, bias * affinity_factor(il)));
+        }
+        if (affinity_calibrating) {
+```
+
+### QFN_AFFINITY_SPREADS
+
+Path of the per-layer router spread calibration used to scale the QFN residency penalty.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1487`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            affinity_spread.assign(hp->n_layer, 0.0212f);
+            if (hp->n_layer == 48) affinity_spread.assign(measured, measured + 48);
+            if (const char * path = std::getenv("QFN_AFFINITY_SPREADS"); path && *path) {
+                std::ifstream in(path);
+                std::string magic, id;
+                unsigned long long bytes = 0;
+                uint32_t experts = 0, nl = 0;
+```
+
+### QFN_AFFINITY_CALIBRATE
+
+Path to write per-layer router spreads measured at bias zero on the segmented decode path.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1514`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+    void calibrate_write() {
+        const char * path = std::getenv("QFN_AFFINITY_CALIBRATE");
+        std::ofstream out(path);
+        out << "DS4AFFINITY1 " << pack.experts[0].blob * hp->n_expert * hp->n_layer << " " << hp->n_expert << " " << hp->n_layer << " qfn\n";
+        char line[64];
+        for (uint32_t l = 0; l < hp->n_layer; ++l) {
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4560`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        wf_extent_fetch_stats(ds_before, &requests_before, &batches_before);
+        p->bell_prepare_ms = p->bell_fetch_ms = p->bell_ack_ms = 0;
+        if (const char * cal = std::getenv("QFN_AFFINITY_CALIBRATE"); cal && *cal && s.residency_bias == 0) {
+            require(!p->v3_on, "QFN_AFFINITY_CALIBRATE uses the segmented decode path");
+            p->affinity_calibrating = true;
+            p->calibrate_sum.assign(p->hp->n_layer, 0.0);
+            p->calibrate_n.assign(p->hp->n_layer, 0);
+```
+
+### QFN_PREFILL_CONE
+
+0 runs attention and experts on every last-layer prompt row instead of stopping at the caches for rows nothing reads.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4350`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        double t_wait = 0, t_comp = 0;
+        {
+            static const bool cone = [] { const char * e = std::getenv("QFN_PREFILL_CONE"); return !(e && *e == '0'); }();
+            const bool dump = std::getenv("QFN_DUMP_CARRY") && *std::getenv("QFN_DUMP_CARRY") == '1';
+            pf_keep_from = !cone || mtp_ok || dump || req.all_top1 ? p0 : (req.full_from >= 0 ? std::min(req.full_from, n - 1) : n - 1);
+        }
+        for (uint32_t il = 0; il < hp->n_layer; ++il) {
+```
+
+### LLAMA_WF_DS_FENCE_SPIN_US
+
+Microseconds to poll a DirectStorage fence before sleeping on an event; default 0.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:2858`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    if (completed >= val) return true;
+    // LLAMA_WF_DS_FENCE_SPIN_US: poll before sleeping; a thread wake per small decode miss wave is latency.
+    static const long spin_us = [] { const char * e = std::getenv("LLAMA_WF_DS_FENCE_SPIN_US"); return e && *e ? std::strtol(e, nullptr, 10) : 0L; }();
+    if (spin_us > 0) {
+        const auto spin_start = std::chrono::steady_clock::now();
+        do {
+            YieldProcessor();
+```
+
+### QFN_LFU_HALF_LIFE
+
+Half-life in decode steps of the QFN expert cache recency-weighted use count.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4456`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+        }
+        p->log("[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\n", int(p->fused_expert_reduce));
+        if (const char * e = std::getenv("QFN_LFU_HALF_LIFE"); e && *e) p->opt.lfu_half_life = (float) std::atof(e);
+        if (const char * e = std::getenv("QFN_PAIRED_GDN")) {
+            require(!std::strcmp(e, "0") || !std::strcmp(e, "1"), "QFN_PAIRED_GDN must be 0 or 1");
+            p->paired_gdn = !std::strcmp(e, "1");
+        }
+```
+
+### LLAMA_WF_DS_SERVICE_INLINE
+
+0 signals the captured service fence in a second DirectStorage submit after the host wait instead of in the read submission.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6769`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    // Service reads release the captured GPU copy from the same submission: DirectStorage signals right after the
+    // reads, with no host wake and second submit. The host still verifies the wave and aborts the epoch on an error.
+    static const bool service_inline = [] { const char * e = std::getenv("LLAMA_WF_DS_SERVICE_INLINE"); return !(e && *e == '0'); }();
+    if (service_ticket && service_inline) {
+        MemoryBarrier();
+        wf->ds_queue->EnqueueSignal(wf->ds_service_fence, service_ticket);
+    }
+```
+
+### QFN_SEED_LFU_MAX
+
+Cap on the prompt count a seeded expert starts with in the QFN cache use score; default 1, since larger counts crowd out the decode working set; 0 keeps the full count.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2085`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+            owner[slot] = (int32_t) (il * NE + e);
+            // QFN_SEED_LFU_MAX caps the prompt count: uncapped counts outlive the decode's own working set.
+            static const double seed_lfu_max = [] { const char * e = std::getenv("QFN_SEED_LFU_MAX"); return e && *e ? std::atof(e) : 1.0; }();
+            lfu[slot] = seed_lfu_max > 0 ? std::min((double) h[e], seed_lfu_max) : (double) h[e];
+            lfu_step[slot] = 0;
+            resident_host[(size_t) il * NE + e] = 1.0f;
+        }
+```
+
+### QFN_NATIVE_NVFP4_SHARE_GU_INPUT
+
+Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:54`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+
+```text
+    static const int value=[](){
+        char option[8]{};SetLastError(ERROR_SUCCESS);
+        const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_SHARE_GU_INPUT",option,sizeof(option));
+        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;
+        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be exactly 0 or 1 before admission\n");return -1;
+    }();return value;
+```
+
+Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556`. Unset read: '0'.
+
+```text
+    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')
+    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')
+    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')
+    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')
+    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')
+    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):
+        raise ValueError('The original unequal-calibration long suite requires shared-input policy0; use the separate equal-GU component arm for policy1')
+```
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:666`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    }
+    void admit_nvfp4() {
+        const char * shared_gu_env = std::getenv("QFN_NATIVE_NVFP4_SHARE_GU_INPUT");
+        require(!shared_gu_env || !std::strcmp(shared_gu_env, "0") || !std::strcmp(shared_gu_env, "1"),
+                "QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be 0 or 1");
+        const bool shared_gu = shared_gu_env && !std::strcmp(shared_gu_env, "1");
+        const char * residual_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
 ```

@@ -8114,18 +8114,12 @@
     ],
     "doc": "DS4_CUDA_MMQ_Q81_PERSISTENT: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_cuda.cu:1135",
       "engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356",
-      "engines/ds4-win/ds4_cuda.cu:1993",
-      "engines/ds4-win/cuda/mmq/ds4_mmq.cu:362"
+      "engines/ds4-mac/ds4_cuda.cu:1135",
+      "engines/ds4-win/cuda/mmq/ds4_mmq.cu:362",
+      "engines/ds4-win/ds4_cuda.cu:1993"
     ],
     "code_defaults": [
-      {
-        "source": "engines/ds4-mac/ds4_cuda.cu:1135",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
-        "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
-      },
       {
         "source": "engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
@@ -8133,7 +8127,7 @@
         "consumer": "    // is not forbidden by capture-mode restrictions, and so the kernel\n    // pointer arg baked into the captured graph stays valid at replay.\n    if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {\n        const size_t bytes = 256 * 1024;\n        cudaError_t err = cudaMalloc(&g_q81_scratch_ptr, bytes);\n        if (err != cudaSuccess) {\n            fprintf(stderr, \"ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; \""
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:1993",
+        "source": "engines/ds4-mac/ds4_cuda.cu:1135",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
         "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
@@ -8143,6 +8137,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {",
         "consumer": "    // is not forbidden by capture-mode restrictions, and so the kernel\n    // pointer arg baked into the captured graph stays valid at replay.\n    if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {\n        const size_t bytes = 256 * 1024;\n        cudaError_t err = cudaMalloc(&g_q81_scratch_ptr, bytes);\n        if (err != cudaSuccess) {\n            fprintf(stderr, \"ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; \""
+      },
+      {
+        "source": "engines/ds4-win/ds4_cuda.cu:1993",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
+        "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
       }
     ]
   },
@@ -10386,18 +10386,12 @@
     ],
     "doc": "DS4_CUDA_NO_DIRECT_IO: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_cuda.cu:4413",
       "engines/ds4-mac/cuda/mmq/ds4_repack.cu:72",
-      "engines/ds4-win/ds4_cuda.cu:9510",
-      "engines/ds4-win/cuda/mmq/ds4_repack.cu:88"
+      "engines/ds4-mac/ds4_cuda.cu:4413",
+      "engines/ds4-win/cuda/mmq/ds4_repack.cu:88",
+      "engines/ds4-win/ds4_cuda.cu:9510"
     ],
     "code_defaults": [
-      {
-        "source": "engines/ds4-mac/ds4_cuda.cu:4413",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
-        "consumer": "        }\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
-      },
       {
         "source": "engines/ds4-mac/cuda/mmq/ds4_repack.cu:72",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
@@ -10405,16 +10399,22 @@
         "consumer": "    if (st.st_blksize > 1) m.direct_align = (uint64_t)st.st_blksize;\n#if defined(__linux__) && defined(O_DIRECT)\n    if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {\n        char proc_path[64];\n        snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", m.fd);\n        int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n        if (direct_fd >= 0) {"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:9510",
+        "source": "engines/ds4-mac/ds4_cuda.cu:4413",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
-        "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
+        "consumer": "        }\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
       },
       {
         "source": "engines/ds4-win/cuda/mmq/ds4_repack.cu:88",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {",
         "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n    if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {\n        char proc_path[64];\n        snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", m.fd);\n        int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n        if (direct_fd >= 0) {"
+      },
+      {
+        "source": "engines/ds4-win/ds4_cuda.cu:9510",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
+        "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
       }
     ]
   },
@@ -51479,33 +51479,21 @@
     "var": "DSV41_BOUNDED_CACHE",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; '0'; Wrapper/conditional default: see the literal call and consumer below",
+    "code_default": "'0'; Wrapper/conditional default: see the literal call and consumer below; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:29",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:31",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_BOUNDED_CACHE')",
-        "consumer": "                restore.append(lambda limit=old: mx.set_cache_limit(limit))\n            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_BOUNDED_CACHE']",
-        "consumer": "            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\""
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103",
         "unset": "'0'",
@@ -51529,6 +51517,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_BOUNDED_CACHE', '1')",
         "consumer": "\ndef test_compressor_missing_history_fails(model, monkeypatch):\n    monkeypatch.setenv(\"DSV41_BOUNDED_CACHE\", \"1\")\n    cache = model.make_cache()\n    mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)\n    lc = cache[0].layers[2]\n    with pytest.raises(ValueError, match=\"no longer retained\"):"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_BOUNDED_CACHE')",
+        "consumer": "                restore.append(lambda limit=old: mx.set_cache_limit(limit))\n            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_BOUNDED_CACHE']",
+        "consumer": "            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\""
       }
     ]
   },
@@ -51645,15 +51645,13 @@
     "var": "DSV41_COMPILE_PRIMITIVES",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; Wrapper/conditional default: see the literal call and consumer below; '0'",
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below; '0'; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
       "vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:225",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:816",
@@ -51661,21 +51659,11 @@
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1408",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/moe_prefill.py:46",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:52",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_COMPILE_PRIMITIVES')",
-        "consumer": "                language._v41_expert_select = mx.compile(namespace[node.name])\n                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_COMPILE_PRIMITIVES']",
-        "consumer": "                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST\n                hc.COMPILE_POST = True"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
@@ -51723,6 +51711,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_COMPILE_PRIMITIVES', '0')",
         "consumer": "    monkeypatch.setenv(\"DSV41_PREFILL_GROUPED_MXFP4\", \"1\")\n    monkeypatch.setenv(\"DSV41_PREFILL_GROUPED_MIN_ROWS\", \"64\")\n    monkeypatch.setenv(\"DSV41_COMPILE_PRIMITIVES\", \"0\")\n    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))\n    up.num_experts = 8\n    mlp = SimpleNamespace(training=False, up_proj=up,\n                          gate_proj=lambda x, ids, **kw: np.ones_like(x),"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_COMPILE_PRIMITIVES')",
+        "consumer": "                language._v41_expert_select = mx.compile(namespace[node.name])\n                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_COMPILE_PRIMITIVES']",
+        "consumer": "                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST\n                hc.COMPILE_POST = True"
       }
     ]
   },
@@ -52042,32 +52042,20 @@
     "var": "DSV41_FAST_RMS_NORM",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; '0'; Wrapper/conditional default: see the literal call and consumer below",
+    "code_default": "'0'; Wrapper/conditional default: see the literal call and consumer below; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:34",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_FAST_RMS_NORM')",
-        "consumer": "                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_FAST_RMS_NORM']",
-        "consumer": "            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)\n                original = language._hc_split_sinkhorn_ops"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221",
         "unset": "'0'",
@@ -52085,6 +52073,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_FAST_RMS_NORM', '1')",
         "consumer": "    monkeypatch.setenv(\"DSV41_FAST_RMS_NORM\", \"0\")\n    expected = norm(x)\n    monkeypatch.setenv(\"DSV41_FAST_RMS_NORM\", \"1\")\n    actual = norm(x)\n    mx.eval(actual, expected)\n    # Native reduction order can put a BF16 result on the adjacent rounding\n    # value. The real QAT model is separately held to the long retrieval gate."
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_FAST_RMS_NORM')",
+        "consumer": "                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_FAST_RMS_NORM']",
+        "consumer": "            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)\n                original = language._hc_split_sinkhorn_ops"
       }
     ]
   },
@@ -85547,28 +85547,28 @@
     "var": "MLX_MIMO_KV_BITS",
     "flag": null,
     "default": null,
-    "code_default": "Assigned by the runtime; see literal consumer; None",
+    "code_default": "None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
-      "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86"
+      "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86",
+      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['MLX_MIMO_KV_BITS']",
-        "consumer": "    args = parser.parse_args()\n    if args.kv_bits:\n        os.environ[\"MLX_MIMO_KV_BITS\"] = str(args.kv_bits)\n    if args.max_context and args.kv_bits == 8:\n        os.environ[\"MLX_MIMO_CAPACITY_TOKENS\"] = str(args.max_context)\n        os.environ[\"MLX_MIMO_CAPACITY_LIMIT\"] = str(int(getattr(args, \"wired_limit_mb\", 0) or 0) * 2**20)\n    args.func(args)"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86",
         "unset": "None",
         "read": "os.environ.get('MLX_MIMO_KV_BITS')",
         "consumer": "            else:\n                caches.append(QuantizedKVCache(group_size=64, bits=8)\n                              if os.environ.get(\"MLX_MIMO_KV_BITS\") == \"8\" else KVCache())\n        return caches\n\n\nclass Model(nn.Module):"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['MLX_MIMO_KV_BITS']",
+        "consumer": "    args = parser.parse_args()\n    if args.kv_bits:\n        os.environ[\"MLX_MIMO_KV_BITS\"] = str(args.kv_bits)\n    if args.max_context and args.kv_bits == 8:\n        os.environ[\"MLX_MIMO_CAPACITY_TOKENS\"] = str(args.max_context)\n        os.environ[\"MLX_MIMO_CAPACITY_LIMIT\"] = str(int(getattr(args, \"wired_limit_mb\", 0) or 0) * 2**20)\n    args.func(args)"
       }
     ]
   },
@@ -90362,33 +90362,21 @@
     "var": "MLX_VLM_PIPELINE_LAYERS",
     "flag": null,
     "default": null,
-    "code_default": "Assigned by the runtime; see literal consumer; None; ''",
+    "code_default": "None; Assigned by the runtime; see literal consumer; ''",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
-      "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951",
       "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40",
+      "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
+      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
       "vendor/mac-mlx/mlx_vlm/server/cli.py:53",
       "vendor/mac-mlx/mlx_vlm/server/cli.py:184"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['MLX_VLM_PIPELINE_LAYERS']",
-        "consumer": "    require_gpu: bool,\n):\n    os.environ[\"MLX_VLM_PIPELINE_LAYERS\"] = pipeline_layers\n    model_path = get_model_path(model)\n    group = _PipelineGroup(rank, size)\n\n    raw_config = json.loads((Path(model_path) / \"config.json\").read_text())"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
-        "unset": "None",
-        "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
-        "consumer": "        self.pipeline_size = group.size()\n        n_layers = len(core.layers)\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951",
         "unset": "None",
@@ -90400,6 +90388,18 @@
         "unset": "None",
         "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
         "consumer": "        n_layers = len(self.model.layers)\n\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
+        "unset": "None",
+        "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
+        "consumer": "        self.pipeline_size = group.size()\n        n_layers = len(core.layers)\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['MLX_VLM_PIPELINE_LAYERS']",
+        "consumer": "    require_gpu: bool,\n):\n    os.environ[\"MLX_VLM_PIPELINE_LAYERS\"] = pipeline_layers\n    model_path = get_model_path(model)\n    group = _PipelineGroup(rank, size)\n\n    raw_config = json.loads((Path(model_path) / \"config.json\").read_text())"
       },
       {
         "source": "vendor/mac-mlx/mlx_vlm/server/cli.py:53",
@@ -92039,7 +92039,7 @@
     "doc": "Experimental two-component gate/up/down activation quantization for short native-packed NVFP4 mode6 (nt1..4, including short final prefill); default0 retains original arithmetic. Reuses grouped FP4 GEMMs, adds products before SwiGLU/globals, uses extra persistent scratch and may reduce cache slots. Long prefill unchanged; short non-mode6 with1 fails. Both fused-mid schedules supported; numerical/performance qualification pending.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:63",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:551",
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488"
     ],
@@ -92051,10 +92051,10 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:551",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL', '0')",
-        "consumer": "                        help='Equal gate/up globals, eager/captured changes; compare full output hashes across explicit policy0/1 receipts')\n    args=parser.parse_args();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')"
+        "consumer": "                        help='Equal gate/up globals, eager/captured changes; compare full output hashes across explicit policy0/1 receipts')\n    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')"
       },
       {
         "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670",
@@ -92085,7 +92085,7 @@
     "doc": "Opt-in DSV packed FP4 fused vector decode with dynamic Q8_1 activations and original QFN UE4M3 per16 weight scales/tails; requires explicit native-packed decode mode6, conflicts with FP4 residual activations. Both fused-mid schedules retained. No expert weight inversion; persistent activation scratch. Default0 pending full100K numerical/performance and sampler qualification.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:72",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:552",
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4489"
     ],
@@ -92097,10 +92097,10 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_DECODE_VECTOR must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:552",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR', '0')",
-        "consumer": "    args=parser.parse_args();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):"
+        "consumer": "    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):"
       },
       {
         "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674",
@@ -92133,7 +92133,7 @@
     "doc": "Short native-packed NVFP4 mode6 fused SwiGLU/down pack; independent calibrated gate/up/down scales retained.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:36",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:572"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575"
     ],
     "code_defaults": [
       {
@@ -92143,7 +92143,7 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_FUSED_MID\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0; // measured: the short schedule is slower in prefill, decode unchanged\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_FUSED_MID must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:572",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_FUSED_MID', '0')",
         "consumer": "    result=dict(status='IN-PROGRESS',qualification='Synthetic layout/arithmetic only; whole-model KL/top1/recall pending',\n                host_fixture_data_budget_bytes=1536*2**20,gpu_allocation_budget_bytes=12*2**30,\n                short_mode6_fused_mid=os.environ.get('QFN_NATIVE_NVFP4_FUSED_MID','0'),\n                source_sha256_before=hashes(),native_cases=[],compatibility_cases=[])\n    if args.residual_self_test:\n        result.update(test_arm='residual-self-test',short_mode6_residual=residual_flag,residual_cases=[])\n    if args.vector_self_test:"
@@ -92192,7 +92192,7 @@
     "doc": "Native-packed NVFP4 long mode6 route grouping: 0 retains original warp scan, 1 selects stable CTA256 contiguous-token grouping with fixed 2 KiB shared storage. Flag1 refuses long requests (nt>4) in modes0..5 at workspace/run admission instead of ignoring the policy. Short requests retain every existing supported mode and compact/vector path. Full route/tail validation retained. Experimental; CUDA grouping arrays and whole-model numeric/performance qualification required before default promotion.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:45",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:580"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:583"
     ],
     "code_defaults": [
       {
@@ -92202,7 +92202,7 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_GROUP_PARALLEL\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_GROUP_PARALLEL must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:580",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:583",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_GROUP_PARALLEL', '0')",
         "consumer": "    if args.grouping_self_test:\n        result.update(test_arm='grouping-self-test',grouping_cases=[],\n                      grouping_policy=os.environ.get('QFN_NATIVE_NVFP4_GROUP_PARALLEL','0'))\n    if args.share_gu_input_self_test:\n        result.update(test_arm='share-gu-input-self-test',shared_gu_policy=shared_gu_flag,shared_gu_cases=[])\n    c=None;primary=None\n    def save():receipt.write_text(json.dumps(result,indent=2)+'\\n')"
@@ -101113,7 +101113,7 @@
     "doc": "Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:54",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:553",
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:666"
     ],
     "code_defaults": [
@@ -101124,7 +101124,7 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:553",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT', '0')",
         "consumer": "    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):\n        raise ValueError('The original unequal-calibration long suite requires shared-input policy0; use the separate equal-GU component arm for policy1')"
