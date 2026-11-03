@@ -45,7 +45,7 @@ is agreement. A dash means no matching measurement is available.
 
 | Prompt length | Bias | Prefill | Decode | KL | Top-1 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100,000 | 0 | — | — | — | — |
+| 100,000 | 0 | 2,614 | — | — | — |
 | 100,000 | 0.35 | — | — | — | — |
 | 100,000 | 1.36125 | — | — | — | — |
 
@@ -59,8 +59,8 @@ Reproduce QFN's exact fixture and timing protocol with the
 [100K guide](docs/QFN_100K_REPRO.md), and use the
 [calibration workflow](examples/single-machine/CALIBRATION.md) for KL/top-1.
 The portable timing wrapper has exact-fixture and CPU protocol checks;
-native wrapper qualification remains pending. DeepSeek's matching current-stack
-100K measurements are unavailable; no short-prompt result substitutes for them.
+native wrapper qualification remains pending. The short DeepSeek 100K attempt did not complete every requested metric;
+unavailable decode or full-vocabulary quality measurements remain dashes.
 
 ### Download, pack and run
 
