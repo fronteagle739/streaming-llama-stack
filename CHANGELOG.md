@@ -2,43 +2,59 @@
 
 ## 2026-11-03 — portable QFN pack and exact 100K benchmark
 
-- Add Streaming Llama Pack (`.slpack`) reader/writer support, the portable QFN
-  importer, pinned NVIDIA and auxiliary recipes, full source/section identities,
+- Add Streaming Llama Pack (`.slpack`) reader/writer support, a portable QFN
+  importer, pinned NVIDIA and auxiliary recipes, source/section identities,
   canonical provenance, inverse checks and explicit memory supervision. Preserve
   dense quantization provenance, MTP, vision, profiles, sampler defaults and all
-  supported runtime controls. Complete raw-source-plus-pinned-auxiliary proof
-  passed: all 25 source pins/all 26 regenerated sections, inverse/HC8 and complete
-  reference readback. Canonical 131,730,218,740 bytes has SHA256
+  runtime controls. The complete raw-source-plus-pinned-auxiliary proof passes;
+  canonical output is 131,730,218,740 bytes with SHA256
   `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
-  Seven declared provenance fields retain every metadata field; no second full
-  model copy was written. Pin Python 3.12.10/NumPy 2.5.0/regex 2026.5.9/psutil 7.2.2
-  through requirements-pack.txt. Dense/PLE quantization and the explicit
-  auxiliary dependency remain; the complete pack is not raw-source lossless.
-- Add the audited exact 100K public-text fixture reconstruction and portable
-  guarded stdio timing wrapper. The 400,000-byte token fixture matches exactly.
-  Three CPU-only protocol cases pass; native wrapper performance qualification
-  is pending. Keep full-vocabulary calibration and sampled natural-stop tests.
-- Select QFN Max speed bias 0.68 from historical 100K evidence: 50.12 tok/s,
-  mean KL 0.13732 and top-1 88.28125%. Those receipts predate the installed
-  build. No new 0.68 inference was run. Retain numeric 0.35 and its prior data.
-- Accept the final quiet installed QFN control A2 at 4,439.86 /25.2482 /
-  46.2537 tok/s (prefill /quality /bias-0.35), exact 100K with 100 warmup and 128
-  measured tokens per mode, same sequence, MTP off/eight read parts, recall
-  and guard PASS. Keep the historical 4,573.37 /26.7441 /46.7450 checkpoint
-  separate; supersede the earlier installed 4,326.40 /25.6518 /42.8092 row.
-- Close the regression investigation after the controlled same-pack 0.35
-  comparison cleared engine/DLL changes; concurrent load explains most of the
-  earlier gap. Installed range/mean spreads were 1.3311% / 4.4259% / 1.3186%.
-  The residual roughly 3% prefill read-path difference remains unexplained and
-  on the roadmap. Workspace 32 and fresh-placement performance remain unproven;
-  no further workspace/storage tests are planned for this delivery. Current
-  installed-build KL/top-1 remain queued; historical metrics are separate.
-- Document both models' immutable Hugging Face links, conversion/launch commands,
-  settings and evidence boundaries. DSV4.1's historical 100K decode is
-  7.39 /24.11 tok/s with a 100-discarded +899-timed protocol. Its separate
-  short-prompt KL 0.479/top-1 84.1% result is not presented as 100K quality.
-  Current native DSV4.1 prefill/KL/top-1 and exact historical benchmark command
-  remain queued; native main/auxiliary output identities are not yet measured.
-- Keep GLM's separate source-format handoff distinct from executable support in
-  this review tree; full native build/pack/inverse/runtime proof remains pending.
-  No public push or complete three-model reproducibility claim is made.
+  The pack includes quantized dense/PLE tensors and requires the auxiliary input;
+  it is not a lossless conversion of the NVIDIA download alone.
+- Pin Python 3.12.10, NumPy 2.5.0, regex 2026.5.9 and psutil 7.2.2 in
+  [requirements-pack.txt](requirements-pack.txt).
+- Add the exact 100K public-text fixture builder and guarded stdio benchmark.
+  Preserve full-vocabulary calibration, sampled natural stops and all samplers.
+- Set QFN Max speed to bias 0.68 while retaining numeric intermediate values.
+- Document QFN and DeepSeek V4.1 source links, pinned revisions, pack/run commands
+  and verification in [the recipes guide](docs/SLPACK_RECIPES.md).
+- Keep GLM's separately qualified source-format handoff distinct from runnable
+  support in this tree: native adoption/build/pack/inverse/runtime/output identity
+  remain pending. DeepSeek native main/auxiliary output identities also remain
+  unmeasured. Complete three-model qualification is not claimed.
+
+### Performance and quality
+
+Hardware: RTX 5090 with 32 GB VRAM, 32 GB system RAM and fast local
+DirectStorage NVMe storage. Rates are tokens/s. Each decode cell lists quality
+and speed throughput; speed bias applies to the speed endpoint, while quality
+and prefill use unbiased routing. KL is relative to unbiased routing and top-1
+is agreement. A dash means no measurement is available.
+
+#### QFN
+
+| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100,000 | 0.35 | 4,440 | 25.25 / 46.25 | — | — |
+| 100,000 | 0.68 | 4,150.10 | 25.56 / 50.12 | 0.13732 | 88.28125% |
+
+#### DeepSeek V4.1
+
+| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100,000 | unrecorded | — | 7.39 / 24.11 | — | — |
+| 384 | 1.36125 | — | — | 0.479 | 84.1% |
+
+QFN timing uses 100 discarded warmup tokens and 128 measured tokens per mode
+on one continuing sequence, MTP off and eight read parts. The 100K DeepSeek
+decode window discards 100 tokens and measures 899; its 384-token quality
+measurement is separate. QFN named modes use 0 / 0 / 0.68; numeric intermediate
+values, including 0.35, remain available. DeepSeek modes use 0 / 0.35 / 1.36125.
+
+Reproduce QFN's exact fixture and timing protocol with the
+[100K guide](docs/QFN_100K_REPRO.md), and use the
+[calibration workflow](examples/single-machine/CALIBRATION.md) for KL/top-1.
+The portable timing wrapper has exact-fixture and CPU protocol checks;
+native wrapper qualification remains pending. The precise DeepSeek 100K
+fixture/benchmark command and native prefill/100K KL/top-1 measurements remain
+queued. Its 384-token quality values do not establish 100K quality.

@@ -142,10 +142,8 @@ CPU protocol checks from pending native wrapper qualification.
 
 
 Current shipped QFN named modes are 0 / 0 / 0.68 for the native-packed NVFP4
-model/quant profile. Max speed 0.68 was selected on 2026-11-03 from historical evidence;
-no new 0.68 GUI or 100K tests were run. Its historical 100K evidence is 50.12 tok/s,
-top-1 88.3%, KL 0.137 and predates the installed build. The short calibration
-workflow proof above selected 0.35 and remains historical evidence of the
-workflow; its measured table is unchanged. Continuous numeric bias values,
-including 0.35, remain available. Future explicit calibration still runs and
-reports its own complete gates and sampled-stop evidence; none are disabled.
+model/quant profile. The short calibration workflow proof above establishes
+workflow behavior, not a new full-context calibration. Continuous numeric bias
+values and every sampler remain supported. Use the
+[measurement table](../../README.md#performance-and-quality) for rates and
+quality results, and run a new calibration for the intended machine and quant.

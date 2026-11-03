@@ -6,19 +6,15 @@ bytes, persistent activation storage and a CUDA graph per token remain intact.
 The model format is Streaming Llama Pack (`.slpack`); see [format](SLPACK.md),
 [pinned recipes](SLPACK_RECIPES.md) and [exact 100K reproduction](QFN_100K_REPRO.md).
 
-Named modes select 0/0/0.68. The accepted installed 0.35 control is a separately
-requested intermediate point, not a new 0.68 measurement. At exact 100K with 100
-discarded warmup and 128 measured tokens per mode on the same sequence, the final
-quiet installed control measured 4,439.8570 prefill/25.2482 quality/46.2537 tok/s
-at bias 0.35, recall and guard PASS. Current installed KL/top-1 remain unmeasured.
-Historical 0.68 measured 50.1246 tok/s, KL 0.137320748/top-1 88.28125%, before the
-installed build. No new 0.68 inference was run. [README evidence](../README.md)
-separates all checkpoints and the regression closure.
+Named modes select 0/0/0.68; numeric bias 0.35 and the full supported range
+remain available. See the [performance table](../README.md#performance-and-quality)
+and [exact 100K reproduction](QFN_100K_REPRO.md). Current build KL/top-1 and
+native qualification of the portable timing wrapper remain unmeasured.
 
-All arithmetic aliases, numeric bias values, samplers, stop behavior, MTP,
-RAM expert tiers and other runtime capabilities remain supported. Workspace 12
-remains the default; the optional 32 MiB setting is unqualified. Fresh source
-build and full three-model reproduction qualification remain incomplete.
+All arithmetic aliases, samplers, stop behavior, MTP, RAM expert tiers and other
+runtime capabilities remain supported. Workspace 12 remains the default;
+the optional 32 MiB setting is unqualified. Fresh source build and full
+three-model reproduction qualification remain incomplete.
 
 ## Retained reference and experimental arithmetic
 

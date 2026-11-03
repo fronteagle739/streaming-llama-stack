@@ -60,27 +60,13 @@ the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
 Copy [qfn.example.json](qfn.example.json) to `my.local.json`, set `model` and `gpu_uuid`, then run
 `qfn-max-quality.ps1`, `qfn-balanced.ps1` or `qfn-max-speed.ps1`. The engine's code defaults are the fastest qualified path:
 packed-vector FP4 decode on the bytes prefill streams, one model graph and one service graph per token,
-the prefill carry in the cache tail, eight-split expert reads, MTP off. Exact 100K prompt, warm decode:
-
-| Setting | Decode | Against Max quality |
-|---|---:|---:|
-| Max quality | 26.74 tok/s | byte-identical to the native Q8 reference |
-| Balanced, initial reference | same unbiased routing | conservative until a machine-local sweep selects an intermediate value |
-| Explicit bias 0.35, historical qualified build | 46.74 tok/s | deliberate routing tradeoff: KL 0.0372, top-1 92.58% on 256 forced rows |
-| Explicit bias 0.35, accepted quiet installed control | 46.2537 tok/s | exact 100K recall/guard PASS; installed-build KL/top-1 unmeasured |
-| Max speed, bias 0.68, historical pre-install build | 50.12 tok/s | deliberate routing tradeoff: KL 0.137, top-1 88.3%; no installed-build GUI/timing test at this bias |
-
-The historical default-only 100K run measured prefill 4,573 tok/s; the three-run combined
-candidate median was 4,625 tok/s. Final accepted quiet installed control measured
-4,439.86 prefill and 25.2482 Max quality tok/s; the regression investigation is
-closed, with roughly 3% residual prefill read-path difference
-unexplained and roadmap-only. The earlier installed r2 remains historical.
-The delivered Max speed selection is 0.68 as of 2026-11-03;
-no new 0.68 inference tests were run.
-The 0.68 historical row predates the installed build. Three historical GUI checks at bias
-0.35 stopped naturally; this is sampled evidence, not a guarantee for every prompt. Keep the pack
-on a fast NVMe volume. MTP and the RAM expert tier remain available but are off
-in these measured defaults because their tested configurations lost throughput.
+the prefill carry in the cache tail, eight-split expert reads and MTP off.
+See the [performance and quality table](../../README.md#performance-and-quality)
+for measured prompt lengths, biases and available metrics. The
+[exact 100K guide](../../docs/QFN_100K_REPRO.md) gives the fixture and commands;
+native qualification of the portable timing wrapper remains pending.
+Keep the pack on a fast NVMe volume. MTP and the RAM expert tier remain
+available and are off in the measured defaults.
 
 Each model carries its own settings in [qfn.settings.json](qfn.settings.json) or
 [dsv41.settings.json](dsv41.settings.json). These record all three bias values,
@@ -101,4 +87,4 @@ automatic calibration of the current machine. Recalibrate after changing
 hardware, storage, model weights, quantisation, context, cache or kernels; see
 [CALIBRATION.md](CALIBRATION.md). A new machine-local calibration sweep must report KL/top-1, warm throughput,
 cache hits and natural generation stops. The shipped 0.68 Max speed selection is
-an explicit selection from historical 100K evidence, not a new machine calibration.
+a reference selection, not a new machine calibration.

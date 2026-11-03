@@ -26,49 +26,41 @@ compatible auxiliary container. The complete pack is not claimed lossless
 against the raw NVIDIA checkpoint. No supported fields, samplers, arithmetic
 aliases, stop behavior, numeric bias range or MTP capability were removed.
 
-### Performance and quality evidence
+### Performance and quality
 
-These are separate measured checkpoints, not a matched comparison between
-models or builds. The final accepted installed row is the quiet control A2.
-It uses the same 100K fixture, MTP off, eight read parts, and 100 discarded
-warmup plus 128 measured tokens for each mode on one continuing sequence.
-Recall and guarded cleanup passed.
+Hardware: RTX 5090 with 32 GB VRAM, 32 GB system RAM and fast local
+DirectStorage NVMe storage. Rates are tokens/s. Each decode cell lists quality
+and speed throughput; speed bias applies to the speed endpoint, while quality
+and prefill use unbiased routing. KL is relative to unbiased routing and top-1
+is agreement. A dash means no measurement is available.
 
-| Model / measured checkpoint | Prompt and decode window | Prefill tok/s | Quality decode tok/s | Biased decode tok/s | Bias |
-| --- | --- | ---: | ---: | ---: | ---: |
-| QFN historical accepted checkpoint | Exact 100K; 100 discarded +128 measured per mode, same sequence | 4,573.37 | 26.7441 | 46.7450 | 0.35 |
-| QFN installed `.slpack`, final accepted quiet control A2 | Exact 100K; same 100+128 protocol | 4,439.86 | 25.2482 | 46.2537 | 0.35 |
-| QFN historical speed point, predating the installed build | Exact 100K; same 100+128 protocol | 4150.10 | 25.5618 | 50.1246 | 0.68 |
-| DSV4.1 historical packed-FP4 decode | 100K natural-text chat prompt; 100 discarded +899 timed steps | Not qualified here | 7.39 | 24.11 | 1.36125 |
+#### QFN
 
-The historical and installed rows use different executables. The controlled
-same-pack 0.35 comparison cleared engine/DLL changes as the regression cause;
-concurrent load explains most of the earlier gap. Installed control spread
-(range divided by mean) was 1.3311% for prefill, 4.4259% for quality decode and
-1.3186% for biased decode. The quiet A2 row is the current timing reference;
-ordinary operating-system activity remained. The residual roughly 3% prefill
-read-path difference is unexplained and remains on the roadmap. The regression
-investigation is closed; no further workspace/storage tests are planned for
-this delivery. Workspace 32 remains unproven, with default 12. The earlier
-installed 4,326.40 / 25.6518 / 42.8092 row is historical only.
+| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100,000 | 0.35 | 4,440 | 25.25 / 46.25 | — | — |
+| 100,000 | 0.68 | 4,150.10 | 25.56 / 50.12 | 0.13732 | 88.28125% |
 
-The selected QFN Max speed setting is now **0.68**; Max quality and the current
-conservative Balanced reference use zero. The numeric 0.35 point remains
-available with its historical evidence. The 0.68 selection is delivered, but
-no new installed-build 0.68 inference or timing was run. Its historical
-full-vocabulary test at 100K measured mean KL **0.13732**, top-1 agreement
-**88.28125%** over 256 rows and 248,320 vocabulary columns, relative to unbiased
-routing. This is an intentional routing tradeoff, not a bit-identical gate.
-Current installed-build KL/top-1 remain unmeasured and queued; the accepted
-0.35 timing row does not inherit the historical quality metrics.
+#### DeepSeek V4.1
 
-DSV4.1's separate older **short-prompt** 384-token sweep measured KL **0.479**
-and top-1 **84.1%** at bias 1.36125, versus unbiased routing on the same GGUF.
-Those quality values are not 100K measurements and must not be attached to the
-7.39/24.11 timing pair as though they came from one arm. Current native DSV4.1
-100K prefill, KL and top-1 remain queued. No unverified 3,917-tok/s prefill claim
-is used here. DSV4.1 reference mode biases remain 0 /0.35 /1.36125, tile 4096,
-eight read parts, ultra-cone prefill (keep 2541), and ds4-decode.
+| Prompt length | Speed bias | Prefill | Decode quality / speed | KL | Top-1 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100,000 | unrecorded | — | 7.39 / 24.11 | — | — |
+| 384 | 1.36125 | — | — | 0.479 | 84.1% |
+
+QFN timing uses 100 discarded warmup tokens and 128 measured tokens per mode
+on one continuing sequence, MTP off and eight read parts. The 100K DeepSeek
+decode window discards 100 tokens and measures 899; its 384-token quality
+measurement is separate. QFN named modes use 0 / 0 / 0.68; numeric intermediate
+values, including 0.35, remain available. DeepSeek modes use 0 / 0.35 / 1.36125.
+
+Reproduce QFN's exact fixture and timing protocol with the
+[100K guide](docs/QFN_100K_REPRO.md), and use the
+[calibration workflow](examples/single-machine/CALIBRATION.md) for KL/top-1.
+The portable timing wrapper has exact-fixture and CPU protocol checks;
+native wrapper qualification remains pending. The precise DeepSeek 100K
+fixture/benchmark command and native prefill/100K KL/top-1 measurements remain
+queued. Its 384-token quality values do not establish 100K quality.
 
 ### Download, pack and run
 
@@ -106,7 +98,7 @@ back the entire reference. The verified canonical output is 131,730,218,740 byte
 SHA256 `195df4842abf2dd335ad706be6518611b2a433e806d98c4edcc8fe5e2b309a92`.
 Its metadata is 73 bytes longer and changes exactly seven declared provenance
 fields while retaining every field. All 25 nonmetadata payloads remain identical
-to the historical reference. The proof calculated the exact output identity
+to the reference artifact. The proof calculated the exact output identity
 without writing a second full model. Both memory guards closed successfully;
 bounded paging observation is not a claim of zero physical paging I/O.
 
@@ -132,8 +124,8 @@ powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mod
 ```
 
 The DSV commands describe the supported conversion and launch route; they do
-not reproduce the historical 100K decode receipt automatically. Its exact
-historical fixture/benchmark command and a current matched 100K prefill,
+not reproduce the 100K decode receipt automatically. Its exact
+exact fixture/benchmark command and a current matched 100K prefill,
 quality and speed qualification remain required. Preserve all main,
 DSpark/MTP and vision outputs. The recipe's 518,596,067,328-byte Q4 main-only
 reference, SHA256
@@ -147,103 +139,6 @@ handoff. Its `scripts/glm53f_pack.py` route is not present in this QFN review
 tree. Native adoption/build, full packing, inverse verification, runtime
 qualification and output size/hash remain pending. This package is not claimed
 to provide complete measured three-model download/pack/verify/run reproduction.
-
-## Other historical results
-
-DeepSeek V4.1 Flash on one RTX 5090 desktop with 32 GB of RAM, plus an optional
-512 GB Mac Studio M3 Ultra for decode. Every figure below is **real text**: *I Promessi
-Sposi* with a password at the start and a recall question at the end, 199,952 tokens
-(the 100K rows use its first 100,000 tokens). Every run below answered the password
-correctly. Logits are bit-identical to the
-previous build. Earlier README figures (for example 5,240 tok/s) were measured on
-100,000 *identical* tokens. That file needs about 1,200 Engram rows per table, against
-1.66M on real text, so it hid about 37 s of Engram and spill cost at 200K. Those
-figures are retired.
-
-### Single machine: RTX 5090
-
-| Model file | Prompt | Prefill (prompt clock) | Launch to first token | Decode, Max quality | Decode, Max speed |
-|---|---:|---:|---:|---:|---:|
-| Packed FP4 (tensor-core-native layout) | 200K | **43.2 s = 4,632 tok/s** | 47.2 s | **7.6-7.9 tok/s** | **22.7 tok/s** |
-| Q4_K/Q8_0 | 200K | 59.6 s = 3,356 tok/s | 63.9 s | 7.5 tok/s | 17.8 tok/s |
-
-Before this release the same FP4 200K prompt took 76.2 s (2,623 tok/s), and 100K took
-40.3 s. Three changes made the difference:
-- Engram rows are read as 1 MiB extents through one queue at QD64, instead of about 3M
-  random 4-8 KiB reads per sweep. This volume caps 4 KiB random reads at ~280K IOPS.
-- One early load at open holds every sweep's rows.
-- The 1M-context hidden bank holds the whole sweep, so no rows spill (graph floor 3.0 GiB).
-
-The remaining gap to the synthetic figure is real-text expert diversity in the
-executor (31.1 s against 29.3 s), the tail weight stream (6.8 s) and an Engram wait
-(about 2.5 s). Q4 Max speed was measured with desktop applications open. The
-planner then refused the whole-prompt Engram admission (9.37 GB needed, 9.30 GB room),
-so each sweep loaded its own rows: still exact, but slower.
-
-### Single machine: Mac Studio M3 Ultra (512 GB)
-
-| Model file | Prompt | Prefill | Decode | Notes |
-|---|---:|---:|---:|---|
-| Mac decode FP4 | 200K | 384 tok/s (521 s) | 36.6 tok/s serial | Metal layer prefill |
-| Mac decode FP4 + DSpark | 200K | 311 tok/s (643 s) | 36.8 tok/s (prose; DSpark rarely drafts on prose) | |
-
-The Mac-only engine must keep Metal layer prefill on. The paired receiver preset
-disables it, and with it disabled the Mac prefills one token at a time (~37 tok/s); the
-stack's Mac receiver now unsets it for Mac-only runs.
-
-### Two machines: RTX prefill, Mac decode
-
-200K real text: packed FP4 on the RTX, Mac decode FP4 on the Mac.
-
-| Prefill figure | Value |
-|---|---:|
-| (1) RTX prefill rate alone (single-machine prompt clock) | **43.2 s = 4,632 tok/s** |
-| (1) RTX producer prompt clock inside the paired run | 44.4 s |
-| (2) Effective end-to-end prefill on the current 5 Gb/s link, measured | **55.4 s = 3,610 tok/s** |
-| (3) Estimate: 10 GbE, transfer link-bound | ~52.3 s = ~3,830 tok/s |
-| (3) Estimate: Thunderbolt 4/5 bridge, transfer link-bound | ~51.8-52.0 s = ~3,850 tok/s |
-
-Time to first token is 56.3 s from the client's request, with the Mac engine already
-loaded at pairing or preset start. Decode runs at **37.0 tok/s**.
-
-Measured stage breakdown of (2). The sum is prompt_ms on the Mac clock:
-
-| Stage | Seconds |
-|---|---:|
-| RTX producer startup, admission and allocation, prefill, until ready | 48.35 |
-| Export of 0.66 GB BF16 wire (1.30 GB canonical), streaming over direct TCP and Mac load | 3.73 |
-| Mac owner-hash verification | 0.88 |
-| Mac prefix verification | 0.88 |
-| Rewind anchor (Mac capture plus RTX save) | 1.00 |
-| Mac catch-up hash chain | 0.44 |
-| **prompt_ms** | **55.39** |
-
-Before this release the same 200K paired run took 101.9 s (1,962 tok/s), with about
-183 s to first token. The changes since: real-text Engram, an F32-to-BF16 wire,
-in-stream owner hashing, no rewind re-hash, and a direct TCP stream in place of the
-SSH tunnel. That stream goes through a small relay in the Mac receiver, because macOS
-Local Network privacy blocks an unapproved ds4-server from dialling the RTX. The SSH
-tunnel remains the explicit fallback.
-
-Assumptions for the estimates in (3):
-- Only the transfer stage is rescaled, to payload / achievable link rate.
-- Payload is the BF16 wire, 0.66 GB at 200K.
-- Achievable rates: 5 GbE ~550 MB/s (1.2 s), 10 GbE ~1.1 GB/s (0.6 s), Thunderbolt 4
-  bridge ~2 GB/s (0.33 s), Thunderbolt 5 bridge ~4 GB/s (0.17 s).
-
-Today the stream runs at ~178 MB/s of wire bytes, and it is bound by the RTX export
-loop (GPU readback, BF16 narrowing and per-owner SHA-256), not by the 5 Gb/s link. A
-faster link therefore helps only after that loop is overlapped. The link itself
-negotiates at 5 Gb/s, not 10.
-
-**Known limits.**
-- Cross-machine KL is mean 0.028, max 0.054 nats over 8 rows (qualification limit 0.1
-  mean / 0.5 max).
-- The RTX-Mac link runs at 5 Gb/s.
-- About 3 s of RTX startup sits inside prompt_ms.
-- About 3 s of Mac-side verification is serial.
-
-[Paired measurements and timing scope](docs/PERFORMANCE.md#rtx-prefill-mac-decode).
 
 ### Presets and scripts (fastest defaults)
 
@@ -259,56 +154,18 @@ negotiates at 5 Gb/s, not 10.
 
 The host-RAM expert tier and the CPU expert lane stay opt-in toggles.
 
-Other models on the same streaming engine and RTX 5090:
-
-| Model | Best prefill | Prompt length |
-|---|---:|---:|
-| Step-3.5 Flash (Q8_0, 194 GB) | 2,294 tok/s | about 25K tokens |
-| MiniMax M2.5 (Q3_K_XL, 100 GB) | 1,576 tok/s | 9K tokens |
-| GLM-5 (Q4_K_XL, 400 GB) | 764 tok/s | 16K tokens |
-| Kimi K2.5 (Q3_K_XL, 500 GB) | 652 tok/s | 16K tokens |
-
-[Full numbers, with the conditions for each](docs/PERFORMANCE.md).
-
 ### Host-RAM expert tier
 
-The host-RAM tier stays **off by default** (`LLAMADECODE_HOST_CACHE_MB=0`). Round 4
-(2026-10-30) moved its data movement off the critical path: the VRAM-to-RAM copy-in
-runs on its own stream with one event, the DirectStorage batch is submitted first and
-RAM hits upload on a separate H2D stream while it reads, and Max-speed routing prices
-a RAM expert at half a miss (`LLAMADECODE_RAM_ROUTE_COST=0.5`). On this 32 GB box the
-tier is a small gain only at FP4 Max quality and still a loss elsewhere: Windows refuses
-to CUDA-register the locked tier in-process, so each hit is copied through pinned
-staging (about 1 ms of CPU per expert), and a 6.6 GB tier holds 351 experts, removing
-only 6% of misses.
-
-Packed FP4 unless marked Q4, 899 warm steps, VRAM headroom 128 + 64 MiB, 6.6 GB tier:
-
-| Context, endpoint | Tier off | Tier on |
-|---|---:|---:|
-| 50K Max quality | 7.30 tok/s | 7.27 / 7.39 tok/s |
-| 100K Max quality | 7.36 tok/s | 7.48 tok/s |
-| 50K Max speed | 23.88 tok/s | 22.94 tok/s |
-| 100K Max speed | 23.27 tok/s | 22.71 tok/s |
-| Q4 50K Max quality | 7.26 tok/s | 6.94 tok/s |
-| Q4 100K Max quality | 7.34 tok/s | 6.97 tok/s |
-
-The earlier synchronous tier (`LLAMADECODE_HOST_ASYNC=0`) measured 7.06 tok/s on the
-same 50K Max quality run. Max-speed routing that counts RAM as VRAM
-(`LLAMADECODE_RAM_ROUTE_COST=0`) measured 21.58 tok/s against 22.85 at 0.5.
-Free-RAM sizing has a practical limit: an 8.7 GB tier left 2.2 GB available and the
-pagefile guard stopped the run.
-
-**Decode VRAM headroom** is now 128 MiB reserve plus a 64 MiB L2 growth margin
-(was 512 + 768 MiB), about 60 more cached experts. 128 MiB with no margin breached
-the reserve in every run. If the planned L2 allocation is refused, it steps down
-256 MiB at a time (`LLAMADECODE_L2_ALLOC_REFUSED`, at most 2 GiB) and the reserve
-guard still refuses on a real shortfall. Packed FP4 Max quality with the new headroom:
-50K 7.05-7.30, 100K 7.20-7.36, 200K 8.29-8.83 tok/s.
-
-It is expected to matter more on machines with much more RAM, or where the tier can be
-CUDA-registered; that is untested and listed in the
-[roadmap](docs/ROADMAP.md).
+The host-RAM expert tier is supported and stays off by default
+(`LLAMADECODE_HOST_CACHE_MB=0`). VRAM-to-RAM copy-in runs on its own stream;
+RAM hits upload on a separate H2D stream while DirectStorage reads. The route
+cost is configurable (`LLAMADECODE_RAM_ROUTE_COST=0.5`), as are asynchronous
+and synchronous transfer policies. CPU expert lanes also remain optional.
+On Windows the tier uses pinned staging when CUDA registration is unavailable;
+size it within the physical-RAM guardian's budget. Decode headroom reserves
+128 MiB plus a 64 MiB L2 growth margin, with guarded allocation step-down.
+See [runtime variables](docs/VARIABLES.md) for all controls and
+[performance details](docs/PERFORMANCE.md) for the measured configuration scope.
 
 ## How it works
 
@@ -548,10 +405,6 @@ It prints an endpoint, a pairing token and the Windows command:
 ./slstack.ps1 rtx --config my.local.json --mac <mac-endpoint> --pair-token <printed-token> --webui
 ```
 
-The current exact-cone WebUI proof processes **105,054 tokens** in a
-**59.005 s** prompt interval; initial Mac decode measures **27.50 tok/s**.
-The same prompt on one RTX takes **46.282 s**. Historical image-prompt results
-remain in the [paired measurements](docs/TWO_MACHINE.md).
 Use the [ULTRA exact-cone paired preset](examples/dual-machine/dsv41-ultra-cone/preset.json)
 with the [example launchers](examples/dual-machine/README.md).
 [Cone state protocol](docs/CONE_STATE.md).
@@ -584,12 +437,9 @@ configuration.
 - The faster dial settings cost quality. Max speed introduced syntax errors in C++
   tests; use Max quality or Balanced for code.
 - Approximate YOCO140 is opt-in; the default dependency cone keeps 2,541 rows.
-- The matched eager control uses the Q4 shipping-default Q8 dense path with
-  stored FP4 experts; the earlier KERNELS2 row measures the full Q4_K/Q8_0 file.
-- The latest 100K FP4 run uses experimental prefill graphs and does not establish
-  a repeatable graph speedup. No 50K or 200K run on that same final build is recorded.
-- The 1M result and the 49,555-token warm-decode controls use earlier YOCO140
-  prefill defaults. Warm decode has not been remeasured on the final OTHER22 build.
+- Experimental prefill graphs do not have a demonstrated repeatable gain across
+  all prompt lengths. Configured long-context capacity does not establish
+  warm-decode performance at every length.
 - FP4 prefill timing does not qualify decode or broad recall quality. Dense FP8
   remains experimental and has no demonstrated prompt gain.
 - TileLang attention is the selected default but is numerically different from

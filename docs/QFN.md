@@ -46,22 +46,12 @@ See `examples/single-machine/CALIBRATION.md` for the calibration script, which
 reuses the existing full-vocabulary gate and warm timing protocol and measures
 KL, top-1 agreement, throughput, cache hits and natural generation stops.
 
-The final accepted quiet installed control at exactly 100,000 prompt tokens
-measured 4,439.86 tokens/s prefill, 25.2482 unbiased decode and 46.2537 decode at
-explicit bias 0.35, with 100 warmup and 128 measured tokens per mode on the same
-sequence, MTP off/eight read parts, recall and guarded cleanup PASS.
-The historical accepted checkpoint measured 4,573.37/26.7441/46.7450 and used a
-different executable. The regression investigation is closed;
-the remaining roughly 3% prefill read-path difference is unexplained and roadmap-only.
-
-Selected Max speed 0.68 uses historical preinstalled-build evidence: 50.1246 tok/s,
-mean KL 0.137320748 and top-1 agreement 88.28125% over 256 full-vocabulary rows.
-No new installed-build 0.68 inference was run. Current installed-build KL/top-1
-are unmeasured; do not attach historical metrics to its timing row. Numeric 0.35
-and its historical sampled natural-stop evidence remain available. See the
-[complete evidence table](../README.md#performance-and-quality-evidence) and
-[portable exact 100K protocol](QFN_100K_REPRO.md). These are measured reference
-points, not a promise for another machine or a fresh source build.
+See the [performance table](../README.md#performance-and-quality) for measured
+prompt lengths, biases, prefill/decode rates and available KL/top-1 results.
+Use the [exact 100K protocol](QFN_100K_REPRO.md) to reconstruct its fixture and
+run the timing sequence. The portable wrapper's native qualification remains
+pending. Numeric intermediate values remain supported independently of named
+modes; the calibration workflow measures a machine/model/quant combination.
 
 ## Format and source provenance
 
