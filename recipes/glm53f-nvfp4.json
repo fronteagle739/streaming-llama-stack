@@ -293,11 +293,11 @@
   },
   "format": "Streaming Llama Pack v1",
   "packer": "scripts/glm53f_pack.py",
-  "packer_status": "Separate GLM private branch: shared envelope writer/native-reader integration and fixtures pending; not supplied by the QFN importer",
+  "packer_status": "Shared-envelope writer and native-consumer format port prepared separately with 33 CPU fixtures passing; integration adoption, native build and full-model qualification pending. Not included in this QFN package.",
   "expected": {
     "bytes": null,
     "sha256": null,
-    "status": "Awaiting GLM shared-format integration and full source-derived pack; no full output exists"
+    "status": "Awaiting separate GLM integration adoption, native build and full source-derived pack; no full output exists"
   },
   "notes": "All source tensor fields, audio/source limitations, MTP, vision and video remain the GLM native importer responsibility; no QFN geometry is applied."
 }

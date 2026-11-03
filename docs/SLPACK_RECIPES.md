@@ -123,5 +123,7 @@ retain the entire source inventory and use the same `.slpack` envelope, with
 the GLM-specific layout and source-preservation certificate. Its new full pack
 has not yet been produced, so expected output size/hash remain explicitly
 pending. No guessed output identity or QFN tensor geometry is supplied. GLM's
-native reader, format fixtures, model quality and final runtime qualification
-remain separate deliverables.
+shared-envelope writer and native-consumer format port have been prepared
+separately, with 33 CPU fixtures passing. Their integration adoption, native
+build, full-model quality and final runtime qualification remain separate
+deliverables; that separate engine code is not included in this QFN package.
