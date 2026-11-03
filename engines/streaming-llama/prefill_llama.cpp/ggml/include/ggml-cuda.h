@@ -71,6 +71,28 @@ GGML_BACKEND_API int64_t ggml_backend_cuda_graphs_total_created(ggml_backend_t b
 GGML_BACKEND_API void ggml_backend_cuda_graphs_disable_push(ggml_backend_t backend);
 GGML_BACKEND_API void ggml_backend_cuda_graphs_disable_pop(ggml_backend_t backend);
 GGML_BACKEND_API bool ggml_backend_cuda_graphs_are_disabled(ggml_backend_t backend);
+// Caller promises fixed shapes; allow fixed batched ADD and fail rather than falling back to eager launches.
+GGML_BACKEND_API enum ggml_status ggml_backend_cuda_graph_compute_static(ggml_backend_t backend, struct ggml_cgraph * graph);
+// Capture/instantiate the fixed graph without launching it. Prepare BEFORE
+// submitting any independent service graph with future unsignalled waits.
+GGML_BACKEND_API enum ggml_status ggml_backend_cuda_graph_prepare_static(ggml_backend_t backend, struct ggml_cgraph * graph);
+// Caller-owned, device-local BLAS workspace must outlive the prepared graph and
+// every parent that embeds it. Calls using this workspace must not overlap.
+// Suppresses cuBLAS allocation/free nodes, which CUDA forbids in child graphs.
+GGML_BACKEND_API enum ggml_status ggml_backend_cuda_graph_prepare_static_with_workspace(
+    ggml_backend_t backend, struct ggml_cgraph * graph, void * workspace, size_t workspace_bytes);
+// Borrow the CUDA graph captured by prepare_static; neither captures nor launches.
+// native_graph is a cudaGraph_t cast to void*. capture_version changes on every
+// recapture, even with tracing off. Borrowed handles expire on recapture, graph
+// clear or backend destruction. A caller-owned parent must rebuild its model
+// child after a version change, and retire before freeing model tensor storage.
+GGML_BACKEND_API bool ggml_backend_cuda_graph_get_prepared(
+    ggml_backend_t backend, struct ggml_cgraph * graph, void ** native_graph, uint64_t * capture_version);
+// Launch ONE caller-owned cudaGraphExec_t containing the prepared model child
+// and independent service nodes. Retains model dispatch/graph accounting and
+// refuses stale capture versions. No preparation, capture or allocation occurs.
+GGML_BACKEND_API enum ggml_status ggml_backend_cuda_graph_launch_prepared_parent(
+    ggml_backend_t backend, struct ggml_cgraph * graph, void * parent_exec, uint64_t capture_version);
 // Pre-map the caller's already-admitted temporary high-water mark before
 // stream capture. No graph, tensor allocation or arithmetic is executed.
 GGML_BACKEND_API bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend, size_t bytes);

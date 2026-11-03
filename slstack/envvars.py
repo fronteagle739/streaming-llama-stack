@@ -78,6 +78,7 @@ def add_flags(parser, *, suppress=False):
 def apply(env, cfg, scope):
     """Explicit values win; inherited engine knobs never silently override a preset."""
     overrides = cfg.get('env_overrides', {})
+    parent_scope = 'studio' if scope == 'qfn-engine' else None
     scope = SCOPE_ALIASES.get(scope, scope)
     context = {**cfg, 'host_budget_bytes': int(cfg.get('host_budget_gib', 8) * (1 << 30)),
                'host_budget_mb': int(cfg.get('host_budget_gib', 8) * 1024),
@@ -98,15 +99,26 @@ def apply(env, cfg, scope):
                                                           str(path(cfg.get('streaming_root', 'vendor/engines'))))))
     for row in rows():
         var = row['var']
+        # These standard CPU-library settings are host-wide, unlike model-specific engine knobs.
+        # Documenting the new parity harness must not erase existing host limits in other engines.
+        if var in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS'):
+            if var in overrides:
+                value = str(overrides[var])
+                if not value.isdecimal() or int(value) < 1:
+                    raise ValueError(f'{var}: thread count must be a positive integer')
+                env[var] = value
+            continue
         if var.upper() in HOST_VARIABLES and not row.get('defaults_by_scope'):
             continue  # Host variables (PATH, HOME, locale) keep their OS semantics.
         inherited = env.pop(var, None)
-        applicable = scope in row['scopes']
+        applicable = scope in row['scopes'] or parent_scope in row['scopes']
         value = overrides.get(var) if applicable else None
         if value is None and applicable:
             value = cfg.get('ds4_env', {}).get(var) if scope == 'ds4-win' else None
             if value is None:
                 value = row.get('defaults_by_scope', {}).get(scope)
+                if value is None and parent_scope:
+                    value = row.get('defaults_by_scope', {}).get(parent_scope)
                 if row.get('model_signature') and not matches_model_signature(cfg, row['model_signature']):
                     value = None
                 if value is not None:
@@ -121,7 +133,7 @@ def apply(env, cfg, scope):
             value = str(value)
             if row.get('allowed_values') and value not in row['allowed_values']:
                 raise ValueError(f'{var}: value violates required memory-residency policy')
-            if 'minimum' in row or 'maximum' in row:
+            if ('minimum' in row or 'maximum' in row) and not (value == '' and row.get('empty_is_default')):
                 try:
                     numeric = float(value)
                     valid = math.isfinite(numeric) and row.get('minimum', -math.inf) <= numeric <= row.get('maximum', math.inf)

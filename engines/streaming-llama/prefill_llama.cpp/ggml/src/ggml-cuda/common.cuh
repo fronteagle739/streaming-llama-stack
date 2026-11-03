@@ -897,6 +897,13 @@ struct ggml_cuda_type_traits<GGML_TYPE_F16> {
 };
 
 template<>
+struct ggml_cuda_type_traits<GGML_TYPE_Q2_0> {
+    static constexpr int qk = QK2_0;
+    static constexpr int qr = QR2_0;
+    static constexpr int qi = QI2_0;
+};
+
+template<>
 struct ggml_cuda_type_traits<GGML_TYPE_Q4_0> {
     static constexpr int qk = QK4_0;
     static constexpr int qr = QR4_0;
@@ -1228,6 +1235,13 @@ struct ggml_cuda_graph {
     // ref: https://github.com/ggml-org/llama.cpp/pull/19165
     std::vector<ggml_cuda_graph_node_properties> extra;
     ggml_cuda_dispatch_deltas dispatch_deltas;
+    // Opt-in QFN_V3_GRAPH_TRACE diagnostics. Counts describe submitted CUDA
+    // graphs, not GGML nodes or kernel completions.
+    uint64_t trace_captures = 0, trace_launches = 0, trace_replays = 0;
+    uint64_t trace_instantiations = 0, trace_exec_updates = 0, trace_update_failures = 0;
+    uint64_t trace_kernel_nodes = 0, trace_cuda_nodes = 0, trace_launched_kernel_nodes = 0;
+    const char * trace_update_reason = "none";
+    int trace_update_node = -1;
 
     void record_update(bool use_graph, bool update_required) {
         if (use_graph && update_required) {

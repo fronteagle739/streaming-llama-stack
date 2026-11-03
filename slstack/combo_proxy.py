@@ -67,7 +67,9 @@ class Proxy:
         self.cfg=cfg;self.run_id=run_id;self.window_file=Path(window_file)
         self.token=os.environ.get('DS4_SERVER_AUTH_TOKEN','')
         if len(self.token)<32:raise ValueError('Normal Studio native Bearer token is required')
-        self.lock=threading.Lock();self.session=None;self.key=None;self.pending=0
+        self.lock=threading.Lock();self.session=None;self.key=None;self.pending=cfg.get('generation_initial_bias',0)
+        from studio.quality_speed_contract import validate
+        self.pending=validate(self.pending)
         capability=evidence['ultra'].get('provider_initial')
         if not capability:raise ValueError('Qualified native capability receipt is required')
         self.models=evidence['ultra'].get('native_models')

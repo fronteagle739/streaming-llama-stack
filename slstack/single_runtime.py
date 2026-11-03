@@ -33,11 +33,11 @@ PRESET_NAME = 'DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, sin
 PRODUCER_FILES = ('ds4-decode.dll', 'dstorage.dll', 'dstoragecore.dll')
 NATIVE_EXTENSIONS = ('LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL', 'LLAMA_DSV41_DENSE_FP8_DLL')
 DECODE_ENV = {'LLAMADECODE_DS4_DECODE': '1'}
-KEPT = ('generation_control_file', 'stack_preferences_file', 'vision_encoder', 'vision_bridge_version', 'ds4_vision', 'yoco_keep', 'gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
+KEPT = ('generation_initial_bias', 'generation_control_file', 'stack_preferences_file', 'vision_encoder', 'vision_bridge_version', 'ds4_vision', 'yoco_keep', 'gpu_uuid', 'gpu_idle_max_mib', 'hold_file', 'task', 'lease_minutes', 'request_timeout_s', 'host_budget_gib',
         'min_available_gib', 'job_commit_gib', 'context', 'model', 'model_name', 'model_sha256', 'producer_host_budget_gib',
         'producer_profile', 'producer_sha256', 'producer_source_revision', 'producer_fixed_direct_open', 'env_overrides',
         'producer_graceful_shutdown_seconds', 'host', 'port', 'ctx_cache_precision', 'ctx_cache_growable',
-        'producer_host_reserve_gib', 'producer_decode_host_budget_gib',
+        'producer_host_reserve_gib', 'producer_decode_host_budget_gib', 'producer_compute_tile', 'expert_cache_restore',
         # LLAMADECODE fold sweep plan (owner): primary sweep S*, the remainder folded into the last sweep up
         # to the fold cap; the host max is the ceiling for that largest sweep's bank.
         'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens', 'producer_host_max_gib', 'producer_chunks_per_pass',

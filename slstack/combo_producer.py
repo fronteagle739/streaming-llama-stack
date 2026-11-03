@@ -407,6 +407,13 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     carry_arguments(cfg, arguments)
     if cfg.get('env_overrides',{}).get('LLAMA_DSV41_DENSE_FP8')=='1':
         arguments['--backend-temporary-reserve-bytes']=str(int(arguments['--backend-temporary-reserve-bytes'])+(576<<20))
+    if 'producer_compute_tile' in cfg:
+        tile=cfg['producer_compute_tile']
+        if type(tile) is not int or tile <= 0:
+            raise ValueError('producer_compute_tile must be a positive integer')
+        if cfg.get('env_overrides',{}).get('LLAMA_DSV41_FLASHINFER_MXFP4')=='1' and str(tile)!=str(arguments['--compute-tile']):
+            raise ValueError('producer_compute_tile conflicts with LLAMA_DSV41_FLASHINFER_BATCH_TOKENS')
+        arguments['--compute-tile']=str(tile)
     return arguments, plan
 
 

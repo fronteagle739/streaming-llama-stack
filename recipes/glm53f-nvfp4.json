@@ -1,0 +1,303 @@
+{
+  "schema": 1,
+  "model": "glm53f",
+  "source": {
+    "repo": "edp1096/Huihui-GLM-5.3-Flash-abliterated-NVFP4",
+    "revision": "25a335075327eb8edf863a2a8f779c32f0095808",
+    "url": "https://huggingface.co/edp1096/Huihui-GLM-5.3-Flash-abliterated-NVFP4/tree/25a335075327eb8edf863a2a8f779c32f0095808",
+    "files": [
+      {
+        "name": ".gitattributes",
+        "bytes": 1635,
+        "hash_algorithm": "sha1",
+        "hash": "a09db2ea4d1bd1fc1c09f6fca45e8e4054953535"
+      },
+      {
+        "name": ".quant_summary.txt",
+        "bytes": 616642,
+        "hash_algorithm": "sha1",
+        "hash": "388d3ad297bef5d95516a0400716d27af6e0eec7"
+      },
+      {
+        "name": "README.md",
+        "bytes": 10927,
+        "hash_algorithm": "sha1",
+        "hash": "938d4859e05e96d1f3626f53d24ec1e34de99729"
+      },
+      {
+        "name": "README.nvidia.md",
+        "bytes": 10235,
+        "hash_algorithm": "sha1",
+        "hash": "08fa91a54c57d22b41740736017c83a1477d5d00"
+      },
+      {
+        "name": "chat_template.jinja",
+        "bytes": 10644,
+        "hash_algorithm": "sha1",
+        "hash": "fb94d40d72a2eefa0c7140cb66d941656be16969"
+      },
+      {
+        "name": "config.json",
+        "bytes": 16691,
+        "hash_algorithm": "sha1",
+        "hash": "d0e8e75de453199e1b655fa12120b0d923c87ca8"
+      },
+      {
+        "name": "generation_config.json",
+        "bytes": 215,
+        "hash_algorithm": "sha1",
+        "hash": "46d04e68002526d394949f63d65f93ac4ac8abeb"
+      },
+      {
+        "name": "hf_quant_config.json",
+        "bytes": 7997,
+        "hash_algorithm": "sha1",
+        "hash": "559a76e5dc63ca06fda08e160c77c359924965c6"
+      },
+      {
+        "name": "model-00001-of-00033.safetensors",
+        "bytes": 8945680672,
+        "hash_algorithm": "sha256",
+        "hash": "5c7ee3e2a0bd7452b7ccea70bd18f7221676a709a3d4c050d1457fa7d7359125"
+      },
+      {
+        "name": "model-00002-of-00033.safetensors",
+        "bytes": 8945659984,
+        "hash_algorithm": "sha256",
+        "hash": "7afab1480693d8a37faba2f092b0626b121f6fce9241478ad95cf857145ddc41"
+      },
+      {
+        "name": "model-00003-of-00033.safetensors",
+        "bytes": 8945740832,
+        "hash_algorithm": "sha256",
+        "hash": "f184e8b75db437579fa571d4693d6fba7a2806e531d3b8e05d13b1dbc0a90142"
+      },
+      {
+        "name": "model-00004-of-00033.safetensors",
+        "bytes": 5985863344,
+        "hash_algorithm": "sha256",
+        "hash": "dd08e62f3f86dad5ac784e68eb956fa20a18bab72d81337d3058af281ce18c93"
+      },
+      {
+        "name": "model-00005-of-00033.safetensors",
+        "bytes": 5985909512,
+        "hash_algorithm": "sha256",
+        "hash": "bc763b5eec6911a7750b6e37d7f499d6226535792be5c7e7a169d1abb09875d6"
+      },
+      {
+        "name": "model-00006-of-00033.safetensors",
+        "bytes": 5915365198,
+        "hash_algorithm": "sha256",
+        "hash": "41416899a186ef959d2192bf417ff994c451e6e744ab22b9327937a6f5419799"
+      },
+      {
+        "name": "model-00007-of-00033.safetensors",
+        "bytes": 5915359020,
+        "hash_algorithm": "sha256",
+        "hash": "0e7163d404739079d903188c7b18b564327fdae63ccfdaac32db419ade6b4ddf"
+      },
+      {
+        "name": "model-00008-of-00033.safetensors",
+        "bytes": 5915364798,
+        "hash_algorithm": "sha256",
+        "hash": "92dc3046aa89452b107423c248b278715acc9d2f49caf90ef3226c94b16b1f50"
+      },
+      {
+        "name": "model-00009-of-00033.safetensors",
+        "bytes": 5915358812,
+        "hash_algorithm": "sha256",
+        "hash": "4770820b433f6ca50c7d30f0b2eaa9df6fd7c095769f51ee46aa519c37e5f7d3"
+      },
+      {
+        "name": "model-00010-of-00033.safetensors",
+        "bytes": 5915358494,
+        "hash_algorithm": "sha256",
+        "hash": "fb146474bbd5703d1829d78bb895d09982eb8a87f567f03371131d3d594d1787"
+      },
+      {
+        "name": "model-00011-of-00033.safetensors",
+        "bytes": 5915358332,
+        "hash_algorithm": "sha256",
+        "hash": "3ed00bde3a93fddd02be7d3f4e59361b79f2bace1efc234f4699c80e7bc485f4"
+      },
+      {
+        "name": "model-00012-of-00033.safetensors",
+        "bytes": 5915083008,
+        "hash_algorithm": "sha256",
+        "hash": "eeaa37996cbd110a4ea4a71f76227b0a395845c2c75ad4f3468b3dfdace3e57c"
+      },
+      {
+        "name": "model-00013-of-00033.safetensors",
+        "bytes": 5915639642,
+        "hash_algorithm": "sha256",
+        "hash": "d1d5c86fa3566eb099f99677550f44191c77faa935491d6d2c5a7c337797eaf9"
+      },
+      {
+        "name": "model-00014-of-00033.safetensors",
+        "bytes": 5915084432,
+        "hash_algorithm": "sha256",
+        "hash": "37cd788e0b0db8e5cb52a7fed44d6cb19322a082121b064ceb172c6ed8b9f89e"
+      },
+      {
+        "name": "model-00015-of-00033.safetensors",
+        "bytes": 5915642946,
+        "hash_algorithm": "sha256",
+        "hash": "447d1460e572ed36fc40b757c8832103c2312b62ee0c4ce6b8c811839dd398e4"
+      },
+      {
+        "name": "model-00016-of-00033.safetensors",
+        "bytes": 5915084544,
+        "hash_algorithm": "sha256",
+        "hash": "295d41e378742874a9c3b0b8fc0ed82b9fbd46204a45c4172318b0b31d81df52"
+      },
+      {
+        "name": "model-00017-of-00033.safetensors",
+        "bytes": 5915653746,
+        "hash_algorithm": "sha256",
+        "hash": "7be78c2466c0c5d4472c1405ff8631b1da1f0dc059e878d3f6f75bf670514b27"
+      },
+      {
+        "name": "model-00018-of-00033.safetensors",
+        "bytes": 5915084536,
+        "hash_algorithm": "sha256",
+        "hash": "2a4dbeb32bb372df9046bf9ff383d26929ef6859139d94ceba1288e5230cf295"
+      },
+      {
+        "name": "model-00019-of-00033.safetensors",
+        "bytes": 5915653908,
+        "hash_algorithm": "sha256",
+        "hash": "b96eec117cd4a360f3df859b0fa715f2e4865e5afb2b67c2690692840a872e1b"
+      },
+      {
+        "name": "model-00020-of-00033.safetensors",
+        "bytes": 5915368968,
+        "hash_algorithm": "sha256",
+        "hash": "781f82cdec5221d1f1caf2baae7bf6fd184cf0e5135478192d664c5b5031edd6"
+      },
+      {
+        "name": "model-00021-of-00033.safetensors",
+        "bytes": 5915366420,
+        "hash_algorithm": "sha256",
+        "hash": "5de82be70571723893b56c55ffedd5f6f98f79d1f7f4a66da9adb4969d4eb4b0"
+      },
+      {
+        "name": "model-00022-of-00033.safetensors",
+        "bytes": 5915362564,
+        "hash_algorithm": "sha256",
+        "hash": "8f27fac338e9960367a58f0a6ba3681148d52bf38d563d183cac5ab7092b16a6"
+      },
+      {
+        "name": "model-00023-of-00033.safetensors",
+        "bytes": 5915370484,
+        "hash_algorithm": "sha256",
+        "hash": "7e309f8095b6e99694d3d7f4a1364aa341a1fec264e79dc51a9c1dd428cd423b"
+      },
+      {
+        "name": "model-00024-of-00033.safetensors",
+        "bytes": 5915084584,
+        "hash_algorithm": "sha256",
+        "hash": "e383244357a402e423f500c664892e85eb226b8441badb836536e28db0a2e924"
+      },
+      {
+        "name": "model-00025-of-00033.safetensors",
+        "bytes": 5915652952,
+        "hash_algorithm": "sha256",
+        "hash": "c2c44e89d8cfa544f63a4880505f24f2d585937350b797546eeb62abbd0d4641"
+      },
+      {
+        "name": "model-00026-of-00033.safetensors",
+        "bytes": 5915084552,
+        "hash_algorithm": "sha256",
+        "hash": "c9c1529ec35eda528cc6acf10a1913e9c87d2bd9ca375d8be031dbd53e8bc4cf"
+      },
+      {
+        "name": "model-00027-of-00033.safetensors",
+        "bytes": 5915652344,
+        "hash_algorithm": "sha256",
+        "hash": "86e8a97cb2dc7ed960d68a71cf12ea54664bc3efcbc50c7a0c7e27d25593bd21"
+      },
+      {
+        "name": "model-00028-of-00033.safetensors",
+        "bytes": 5915364684,
+        "hash_algorithm": "sha256",
+        "hash": "14ceb9b98febcff641df8ca534bb489b38c50318ddae81063cc2b8f9eb7d4382"
+      },
+      {
+        "name": "model-00029-of-00033.safetensors",
+        "bytes": 5915373524,
+        "hash_algorithm": "sha256",
+        "hash": "a705d67e2580270744f26135fc46fd062ea59df6260b45cd628bc2b8a74f6ab2"
+      },
+      {
+        "name": "model-00030-of-00033.safetensors",
+        "bytes": 5915364844,
+        "hash_algorithm": "sha256",
+        "hash": "044b086f088e2f576dc6675033ff2ff91b1a995a14d79d3683dd400a55c72708"
+      },
+      {
+        "name": "model-00031-of-00033.safetensors",
+        "bytes": 5915373956,
+        "hash_algorithm": "sha256",
+        "hash": "3c7461c53cc255db1cc587a6ef6e09edd7b2f7058498d67ed48a01c44912e9e9"
+      },
+      {
+        "name": "model-00032-of-00033.safetensors",
+        "bytes": 5915364628,
+        "hash_algorithm": "sha256",
+        "hash": "98ceb03cece6becde3d2a84c5e4db106addea12cf24e6dc73751717deb29e3ea"
+      },
+      {
+        "name": "model-00033-of-00033.safetensors",
+        "bytes": 5915373132,
+        "hash_algorithm": "sha256",
+        "hash": "c6fa7921452627ad9d7913875d78496c60082f71b05f943b5dddb3318f0771c2"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 16291474,
+        "hash_algorithm": "sha256",
+        "hash": "26765b2601fd246ef361cfb9f5e10f9fb291a59e05ad0a109062f3a4747c7fd1"
+      },
+      {
+        "name": "processor_config.json",
+        "bytes": 909,
+        "hash_algorithm": "sha1",
+        "hash": "3ec2a058b2cdec556eca0f621e8c5164eec213c2"
+      },
+      {
+        "name": "runtime-qualification.json",
+        "bytes": 2703,
+        "hash_algorithm": "sha1",
+        "hash": "612b67c1fe7c56139c8a835a95401666579ba550"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 20217442,
+        "hash_algorithm": "sha256",
+        "hash": "19e773648cb4e65de8660ea6365e10acca112d42a854923df93db4a6f333a82d"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 761,
+        "hash_algorithm": "sha1",
+        "hash": "e375fa0a4e16660ce0e2026e39374d35dad4c079"
+      },
+      {
+        "name": "transfer-manifest.json",
+        "bytes": 41958,
+        "hash_algorithm": "sha1",
+        "hash": "24fd46d45113a7361433c9d45c77bb946613f0d9"
+      }
+    ],
+    "total_bytes": 204476333629
+  },
+  "format": "Streaming Llama Pack v1",
+  "packer": "scripts/glm53f_pack.py",
+  "packer_status": "Separate GLM private branch: shared envelope writer/native-reader integration and fixtures pending; not supplied by the QFN importer",
+  "expected": {
+    "bytes": null,
+    "sha256": null,
+    "status": "Awaiting GLM shared-format integration and full source-derived pack; no full output exists"
+  },
+  "notes": "All source tensor fields, audio/source limitations, MTP, vision and video remain the GLM native importer responsibility; no QFN geometry is applied."
+}

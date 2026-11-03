@@ -651,6 +651,14 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
         .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_fp16_row,
     },
+    [GGML_TYPE_Q2_0] = {
+        .type_name                = "q2_0",
+        .blck_size                = QK2_0,
+        .type_size                = sizeof(block_q2_0),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_q2_0,
+        .from_float_ref           = (ggml_from_float_t) quantize_row_q2_0_ref,
+    },
     [GGML_TYPE_Q4_0] = {
         .type_name                = "q4_0",
         .blck_size                = QK4_0,
@@ -1060,9 +1068,15 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "DSV41_CANDIDATE_BLOCKS",
     "DSV41_SELECTED_MASK",
     "DSV41_MASKED_HALF",
+    "GATED_DELTA_NET",
+    "QFN_QSA_SELECT",
+    "QFN_QSA_ATTN",
+    "QFN_SLOT_MAP",
+    "QFN_HC_MIX",
+    "QFN_HC_COMBINE",
 };
 
-static_assert(GGML_OP_COUNT == 109, "GGML_OP_COUNT != 109");
+static_assert(GGML_OP_COUNT == 115, "GGML_OP_COUNT != 115");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -1184,9 +1198,15 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "dsv41_candidate_blocks(scores,visible)",
     "dsv41_selected_mask(selected,visible,block_mask)",
     "dsv41_masked_half(gathered,mask)",
+    "gated_delta_net(q,k,v,g,beta,s)",
+    "qfn_qsa_select(score,pos)",
+    "qfn_qsa_attn(q,gate,k,v,sel,pos)",
+    "qfn_slot_map(sel,table,seq)",
+    "qfn_hc_mix(x,g)",
+    "qfn_hc_combine(r,b,i)",
 };
 
-static_assert(GGML_OP_COUNT == 109, "GGML_OP_COUNT != 109");
+static_assert(GGML_OP_COUNT == 115, "GGML_OP_COUNT != 115");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -6362,6 +6382,160 @@ struct ggml_tensor * ggml_solve_tri(
 
 // ggml_lightning_indexer
 
+// ggml_gated_delta_net (QFNSTREAM: upstream ggml-org semantics)
+
+struct ggml_tensor * ggml_gated_delta_net(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * q,
+        struct ggml_tensor  * k,
+        struct ggml_tensor  * v,
+        struct ggml_tensor  * g,
+        struct ggml_tensor  * beta,
+        struct ggml_tensor  * state,
+        int64_t               K) {
+    GGML_ASSERT(ggml_is_contiguous_rows(q));
+    GGML_ASSERT(ggml_is_contiguous_rows(k));
+    GGML_ASSERT(ggml_is_contiguous_rows(v));
+    GGML_ASSERT(ggml_is_contiguous(g));
+    GGML_ASSERT(ggml_is_contiguous(beta));
+    GGML_ASSERT(ggml_is_contiguous(state));
+    GGML_ASSERT(q->type == GGML_TYPE_F32 && k->type == GGML_TYPE_F32 && v->type == GGML_TYPE_F32);
+    GGML_ASSERT(g->type == GGML_TYPE_F32 && beta->type == GGML_TYPE_F32 && state->type == GGML_TYPE_F32);
+    const int64_t S_v      = v->ne[0];
+    const int64_t H        = v->ne[1];
+    const int64_t n_tokens = v->ne[2];
+    const int64_t n_seqs   = v->ne[3];
+    GGML_ASSERT(g->ne[0] == 1 || g->ne[0] == S_v);
+    GGML_ASSERT(beta->ne[0] == 1);
+    GGML_ASSERT(state->ne[0] == S_v && state->ne[1] == S_v && state->ne[2] == H && state->ne[3] == n_seqs);
+    GGML_ASSERT(K >= 1);
+    const int64_t state_rows = K * S_v * n_seqs;
+    const int64_t ne[4] = { S_v * H, n_tokens * n_seqs + state_rows, 1, 1 };
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
+    ggml_set_op_params_i32(result, 0, (int32_t) K);
+    result->op     = GGML_OP_GATED_DELTA_NET;
+    result->src[0] = q;
+    result->src[1] = k;
+    result->src[2] = v;
+    result->src[3] = g;
+    result->src[4] = beta;
+    result->src[5] = state;
+    return result;
+}
+
+// ggml_qfn_qsa_select (QFNSTREAM)
+
+struct ggml_tensor * ggml_qfn_qsa_select(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * score,
+        struct ggml_tensor  * pos,
+        int                   n_top,
+        int                   ratio) {
+    GGML_ASSERT(score->type == GGML_TYPE_F32 && pos->type == GGML_TYPE_I32);
+    GGML_ASSERT(score->nb[0] == sizeof(float) && ggml_is_contiguous(pos));
+    GGML_ASSERT(score->ne[2] == 1 && score->ne[3] == 1 && pos->ne[0] == score->ne[1]);
+    GGML_ASSERT(n_top > 0 && ratio > 1);
+    const int64_t n_sel = (int64_t) n_top * ratio + ratio - 1;
+    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_sel, score->ne[1]);
+    ggml_set_op_params_i32(result, 0, n_top);
+    ggml_set_op_params_i32(result, 1, ratio);
+    result->op     = GGML_OP_QFN_QSA_SELECT;
+    result->src[0] = score;
+    result->src[1] = pos;
+    return result;
+}
+
+// ggml_qfn_hc_mix / ggml_qfn_hc_combine (QFNSTREAM)
+
+struct ggml_tensor * ggml_qfn_hc_mix(struct ggml_context * ctx, struct ggml_tensor * xn, struct ggml_tensor * gate, float scale) {
+    GGML_ASSERT(xn->type == GGML_TYPE_F32 && gate->type == GGML_TYPE_F32 && ggml_is_contiguous(xn) && ggml_is_contiguous(gate));
+    GGML_ASSERT(gate->ne[0] == xn->ne[0]*xn->ne[1] && gate->ne[1] == xn->ne[2]);
+    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, xn->ne[0], xn->ne[2]);
+    ggml_set_op_params_f32(result, 0, scale);
+    result->op     = GGML_OP_QFN_HC_MIX;
+    result->src[0] = xn;
+    result->src[1] = gate;
+    return result;
+}
+
+struct ggml_tensor * ggml_qfn_hc_combine(struct ggml_context * ctx, struct ggml_tensor * residual, struct ggml_tensor * block,
+                                         struct ggml_tensor * inject) {
+    GGML_ASSERT(residual->type == GGML_TYPE_F32 && block->type == GGML_TYPE_F32 && inject->type == GGML_TYPE_F32);
+    GGML_ASSERT(ggml_is_contiguous(residual) && ggml_is_contiguous(block) && ggml_is_contiguous(inject));
+    GGML_ASSERT(block->ne[0] == residual->ne[0] && inject->ne[0] == residual->ne[1]);
+    GGML_ASSERT(ggml_nelements(block) == residual->ne[0]*residual->ne[2] && ggml_nelements(inject) == residual->ne[1]*residual->ne[2]);
+    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, residual->ne[0], residual->ne[1], residual->ne[2]);
+    result->op     = GGML_OP_QFN_HC_COMBINE;
+    result->src[0] = residual;
+    result->src[1] = block;
+    result->src[2] = inject;
+    return result;
+}
+
+// ggml_qfn_slot_map (QFNSTREAM)
+
+struct ggml_tensor * ggml_qfn_slot_map(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * sel,
+        struct ggml_tensor  * table,
+        struct ggml_tensor  * seq,
+        void                * bell,
+        int                   layer) {
+    GGML_ASSERT(sel->type == GGML_TYPE_I32 && ggml_is_contiguous(sel) && ggml_nelements(sel) <= 64);
+    GGML_ASSERT(table->type == GGML_TYPE_I32 && ggml_is_contiguous(table));
+    GGML_ASSERT(seq->type == GGML_TYPE_I32 && ggml_nelements(seq) == 1);
+    GGML_ASSERT(layer >= 0 && layer < 64);
+    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, sel->ne[0], sel->ne[1]);
+    const uint64_t b = (uint64_t) (uintptr_t) bell;
+    ggml_set_op_params_i32(result, 0, (int32_t) (b & 0xFFFFFFFFu));
+    ggml_set_op_params_i32(result, 1, (int32_t) (b >> 32));
+    ggml_set_op_params_i32(result, 2, layer);
+    ggml_set_op_params_i32(result, 3, 0);
+    ggml_set_op_params_i32(result, 4, 0);
+    result->op     = GGML_OP_QFN_SLOT_MAP;
+    result->src[0] = sel;
+    result->src[1] = table;
+    result->src[2] = seq;
+    return result;
+}
+
+void ggml_qfn_slot_map_set_record_latch(struct ggml_tensor * slot_map, void * device_latch) {
+    GGML_ASSERT(slot_map->op == GGML_OP_QFN_SLOT_MAP);
+    const uint64_t latch = (uint64_t) (uintptr_t) device_latch;
+    ggml_set_op_params_i32(slot_map, 3, (int32_t) latch);
+    ggml_set_op_params_i32(slot_map, 4, (int32_t) (latch >> 32));
+}
+
+// ggml_qfn_qsa_attn (QFNSTREAM)
+
+struct ggml_tensor * ggml_qfn_qsa_attn(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * q,
+        struct ggml_tensor  * gate,
+        struct ggml_tensor  * k,
+        struct ggml_tensor  * v,
+        struct ggml_tensor  * sel,
+        struct ggml_tensor  * pos,
+        float                 scale) {
+    GGML_ASSERT(q->type == GGML_TYPE_F32 && ggml_is_contiguous(q) && q->ne[3] == 1);
+    GGML_ASSERT(!gate || (gate->type == GGML_TYPE_F32 && ggml_is_contiguous(gate) && ggml_are_same_shape(gate, q)));
+    GGML_ASSERT(k->type == GGML_TYPE_F16 && v->type == GGML_TYPE_F16 && ggml_are_same_shape(k, v));
+    GGML_ASSERT(k->nb[0] == sizeof(ggml_fp16_t) && k->nb[1] == k->ne[0]*sizeof(ggml_fp16_t) && v->nb[1] == k->nb[1] && v->nb[2] == k->nb[2]);
+    GGML_ASSERT(q->ne[0] == k->ne[0] && q->ne[1] % k->ne[1] == 0 && q->ne[1] / k->ne[1] <= 16);
+    GGML_ASSERT(sel->type == GGML_TYPE_I32 && sel->nb[0] == sizeof(int32_t) && sel->ne[1] == q->ne[2]);
+    GGML_ASSERT(pos->type == GGML_TYPE_I32 && ggml_is_contiguous(pos) && pos->ne[0] == q->ne[2]);
+    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, q->ne[0], q->ne[1], q->ne[2]);
+    ggml_set_op_params_f32(result, 0, scale);
+    result->op     = GGML_OP_QFN_QSA_ATTN;
+    result->src[0] = q;
+    result->src[1] = gate;
+    result->src[2] = k;
+    result->src[3] = v;
+    result->src[4] = sel;
+    result->src[5] = pos;
+    return result;
+}
+
 struct ggml_tensor * ggml_lightning_indexer(
         struct ggml_context * ctx,
         struct ggml_tensor  * q,
@@ -7852,6 +8026,7 @@ size_t ggml_quantize_chunk(
     size_t result = 0;
 
     switch (type) {
+        case GGML_TYPE_Q2_0:    result = quantize_q2_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_0:    result = quantize_q4_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_1:    result = quantize_q4_1(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q5_0:    result = quantize_q5_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;

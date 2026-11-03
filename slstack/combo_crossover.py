@@ -10,7 +10,7 @@ def paired_threshold(cfg):
     """Studio's paired DSV4.1 presets use 11776 Mac-local new tokens.
 
     An explicitly qualified measured crossover uses the existing validator.
-    Source: public paired ULTRA profile,
+    Source: Studio studio_llm_presets.json, ULTRA f637bbc2ecf1,
     DS4_NATIVE_SESSION_LOCAL_PREFILL_MAX_TOKENS (2026-10-27).
     """
     n = qualified_threshold(cfg) if ('combo_crossover_tokens' in cfg or 'combo_crossover_receipt' in cfg) else cfg.get('paired_local_prefill_max_tokens', 11776)

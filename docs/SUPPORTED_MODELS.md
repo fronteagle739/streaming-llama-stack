@@ -21,11 +21,12 @@ RTX 5090 (32 GB), 32 GB system RAM, NVMe RAID-0. Mac decode on an M3 Ultra with
 | MiniMax M2.5 / M3 | `minimax-m2`, `minimax-m3` | 1,576 tok/s at 9K; 439 tok/s at 196K (M2.5 Q3) | Mac: 20–35 tok/s (M2.5) |
 | Step-3.5 / 3.7 Flash | `step35` | 2,294 tok/s at about 25K (3.5 Q8_0) | Mac: 25–33 tok/s (3.5) |
 | MiMo V2.6 Pro | — | — | Mac ds4 with expert streaming: 6.0 tok/s at Max quality, 9.0 at bias 1.36 |
+| Qwen3.8 Flash Next | `qwen4exp` | 4,573 tok/s at exactly 100K | RTX: 26.74 tok/s unbiased, 46.74 at bias 0.35; deliberate routing tradeoff ([details](QFN.md)) |
 
 Kimi K2.7 uses the same architecture as K2.5 and K2.6; the example presets ship
-K2.7 settings. GLM-5.3 Flash (`glm5-next`) and Qwen3.8 Flash Next (`qwen4exp`)
-are different architectures and are not yet in the streaming engine; Qwen3.8
-Flash Next runs on the Mac through mlx-serve.
+K2.7 settings. GLM-5.3 Flash (`glm5-next`) remains pending full-model streaming
+qualification. Qwen3.8 Flash Next (`qwen4exp`) has a standalone Windows CUDA
+streaming engine, described in [QFN setup](QFN.md), as well as its Mac mlx-serve path.
 
 ## DeepSeek V4.1 Flash files
 

@@ -32,6 +32,32 @@ static inline int best_index_int8(int n, const int8_t * val, float x) {
     return x - val[mu-1] < val[mu] - x ? mu-1 : mu;
 }
 
+// QFNSTREAM: upstream ggml-org Q2_0 reference quantizer (scale = absmax, codes round(w/d) clamped to [-1, 2])
+void quantize_row_q2_0_ref(const float * GGML_RESTRICT x, block_q2_0 * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK2_0;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f;
+        for (int j = 0; j < qk; j++) {
+            const float a = fabsf(x[i*qk + j]);
+            if (a > amax) amax = a;
+        }
+        const float d = amax;
+        const float id = d > 0.0f ? 1.0f / d : 0.0f;
+        y[i].d = GGML_FP32_TO_FP16(d);
+        for (int j = 0; j < qk / 4; ++j) {
+            y[i].qs[j] = 0;
+        }
+        for (int j = 0; j < qk; ++j) {
+            int q = (int) roundf(x[i*qk + j] * id) + 1;
+            if (q < 0) q = 0;
+            if (q > 3) q = 3;
+            y[i].qs[j / 4] |= (uint8_t) (q << ((j % 4) * 2));
+        }
+    }
+}
+
 // reference implementation for deterministic creation of model files
 void quantize_row_q4_0_ref(const float * GGML_RESTRICT x, block_q4_0 * GGML_RESTRICT y, int64_t k) {
     static const int qk = QK4_0;
@@ -300,6 +326,19 @@ void quantize_row_mxfp4_ref(const float * GGML_RESTRICT x, block_mxfp4 * GGML_RE
 
             y[i].qs[j]  = x0;
             y[i].qs[j] |= x1 << 4;
+        }
+    }
+}
+
+void dequantize_row_q2_0(const block_q2_0 * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK2_0;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+        for (int j = 0; j < qk; ++j) {
+            const uint8_t q = (x[i].qs[j / 4] >> ((j % 4) * 2)) & 0x03;
+            y[i*qk + j] = ((int) q - 1) * d;
         }
     }
 }
@@ -1916,6 +1955,12 @@ static void quantize_row_q4_0_impl(const float * GGML_RESTRICT x, block_q4_0 * G
             y[ib].qs[j] = L[j] | (L[j+16] << 4);
         }
     }
+}
+
+size_t quantize_q2_0(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    GGML_UNUSED(quant_weights);
+    quantize_row_q2_0_ref(src, dst, (int64_t) nrow*n_per_row);
+    return nrow * ggml_row_size(GGML_TYPE_Q2_0, n_per_row);
 }
 
 size_t quantize_q4_0(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
@@ -5200,6 +5245,10 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
                         return false;
                     }
                 }
+            } break;
+        case GGML_TYPE_Q2_0:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q2_0, data, nb);
             } break;
         case GGML_TYPE_Q4_0:
             {

@@ -1664,7 +1664,8 @@ struct llama_vocab::impl {
     std::vector<llama_token> tokenize(
             const std::string & raw_text,
                          bool   add_special,
-                         bool   parse_special = false) const;
+                         bool   parse_special = false,
+                         std::string (*normalize_text)(const std::string &) = nullptr) const;
 
     int32_t tokenize(
                    const char * text,
@@ -2959,9 +2960,12 @@ static std::string llama_decode_text(const std::string & text) {
 std::vector<llama_token> llama_vocab::impl::tokenize(
         const std::string & raw_text,
         bool add_special,
-        bool parse_special) const {
+        bool parse_special,
+        std::string (*normalize_text)(const std::string &)) const {
     GGML_ASSERT(tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
 
+    if (normalize_text && get_type() != LLAMA_VOCAB_TYPE_BPE)
+        throw std::runtime_error("ordinary-text normalization requires the BPE tokenizer");
     std::vector<llama_token> output;
     std::forward_list<fragment_buffer_variant> fragment_buffer;
 
@@ -3037,6 +3041,7 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", text.length(), fragment.offset, fragment.length, text.c_str());
 #endif
+                        if (normalize_text) text = normalize_text(text);
                         session.tokenize(text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         session.append(fragment.token, output);
@@ -3723,6 +3728,12 @@ std::vector<llama_token> llama_vocab::tokenize(
         bool add_special,
         bool parse_special) const {
     return pimpl->tokenize(raw_text, add_special, parse_special);
+}
+
+std::vector<llama_token> llama_vocab::tokenize(
+        const std::string & raw_text, bool add_special, bool parse_special,
+        std::string (*normalize_text)(const std::string &)) const {
+    return pimpl->tokenize(raw_text, add_special, parse_special, normalize_text);
 }
 
 const std::string & llama_vocab::token_to_piece(llama_token token) const {

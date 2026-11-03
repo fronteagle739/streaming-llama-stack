@@ -65,3 +65,41 @@ def requant_chunks(source,old,tensor,convert,threads,idle,input_hash):
         yield values
     for begin in range(0,len(scales),16<<20):
         idle();yield memoryview(scales)[begin:begin+(16<<20)]
+
+
+# Native NVIDIA scales are UE4M3 per16, distinct from the MXFP4 format above.
+# Keep every scale byte and code; this format requires the native NVFP4 kernel.
+NVFP4='flashinfer-sm120-nvfp4-e16-expert-major-v1'
+
+def pack_nvfp4_matrix(raw,n,k):
+    """Basalt scale4/code32 blocks -> adjacent values, then [K/64,N,4] scales."""
+    import numpy as np
+    shape(n,k)
+    if len(raw)!=n*k//64*36:raise ValueError('Native NVFP4 matrix byte count differs')
+    blocks=np.frombuffer(raw,dtype=np.uint8).reshape(n,k//64,36)
+    original=blocks[:,:,4:].reshape(n,k//64,4,8)
+    # Each original byte pairs logical j and j+8 within its16-value block.
+    codes=np.concatenate((original&15,original>>4),axis=3)
+    values=(codes[:,:,:,0::2]|(codes[:,:,:,1::2]<<4)).copy()
+    scales=blocks[:,:,:4].transpose(1,0,2).copy()
+    return values.tobytes()+scales.tobytes()
+
+def unpack_nvfp4_matrix(packed,n,k):
+    """Independent byte inverse; includes signed zero and every scale bit."""
+    import numpy as np
+    shape(n,k)
+    if len(packed)!=n*k//64*36:raise ValueError('Packed native NVFP4 matrix byte count differs')
+    values=np.frombuffer(packed,dtype=np.uint8,count=n*k//2).reshape(n,k//64,4,8)
+    codes=np.empty((n,k//64,4,16),dtype=np.uint8)
+    codes[:,:,:,0::2]=values&15
+    codes[:,:,:,1::2]=values>>4
+    result=np.empty((n,k//64,36),dtype=np.uint8)
+    result[:,:,:4]=np.frombuffer(packed,dtype=np.uint8,offset=n*k//2).reshape(k//64,n,4).transpose(1,0,2)
+    result[:,:,4:]=(codes[:,:,:,:8]|(codes[:,:,:,8:]<<4)).reshape(n,k//64,32)
+    return result.tobytes()
+
+def pack_nvfp4_blob(raw,inverse=False):
+    if len(raw)!=2764816:raise ValueError('QFN native NVFP4 expert stride differs')
+    convert=unpack_nvfp4_matrix if inverse else pack_nvfp4_matrix
+    return b''.join(convert(raw[i*921600:(i+1)*921600],n,k)
+                    for i,(n,k) in enumerate(((640,2560),(640,2560),(2560,640))))+raw[2764800:]

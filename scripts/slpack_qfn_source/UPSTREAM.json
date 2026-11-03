@@ -1,0 +1,15 @@
+{
+  "attribution": "Basalt, MIT; original author copyright retained in LICENSE",
+  "scope": "Checkpoint import, source quantizers, tokenizer extraction, HC8 and sampler default validation; architecture import retained, native expert relayout and new envelope added.",
+  "original_source_sha256": {
+    "tools/convert/checkpoint.py": "c55ec53c51e1556060955086e88d93f6afd010536c31b6b39190879aad4c9b70",
+    "tools/convert/model_sections.py": "659ec286477be150f9542341fb82bf9e859c3bb6ae68926a1a612cc108cad4c8",
+    "tools/convert/hc8.py": "02594e55a0f1f03ea51aa4aadc5acddf20cbc35152ff49e5428474eae5174037",
+    "tools/tokenizer.py": "a46f4711f0a0658f6c0f9905156e3c769c1176e6b39f1e5e079f079a7163178d",
+    "tools/ggufq.py": "8c9f560d03e8bfdc59b99b72306bcd045e9f962f336c5cbfbfb53fdd36f7f2d2",
+    "tools/gguf_reader.py": "8a1e6a69efb2a06df9df9305275fd850c6dc1bd1a057257a2d6bf40b616c48bd",
+    "tools/convert/convert.py": "e71477908e40921b168cb2019ef81fe97ce05cfa85fc26f4fab9a32d240f1f6a",
+    "serve/engine/modelfile.py": "41d1dabfa5b90fd0d4b4da6ae4ee0e992c5238c86660cfbcbfcb756dcc9b4c8f",
+    "serve/config.py": "bd5aa22cfb7e2130316145885f8fe593863cb658d6bf558e7eda5eb3d26ed85a"
+  }
+}

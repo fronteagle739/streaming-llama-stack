@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain why the sky looks blue in three short sentences, then finish your answer."
+    }
+  ],
+  "seed": 17,
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "top_k": 40,
+  "min_p": 0.05,
+  "max_tokens": 2048
+}

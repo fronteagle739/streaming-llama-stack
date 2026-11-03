@@ -314,6 +314,34 @@ bool wf_fetch_extents_direct(wf_context * wf, int bank, const wf_extent * extent
 // before the host waits on its fence (RAM-tier uploads beside the storage reads).
 bool wf_fetch_extents_direct_overlap(wf_context * wf, int bank, const wf_extent * extents, int n,
         void * cuda_stream, uint64_t * bytes, double * milliseconds, void (*overlap)(void *), void * overlap_user);
+// Explicit captured-doorbell service. Preparation imports ONE independent
+// provider-owned D3D12 timeline fence; call before cache admission/graph launch.
+// The opaque CUDA semaphore remains owned by wf. Destroy all graphs referring
+// to it and prove every consumer stream idle BEFORE wf_destroy/wf_end_pass.
+// Unsupported providers/platforms and invalid lifecycle calls return false
+// with a diagnostic; no normal direct/overlap/ready completion path changes.
+WF_API bool wf_service_fence_prepare(wf_context * wf, void ** cuda_semaphore);
+// CPU-only, serialized reservation of 1..64 monotonically increasing tickets.
+// Only one epoch may be active. UINT64_MAX is never a usable fence value.
+WF_API bool wf_service_begin_epoch(wf_context * wf, uint32_t layers,
+    uint64_t * first_ticket, uint64_t * last_ticket);
+// CPU-only callback: exact original extent splitting, DS submission, CPU fence
+// and error validation, then DS queue signal of the dedicated service fence.
+// The consumer's external-wait/copy/publication nodes MUST already be enqueued.
+// Publish the complete mapped descriptor before calling; n==0 still signals
+// the real ready edge for RAM-only work. Tickets may skip inactive hit layers,
+// but must increase within this epoch. No CUDA call occurs on this path.
+WF_API bool wf_fetch_extents_service(wf_context * wf, int bank,
+    const wf_extent * extents, int n, uint64_t ticket, uint64_t * bytes, double * milliseconds);
+// CPU-only retirement. First join the worker. Normal retirement requires main
+// completion and only inactive remaining descriptors. For abort, mark ALL
+// pending descriptors aborted before calling; they must consume no model data.
+// Drain the INTERNAL DS fence before CPU-signalling the epoch's last ticket,
+// so late lower queue signals cannot rewind the dedicated timeline. The caller
+// must then prove BOTH service/main streams idle before rollback/free/reuse.
+// On failure no release is fabricated: retain resources and require reload.
+// A failed data request still permits abort retirement if queue drain succeeds.
+WF_API bool wf_service_finish_epoch(wf_context * wf, uint64_t last_ticket, bool abort);
 // Next-tail hints only target an already-ready strict direct bank. The caller
 // must join the hint before acquiring/releasing/restarting that stage/fetcher.
 // A generation is never reused within one fetcher, including across wf_start.

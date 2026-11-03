@@ -154,6 +154,11 @@ struct llama_vocab {
                          bool   add_special,
                          bool   parse_special = false) const;
 
+    // Optional transformation of ordinary BPE fragments AFTER the existing
+    // special-token partition. The original overload and all special handling stay intact.
+    std::vector<llama_token> tokenize(const std::string & raw_text, bool add_special, bool parse_special,
+                                    std::string (*normalize_text)(const std::string &)) const;
+
     // does not write null-terminator to buf
     int32_t token_to_piece(
                   llama_token   token,

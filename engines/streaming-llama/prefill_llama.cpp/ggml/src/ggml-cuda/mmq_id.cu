@@ -1,5 +1,6 @@
 #include "mmq_id_common.cuh"
 #include "mmq_id.cuh"
+#include "qfn-mmq-stream-k.cuh"
 #include "ggml-dsv41-expert-routing.h"
 #include "quantize_id.cuh"
 // NOTE (iter-33 port): DO NOT include "quantize.cuh" here — it includes mmq.cuh which redefines
@@ -354,6 +355,9 @@ static void ggml_cuda_mul_mat_q_switch_type_id(ggml_backend_cuda_context & ctx, 
         case GGML_TYPE_Q8_0:
             mul_mat_q_case_id<GGML_TYPE_Q8_0>(ctx, args, stream);
             break;
+        case GGML_TYPE_Q2_0:
+            mul_mat_q_case_id<GGML_TYPE_Q2_0>(ctx, args, stream);
+            break;
         case GGML_TYPE_MXFP4:
             mul_mat_q_case_id<GGML_TYPE_MXFP4>(ctx, args, stream);
             break;
@@ -655,8 +659,9 @@ void ggml_cuda_mul_mat_q_id(ggml_backend_cuda_context & ctx, const ggml_tensor *
     const int64_t s03 = src0->nb[3];// / ts_src0;
     const int64_t s3  =  dst->nb[3] / ts_dst;
 
-    const bool use_stream_k = (GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_VOLTA)
-                            || GGML_CUDA_CC_IS_CDNA(cc);
+    const bool use_stream_k = qfn_mmq_stream_k_enabled() &&
+                            ((GGML_CUDA_CC_IS_NVIDIA(cc) && ggml_cuda_highest_compiled_arch(cc) >= GGML_CUDA_CC_VOLTA)
+                            || GGML_CUDA_CC_IS_CDNA(cc));
 
     if (!ids_tensor) {
 
@@ -865,6 +870,12 @@ bool ggml_cuda_can_use_mmq_id(enum ggml_type type, int cc, int64_t ne11) {
 
     bool mmq_supported;
 
+    // QFNSTREAM: the grouped Q2_0 path is opt-in (QFN_MMQID_Q2_0=1) until it is qualified against the CPU reference
+    if (type == GGML_TYPE_Q2_0) {
+        static const bool q2_0_on = [] { const char * e = getenv("QFN_MMQID_Q2_0"); return e && e[0] == '1'; }();
+        if (!q2_0_on) return false;
+    }
+
     switch (type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
@@ -872,6 +883,7 @@ bool ggml_cuda_can_use_mmq_id(enum ggml_type type, int cc, int64_t ne11) {
         case GGML_TYPE_Q5_1:
         // case GGML_TYPE_Q6_0: /* not supported in this tree */
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q2_0:
         case GGML_TYPE_MXFP4:
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:

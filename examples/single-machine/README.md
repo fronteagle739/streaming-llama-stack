@@ -54,3 +54,42 @@ Certified FP4 index scoring is enabled by default on supported SM120 BF16-index
 paths. The100K comparison is bit-identical and faster; unsupported inputs use
 the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
 `env_overrides` to disable it. See [E6 measurements](../../docs/EXPERIMENT_E6.md).
+
+## Qwen3.8 Flash Next (RTX 5090, native packed NVFP4)
+
+Copy [qfn.example.json](qfn.example.json) to `my.local.json`, set `model` and `gpu_uuid`, then run
+`qfn-max-quality.ps1`, `qfn-balanced.ps1` or `qfn-max-speed.ps1`. The engine's code defaults are the fastest qualified path:
+packed-vector FP4 decode on the bytes prefill streams, one model graph and one service graph per token,
+the prefill carry in the cache tail, eight-split expert reads, MTP off. Exact 100K prompt, warm decode:
+
+| Setting | Decode | Against Max quality |
+|---|---:|---:|
+| Max quality | 26.74 tok/s | byte-identical to the native Q8 reference |
+| Balanced, initial reference | same unbiased routing | conservative until a machine-local sweep selects an intermediate value |
+| Max speed, bias 0.35 | 46.74 tok/s | deliberate routing tradeoff: KL 0.0372, top-1 92.58% on 256 forced rows |
+
+Prefill is 4,573 tok/s in the latest default-only 100K run; the three-run combined
+candidate median was 4,625 tok/s. Three deployed GUI checks at bias
+0.35 stopped naturally; this is sampled evidence, not a guarantee for every prompt. Keep the pack
+on a fast NVMe volume. MTP and the RAM expert tier remain available but are off
+in these measured defaults because their tested configurations lost throughput.
+
+Each model carries its own settings in [qfn.settings.json](qfn.settings.json) or
+[dsv41.settings.json](dsv41.settings.json). These record all three bias values,
+the valid numeric range, router-spread reference, cache seed/half-life and
+tile/read settings. The QFN named launchers accept `-Settings your.settings.json`;
+`dsv41-modes.ps1 -Config your.local.json -Mode balanced -Settings your.settings.json`
+selects the DSV4.1 decode mode independently of its exact-cone prefill. Both
+support `-DryRun`. Explicit local engine options and sampler fields remain available.
+The QFN example uses the qualified 3 GiB physical host budget and 6 GiB
+free-memory floor. Its 40 GiB Windows commit cap includes WDDM accounting;
+the physical-RAM guardian still applies and page-file capacity is never used.
+DSV4.1 retains its delivered 0 / 0.35 / 1.36125 points and QFN starts at
+0 / 0 / 0.35; the initial QFN Balanced value is intentionally identified as
+uncalibrated. Numeric QFN requests still accept the full [0,8] range.
+
+Settings marked `reference-settings` are measured reference choices, not an
+automatic calibration of the current machine. Recalibrate after changing
+hardware, storage, model weights, quantisation, context, cache or kernels; see
+[CALIBRATION.md](CALIBRATION.md). A sweep must report KL/top-1, warm throughput,
+cache hits and natural generation stops before replacing local settings.

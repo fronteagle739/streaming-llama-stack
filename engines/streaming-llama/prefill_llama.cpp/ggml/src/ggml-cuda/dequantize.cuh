@@ -1,5 +1,24 @@
 #include "common.cuh"
 
+static __device__ __forceinline__ void dequantize_q2_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
+    const block_q2_0 * x = (const block_q2_0 *) vx;
+    const float d = x[ib].d;
+    // codes c in {0,1,2,3} map to c - 1 in {-1, 0, +1, +2}
+    const int c0 = (x[ib].qs[(iqs + 0) / 4] >> (((iqs + 0) % 4) * 2)) & 0x3;
+    const int c1 = (x[ib].qs[(iqs + 1) / 4] >> (((iqs + 1) % 4) * 2)) & 0x3;
+    v.x = (c0 - 1) * d;
+    v.y = (c1 - 1) * d;
+}
+
+// QFNSTREAM: IQ4_NL for get_rows (raw n-gram rows decoded on the GPU); byte iqs holds values iqs and iqs+16
+static __device__ __forceinline__ void dequantize_iq4_nl(const void * vx, const int64_t ib, const int iqs, float2 & v){
+    const block_iq4_nl * x = (const block_iq4_nl *) vx;
+    const float d = x[ib].d;
+    const int q = x[ib].qs[iqs];
+    v.x = kvalues_iq4nl[q & 0xF] * d;
+    v.y = kvalues_iq4nl[q >> 4] * d;
+}
+
 static __device__ __forceinline__ void dequantize_q4_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
     const block_q4_0 * x = (const block_q4_0 *) vx;
 

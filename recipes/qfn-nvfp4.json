@@ -1,0 +1,316 @@
+{
+  "schema": 1,
+  "model": "qfn",
+  "source": {
+    "repo": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+    "revision": "fc694b54fb0174e0913e6adf86691ef85a4ead47",
+    "url": "https://huggingface.co/nvidia/Qwen3.8-Flash-Next-NVFP4/tree/fc694b54fb0174e0913e6adf86691ef85a4ead47",
+    "files": [
+      {
+        "name": ".gitattributes",
+        "bytes": 1635,
+        "hash_algorithm": "sha1",
+        "hash": "a09db2ea4d1bd1fc1c09f6fca45e8e4054953535"
+      },
+      {
+        "name": "README.md",
+        "bytes": 12109,
+        "hash_algorithm": "sha1",
+        "hash": "f3edfc5b8f2cae8ae751162626d4c5aa3ed071a6"
+      },
+      {
+        "name": "chat_template.jinja",
+        "bytes": 8952,
+        "hash_algorithm": "sha1",
+        "hash": "c0c686f9c38d70d179fb7b5f5aa7530bc913dda3"
+      },
+      {
+        "name": "config.json",
+        "bytes": 30820,
+        "hash_algorithm": "sha1",
+        "hash": "d9df7636dc5b8bdab82655aba8ce0ebe25b22342"
+      },
+      {
+        "name": "generation_config.json",
+        "bytes": 202,
+        "hash_algorithm": "sha1",
+        "hash": "023756cfadf88e5bf69eefeee3e172f38c448d64"
+      },
+      {
+        "name": "hf_quant_config.json",
+        "bytes": 23001,
+        "hash_algorithm": "sha1",
+        "hash": "89bb1a48d2358f4b9ab7959bd4357a6d6d04020e"
+      },
+      {
+        "name": "merges.txt",
+        "bytes": 3353259,
+        "hash_algorithm": "sha1",
+        "hash": "a494e019ca1502219fd0128658b979e5f05ae8e8"
+      },
+      {
+        "name": "model-00001-of-00010.safetensors",
+        "bytes": 3115991696,
+        "hash_algorithm": "sha256",
+        "hash": "63fde954be6f08b49b876f4f70a0ad0bcfee71aff7b1faa33779b6b32feca2a2"
+      },
+      {
+        "name": "model-00002-of-00010.safetensors",
+        "bytes": 10005510304,
+        "hash_algorithm": "sha256",
+        "hash": "4dafaef62a908e49e0d92c7c2a3fa99f4d9651fdeeb0ca09f09a9b40095af4e0"
+      },
+      {
+        "name": "model-00003-of-00010.safetensors",
+        "bytes": 10005364728,
+        "hash_algorithm": "sha256",
+        "hash": "3218ddc129258e91a721a8e81329ca8f00588332ec721bd8d2cf7d20e324bf47"
+      },
+      {
+        "name": "model-00004-of-00010.safetensors",
+        "bytes": 10006060112,
+        "hash_algorithm": "sha256",
+        "hash": "55e2bdf6a3a1f6e65270787f65c63b2a2a56b308b54eb1fb318dfabc9b48b141"
+      },
+      {
+        "name": "model-00005-of-00010.safetensors",
+        "bytes": 10005362392,
+        "hash_algorithm": "sha256",
+        "hash": "d3c169d3694bfba846455d01e48f047d770f78d071c5a4d22f129389411d686e"
+      },
+      {
+        "name": "model-00006-of-00010.safetensors",
+        "bytes": 10005375328,
+        "hash_algorithm": "sha256",
+        "hash": "38f65a9d11090428e139cc60d0587e8e5433ea2ce79820883c583d7cfcc53130"
+      },
+      {
+        "name": "model-00007-of-00010.safetensors",
+        "bytes": 10005956544,
+        "hash_algorithm": "sha256",
+        "hash": "8cf3fa05c04cb2e060963b69bb01f7a7b9f43c58435fbe380836a0457a19cd3e"
+      },
+      {
+        "name": "model-00008-of-00010.safetensors",
+        "bytes": 10005375200,
+        "hash_algorithm": "sha256",
+        "hash": "53d1f80746aa0cc0a7c2f4836587002a8a4dd72c827432cd2e43abae3c3899e4"
+      },
+      {
+        "name": "model-00009-of-00010.safetensors",
+        "bytes": 5679113808,
+        "hash_algorithm": "sha256",
+        "hash": "eaff6a87ece6fbfd6ad0fbaa0a5cf9ff542f8076acba38e62410b1ed55e12cc3"
+      },
+      {
+        "name": "model-00010-of-00010.safetensors",
+        "bytes": 128587536,
+        "hash_algorithm": "sha256",
+        "hash": "0d49b0cf7c15bf9b5bd1e17403b36727315860a8f2a2e0f5a53655547084f640"
+      },
+      {
+        "name": "model-fp8-mtp-ple.safetensors",
+        "bytes": 53717551730,
+        "hash_algorithm": "sha256",
+        "hash": "3525520c8602d850003eb1960aec0b64291dae33b83f8b65dd639a451df78823"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 31275518,
+        "hash_algorithm": "sha256",
+        "hash": "660414e8300728ba80062e6a3c81cb76a65e2ab136ac9e9ceb450ba0c51c3c0d"
+      },
+      {
+        "name": "preprocessor_config.json",
+        "bytes": 390,
+        "hash_algorithm": "sha1",
+        "hash": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64"
+      },
+      {
+        "name": "processor_config.json",
+        "bytes": 1191,
+        "hash_algorithm": "sha1",
+        "hash": "33818c7f9e991ad735fd240209f4fa73e6c28c50"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 12809320,
+        "hash_algorithm": "sha256",
+        "hash": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 17928,
+        "hash_algorithm": "sha1",
+        "hash": "5de744b3fca2129d7186979ae47c06be33903243"
+      },
+      {
+        "name": "video_preprocessor_config.json",
+        "bytes": 385,
+        "hash_algorithm": "sha1",
+        "hash": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe"
+      },
+      {
+        "name": "vocab.json",
+        "bytes": 6722759,
+        "hash_algorithm": "sha1",
+        "hash": "0aa0ce0658d60ac4a5d609f4eadb0e8e43514176"
+      }
+    ],
+    "total_bytes": 132734506847
+  },
+  "format": "Streaming Llama Pack v1",
+  "packer": "scripts/pack_slpack.py",
+  "routed_experts": "lossless native NVFP4 relayout",
+  "whole_model_lossless": false,
+  "auxiliary_input": {
+    "required": true,
+    "argument": "--sections-from",
+    "roles": [
+      "mtp/*",
+      "vision/*",
+      "profile",
+      "sampling defaults"
+    ],
+    "public_download_pin": null,
+    "status": "BLOCKED-OWNER: exact auxiliary pack has no pinned distributable source recipe yet"
+  },
+  "expected": {
+    "bytes": 131730218667,
+    "sha256": "0f6291a714839961007f0d130aa715b53d82f8d1e73cef9785700e83bce74fbe",
+    "status": "Reference identity projected from fully hashed original plus exact12byte envelope change; deployed full readback pending. Fresh portable-import provenance differs and needs its own output identity.",
+    "historical_container_sha256": "91bbce3986731425d54f77678d95d3cf16041348374d3ee3983e850bdd91cf20",
+    "payload_sections": [
+      {
+        "name": "tokenizer/chat_template.jinja",
+        "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+        "bytes": 8952
+      },
+      {
+        "name": "tokenizer/merges.txt",
+        "sha256": "4ba698529766c7a2f5052083ea10cdf2485577f5237a332ee291054eb11e3332",
+        "bytes": 3353258
+      },
+      {
+        "name": "tokenizer/token_type.json",
+        "sha256": "5088c8c298fc06af8382ddb3b76c888703ac2634e82263b97eedcc2ad202738b",
+        "bytes": 744960
+      },
+      {
+        "name": "tokenizer/tokenizer.json",
+        "sha256": "66df11751f420e737b55ed7e27588799dc3b5480bbbcee5f4d3f6ac6b702532e",
+        "bytes": 573
+      },
+      {
+        "name": "tokenizer/vocab.json",
+        "sha256": "4ba64f0332abcfb0b600b7df1537d1e836e68009d5fb7cdb77339738dc6365c4",
+        "bytes": 5737005
+      },
+      {
+        "name": "dense",
+        "sha256": "230d7f29b52ff1bd1d61f1fda1b87880a75779cdf273ac041c80d638874b3ebf",
+        "bytes": 1538035200
+      },
+      {
+        "name": "dense.index",
+        "sha256": "07c7eddb0414b9efc540fac14e403cfb8b78f5ebde5aeb92ca9f65d99ebe569b",
+        "bytes": 93552
+      },
+      {
+        "name": "experts",
+        "sha256": "f34f5a09e6fefe0de7b855a754e6c7c9ec5eea518a40e6f36caefe17855210e3",
+        "bytes": 67948118016
+      },
+      {
+        "name": "experts.layout",
+        "sha256": "59638024098b775b8718bbc9e6c083c61b5f64973fffa1688556a4da4d429397",
+        "bytes": 1421
+      },
+      {
+        "name": "experts.input_scale",
+        "sha256": "501452296bb54f0f7b4cef5870f967c89865f1cfdffd8314289cf64010ba2c6d",
+        "bytes": 294912
+      },
+      {
+        "name": "experts.input_scale.index",
+        "sha256": "4709097a65eab6644cc36ec5eaf6a08ea763b9e1a48056ccf253911300fbef33",
+        "bytes": 20019615
+      },
+      {
+        "name": "checkpoint/config.json",
+        "sha256": "deef67a61f3311faf051b23dc4192f442c7fee4f9cd2f38cbcbe4da55c763a80",
+        "bytes": 30820
+      },
+      {
+        "name": "checkpoint/generation_config.json",
+        "sha256": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+        "bytes": 202
+      },
+      {
+        "name": "checkpoint/hf_quant_config.json",
+        "sha256": "331ad11d57c8bc374554579977198084e0d4d0933d5b3558f125f6f670aba0e8",
+        "bytes": 23001
+      },
+      {
+        "name": "checkpoint/tokenizer.json",
+        "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+        "bytes": 12809320
+      },
+      {
+        "name": "checkpoint/tokenizer_config.json",
+        "sha256": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+        "bytes": 17928
+      },
+      {
+        "name": "gguf",
+        "sha256": "37d4d5bafe777acb184d6ff6f67ce46cae4da5449de62acba94a782690250ee9",
+        "bytes": 59696258048
+      },
+      {
+        "name": "mtp/dense",
+        "sha256": "dfe18647e0c95d05302907be88f021590119645a1567fcd770c8d309df852d75",
+        "bytes": 116099072
+      },
+      {
+        "name": "mtp/dense.index",
+        "sha256": "991456cf4eb266eb8a888c349e548d11bc640f5dbd9149439aa9786af0f732fd",
+        "bytes": 1851
+      },
+      {
+        "name": "mtp/experts",
+        "sha256": "09398406be61f1f54c93861f449e48b8df0bfccbc9ec9b2b7636775a6ea9244f",
+        "bytes": 707788800
+      },
+      {
+        "name": "mtp/draft_vocab",
+        "sha256": "b1e1d3a7a9e4bf862dcd5923ce661fb59bbd07907e594df5cf86a62ac235cb91",
+        "bytes": 425196
+      },
+      {
+        "name": "profile",
+        "sha256": "cd4f488c45c6936eb2e2f33b164553398f2201da352b4f4c8ffd66c12bcdf2df",
+        "bytes": 196628
+      },
+      {
+        "name": "vision/mmproj",
+        "sha256": "b1a82259702816a5330d7bd7607cd9676b11780e79ff7348c21103ff3ce49bd0",
+        "bytes": 907543008
+      },
+      {
+        "name": "vision/text_vocab",
+        "sha256": "2abb8d55ffe2c595a32e9d5a4cc0ed5dfad86efc49d739c913c593821c882b9a",
+        "bytes": 10946976
+      },
+      {
+        "name": "hc8",
+        "sha256": "441e70d561293cf8e3ee23de4729def8b6eea39ff0ace2a38f07358e975fe857",
+        "bytes": 712920832
+      },
+      {
+        "name": "meta",
+        "sha256": "6623eca89c7f7ff9fc9187267273f3e071667178db9d583c43517d159477c033",
+        "bytes": 8101547
+      }
+    ]
+  }
+}

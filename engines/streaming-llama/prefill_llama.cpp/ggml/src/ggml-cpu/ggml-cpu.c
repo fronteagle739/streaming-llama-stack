@@ -217,6 +217,12 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_F16,
         .nrows                    = 1,
     },
+    [GGML_TYPE_Q2_0] = {
+        .from_float               = quantize_row_q2_0,
+        .vec_dot                  = ggml_vec_dot_q2_0_q8_0,
+        .vec_dot_type             = GGML_TYPE_Q8_0,
+        .nrows                    = 1,
+    },
     [GGML_TYPE_Q4_0] = {
         .from_float               = quantize_row_q4_0,
         .vec_dot                  = ggml_vec_dot_q4_0_q8_0,
@@ -2025,6 +2031,60 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_lightning_indexer(params, tensor);
             } break;
+        case GGML_OP_GATED_DELTA_NET:
+            {
+                ggml_compute_forward_gated_delta_net(params, tensor);
+            } break;
+        case GGML_OP_QFN_QSA_SELECT:
+            {
+                ggml_compute_forward_qfn_qsa_select(params, tensor);
+            } break;
+        case GGML_OP_QFN_QSA_ATTN:
+            {
+                ggml_compute_forward_qfn_qsa_attn(params, tensor);
+            } break;
+        case GGML_OP_QFN_HC_MIX:
+            {
+                const struct ggml_tensor * xn = tensor->src[0], * gt = tensor->src[1];
+                const int64_t E = xn->ne[0], HC = xn->ne[1], NT = xn->ne[2];
+                const float scale = ggml_get_op_params_f32(tensor, 0);
+                const int ith = params->ith, nth = params->nth;
+                for (int64_t t = ith; t < NT; t += nth) {
+                    const float * x = (const float *) xn->data + t*E*HC;
+                    const float * g = (const float *) gt->data + t*E*HC;
+                    float * o = (float *) tensor->data + t*E;
+                    for (int64_t i = 0; i < E; ++i) {
+                        float acc = x[i] * (1.f / (1.f + expf(-g[i])));
+                        for (int64_t h = 1; h < HC; ++h) acc += x[h*E + i] * (1.f / (1.f + expf(-g[h*E + i])));
+                        o[i] = acc * scale;
+                    }
+                }
+            } break;
+        case GGML_OP_QFN_HC_COMBINE:
+            {
+                const struct ggml_tensor * rs = tensor->src[0], * bk = tensor->src[1], * ij = tensor->src[2];
+                const int64_t E = rs->ne[0], HC = rs->ne[1], NT = rs->ne[2];
+                const int ith = params->ith, nth = params->nth;
+                for (int64_t t = ith; t < NT; t += nth) {
+                    for (int64_t h = 0; h < HC; ++h) {
+                        const float w = (1.f / (1.f + expf(-((const float *) ij->data)[t*HC + h]))) * 2.0f;
+                        const float * r = (const float *) rs->data + (t*HC + h)*E;
+                        const float * b = (const float *) bk->data + t*E;
+                        float * o = (float *) tensor->data + (t*HC + h)*E;
+                        for (int64_t i = 0; i < E; ++i) o[i] = r[i] + b[i] * w;
+                    }
+                }
+            } break;
+        case GGML_OP_QFN_SLOT_MAP:
+            {
+                if (params->ith == 0) {
+                    const int32_t * s = (const int32_t *) tensor->src[0]->data;
+                    const int32_t * t = (const int32_t *) tensor->src[1]->data;
+                    int32_t * o = (int32_t *) tensor->data;
+                    const int64_t ne = tensor->src[1]->ne[0];
+                    for (int64_t i = 0; i < ggml_nelements(tensor); ++i) o[i] = (s[i] >= 0 && s[i] < ne) ? t[s[i]] : -1;
+                }
+            } break;
         case GGML_OP_DSV4_HC_PRE:
             {
                 ggml_compute_forward_dsv4_hc_pre(params, tensor);
@@ -2400,6 +2460,12 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_GATED_LINEAR_ATTN:
         case GGML_OP_RWKV_WKV7:
         case GGML_OP_LIGHTNING_INDEXER:
+        case GGML_OP_GATED_DELTA_NET:
+        case GGML_OP_QFN_QSA_SELECT:
+        case GGML_OP_QFN_QSA_ATTN:
+        case GGML_OP_QFN_SLOT_MAP:
+        case GGML_OP_QFN_HC_MIX:
+        case GGML_OP_QFN_HC_COMBINE:
         case GGML_OP_DSV4_HC_PRE:
         case GGML_OP_DSV4_ACT_QAT:
         case GGML_OP_DSV41_ENGRAM_ADD:
@@ -2989,6 +3055,24 @@ struct ggml_cplan ggml_graph_plan(
                         // n_embd*n_tasks, which under-allocates by CACHE_LINE_SIZE_F32*n_tasks).
                         const int64_t ne10 = node->src[1]->ne[0];
                         cur += sizeof(float)*(ne10 + CACHE_LINE_SIZE_F32)*n_tasks;
+                    } break;
+                case GGML_OP_GATED_DELTA_NET:
+                    {
+                        const int64_t S_v = node->src[2]->ne[0];
+                        const int64_t K   = ggml_get_op_params_i32(node, 0);
+                        const int64_t per_thread = S_v + (K > 1 ? S_v * S_v : 0) + CACHE_LINE_SIZE_F32;
+                        cur += sizeof(float)*per_thread*n_tasks + sizeof(float)*CACHE_LINE_SIZE_F32;
+                    } break;
+                case GGML_OP_QFN_QSA_ATTN:
+                    {
+                        // per thread: the token's scores over its cell list and one output row
+                        cur += sizeof(float)*(node->src[4]->ne[0] + node->src[0]->ne[0] + 2*CACHE_LINE_SIZE_F32)*n_tasks;
+                    } break;
+                case GGML_OP_QFN_QSA_SELECT:
+                    {
+                        // per thread: one (score, index) pair per visible pool of the widest row
+                        const int64_t n_pool = node->src[0]->ne[0];
+                        cur += 2*sizeof(float)*(n_pool + CACHE_LINE_SIZE_F32)*n_tasks;
                     } break;
                 case GGML_OP_COUNT:
                     {

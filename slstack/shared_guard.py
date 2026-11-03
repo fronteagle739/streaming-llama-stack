@@ -24,6 +24,98 @@ class CleanupUnconfirmed(RuntimeError):
     owned_cleanup_uncertain = True
 
 
+class _PagingCloseTracker:
+    """Delegate all paging behavior; record completion of the actual close call.
+
+    Absence/entry/failure are False. True requires normal return from the pinned
+    watcher's close, with no failed close attempt. A failure remains sticky, as
+    does the provider's failure/lease policy; retry cannot erase that evidence.
+    """
+    __slots__ = ('_watcher', '_record', '_close_attempts', '_close_error', '_close_lock')
+
+    def __init__(self, watcher, record):
+        self._watcher = watcher
+        self._record = record
+        self._close_attempts = 0
+        self._close_error = None
+        self._close_lock = threading.RLock()
+        record.update(paging_telemetry_closed=False,
+                      paging_telemetry_close_attempts=0,
+                      paging_telemetry_close_error=None)
+
+    def __getattr__(self, name):
+        return getattr(self._watcher, name)
+
+    def __setattr__(self, name, value):
+        if name in self.__slots__:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._watcher, name, value)
+
+    def __delattr__(self, name):
+        if name in self.__slots__:
+            object.__delattr__(self, name)
+        else:
+            delattr(self._watcher, name)
+
+    def close(self):
+        with self._close_lock:
+            self._close_attempts += 1
+            self._record.update(paging_telemetry_closed=False,
+                                paging_telemetry_close_attempts=self._close_attempts)
+            try:
+                result = self._watcher.close()
+            except BaseException as error:
+                self._close_error = repr(error)
+                self._record.update(paging_telemetry_close_error=self._close_error,
+                                    release_allowed=False)
+                raise
+            closed = self._close_error is None
+            self._record['paging_telemetry_closed'] = closed
+            if not closed:
+                self._record['release_allowed'] = False
+            return result
+
+
+def _paging_telemetry_closed(job):
+    # A canonical bool: no "not failed"/missing-key/cleanup inference can turn
+    # an unobserved close into positive telemetry-closure evidence.
+    return job.record.get('paging_telemetry_closed') is True
+
+
+def _watch_live_ownership(job, spec):
+    """Preserve the provider monitor while bounding live, rather than past, children."""
+    from .shutdown import ProgressOwnedProcesses
+    job.owned = ProgressOwnedProcesses.from_owned(job.owned, spec)
+    return GuardedJob._watch(job)
+
+
+def _wait_for_command_receipt(job):
+    """Wait without mistaking a receipt published during poll() for its loss."""
+    if job.child is None:
+        raise RuntimeError('job has not started')
+    try:
+        while not job.command_status.exists() and not job.cancelled.is_set():
+            if job.child.poll() is not None:
+                # The bootstrap writes the receipt before it exits. The first
+                # exists() can precede that write while poll() follows exit.
+                if not job.command_status.exists():
+                    job.failure = job.failure or 'owned bootstrap exited before command receipt'
+                break
+            job.finished.wait(job.poll)
+        code = int(job.command_status.read_text()) if job.command_status.exists() else 137
+        job.record['command_exit_code'] = code
+    except BaseException as error:
+        job.failure = job.failure or repr(error)
+        job.cancelled.set()
+        raise
+    finally:
+        job.close()
+    if job.failure:
+        raise RuntimeError(job.failure)
+    return code
+
+
 def supervise(spec):
     for name, pin in {'job_guard.py':'56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648',
                       'job_paging.py':'205f347b92be699b4f72863942568cc08d534ac19e8b7b154cad2521d6d2c120'}.items():
@@ -36,8 +128,11 @@ def supervise(spec):
     if abs(parent.create_time()-spec['owner_created']) > .01:
         raise RuntimeError('Owning process identity changed before launch')
     class Adapter(GuardedJob):
+        wait = _wait_for_command_receipt
+
         def __init__(self,*args,**kwargs):
             super().__init__(*args,**kwargs)
+            self.watcher=_PagingCloseTracker(self.watcher,self.record)
             self.retirement_lock=threading.RLock()
             self.retirement_proof=None
 
@@ -61,6 +156,11 @@ def supervise(spec):
             result=super().start(*args,**kwargs)
             self._cooperative_ownership()
             return result
+
+        def _watch(self):
+            # GuardedJob starts this thread only after establishing ownership.
+            # Upgrade before its first refresh; pinned paging/priority/limits remain intact.
+            return _watch_live_ownership(self, spec)
 
         def _stop(self):
             from .shutdown import ProgressOwnedProcesses
@@ -134,6 +234,7 @@ def supervise(spec):
                   'shared_guard_commit':'2774636281ab32bf871497f0a8caae23c6b6cdc7',
                   'stack_retirement_policy':'cooperative request, progress-aware grace, logged force fallback',
                   'shared_guard_certificate':str(certificate),'cleanup_confirmed':certain,
+                  'paging_telemetry_closed':_paging_telemetry_closed(job),
                   'paging_policy':job.watcher.details(),
                   'owned_paging':{'attribution':job.watcher.observer.attribution,
                     'observed_paged_bytes':job.watcher.job_paged,

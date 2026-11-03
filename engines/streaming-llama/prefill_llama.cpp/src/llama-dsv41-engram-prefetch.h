@@ -56,4 +56,12 @@ public:
     // the cached rows, reads only the missing ones, then inserts them.
     void set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache>);
     void load_early(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
+    // QFNSTREAM: a precomputed row set (any model's own hash) through the same early multi-IoRing loader and
+    // scan/random geometry choice. ids[t] are row indices of table t (any order, duplicates allowed; table 1 may be
+    // empty), offsets[t] the table's file offset, row_bytes the fixed row size of both tables.
+    void prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>& offsets,uint32_t row_bytes,
+                            const std::array<uint64_t,2>& table_rows,uint64_t admitted_host_bytes);
+    // After load_early: the table's sorted unique row ids and their rows (row_bytes each, same order).
+    const std::vector<uint32_t>& table_ids(uint32_t table)const;
+    const uint8_t* table_rows(uint32_t table)const;
 };

@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give three practical tips for keeping a houseplant healthy. Keep the answer under 120 words."
+    }
+  ],
+  "seed": 43,
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "top_k": 40,
+  "min_p": 0.05,
+  "max_tokens": 2048
+}

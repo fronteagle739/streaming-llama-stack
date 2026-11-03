@@ -483,3 +483,8 @@ own licences; see [NOTICE](NOTICE).
   storage-to-GPU transfers.
 
 <sub>Useful to you? [Ko-fi](https://ko-fi.com/FrontEagle).</sub>
+
+## Qwen3.8 Flash Next
+
+The standalone Windows CUDA streaming engine, named modes and calibration workflow
+are described in [QFN setup](docs/QFN.md). The shared model pack uses `.slpack`.

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "model_key": "qfn-native-nvfp4",
+  "bias": {"min": 0, "max": 8, "max_quality": 0, "balanced": 0, "max_speed": 0.35},
+  "router_spreads": {"file": "presets/qfn-affinity-spreads.txt", "reference_mean": 0.6327, "reference_bias": 0, "reference_only": true, "arithmetic": "Use the qualified engine's embedded per-layer constants; the reference file retains the original higher-precision observations."},
+  "cache": {"seed_lfu_max": 1, "half_life": 64},
+  "engine": {"tile": 2048, "read_parts": 8, "mtp": 0, "prefill": "dsv-native", "decode": "dsv-native", "indexer": "basalt-tc-refine-prefill"},
+  "calibration": {
+    "status": "reference-settings",
+    "context": 100000,
+    "selection": {
+      "max_quality": {"bias": 0, "why": "Unbiased routing; byte-identical full-vocabulary reference at 100K."},
+      "balanced": {"bias": 0, "why": "Conservative initial value shared with Max quality until this machine is calibrated; no intermediate bias is claimed qualified."},
+      "max_speed": {"bias": 0.35, "why": "Intentional routing tradeoff; three deployed GUI chats stopped naturally. A separate 2048-token calibration execution proof selected the same named values; it does not establish a new 100K calibration."}
+    }
+  }
+}

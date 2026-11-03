@@ -1,0 +1,209 @@
+{
+  "source": "https://github.com/jesdga95/basalt",
+  "commit": "a04edb960cf3b7e5df2db2d70169ca615bcfbf21",
+  "files": {
+    "include/basalt/core/diag.hpp": {
+      "bytes": 1108,
+      "sha256": "efa1f1530e2da2ed451500bd24ed41f0a6921472cda77d8443a6c577bbdd1690"
+    },
+    "include/basalt/ggml/ggml_common.h": {
+      "bytes": 132461,
+      "sha256": "fef7f0910a97421609a08d0abeb38995b6d44d2bf5e4b7780fa8968f89edb858"
+    },
+    "include/basalt/kernels/dec_gdn.hpp": {
+      "bytes": 4052,
+      "sha256": "13d9e46e2e49c16d2dad4553781b54f59315cb07288b9617d01b3809523ddcfd"
+    },
+    "include/basalt/kernels/dec_moe.hpp": {
+      "bytes": 21317,
+      "sha256": "81646b773e9cc2622255f7e7f68951e22b1416ab219771111b4f011cbefa38a0"
+    },
+    "include/basalt/kernels/dp4a.hpp": {
+      "bytes": 379,
+      "sha256": "829a3e907e62a19e91502041f129d1eb1d74e6ee3689749132a4d5a9a23d4e97"
+    },
+    "include/basalt/kernels/iq_kernels.hpp": {
+      "bytes": 6887,
+      "sha256": "3fa7a3bf4c498265672e63ed507e285c39c21f4c1c41a5cea845f3cbea48ab96"
+    },
+    "include/basalt/kernels/pdl.hpp": {
+      "bytes": 5632,
+      "sha256": "750fc745bef9f6021599f1686ef5d07b854c791fbda07447eb82a8019a6e31f9"
+    },
+    "include/basalt/kernels/pk_moe.hpp": {
+      "bytes": 3134,
+      "sha256": "4b618c4550b4cc9c90d77262d8845f3ca84bb11f91fac339a559be59ca7423ef"
+    },
+    "include/basalt/kernels/q8_1_finite.hpp": {
+      "bytes": 1639,
+      "sha256": "3c3aaacbd1457fe142b53dbe0bdb10f7ed461845da86aab9fda296d90d71590b"
+    },
+    "include/basalt/kernels/resident_tabs.hpp": {
+      "bytes": 544,
+      "sha256": "cf55229cc3a6819fadb177aef2f65014e31e725a27147c0c94e99704922ae14c"
+    },
+    "include/basalt/kernels/verify_kernels.hpp": {
+      "bytes": 17228,
+      "sha256": "c8ea83ddc6c1d0b7649aaab320c88f9b064d43c6db681689d907141971043a4d"
+    },
+    "include/basalt/log.hpp": {
+      "bytes": 5401,
+      "sha256": "ec2ca947dfdac9d5487e0ba3367900c95f78e90c55d3896353fb32d82d2761af"
+    },
+    "include/basalt/platform/format_check.hpp": {
+      "bytes": 403,
+      "sha256": "96a46e9279c09753910c9700d086aa1b47cc0cd27c377582c12a1c2a8c13cb3d"
+    },
+    "include/basalt/prefill/moe_fp4.hpp": {
+      "bytes": 6328,
+      "sha256": "4f882829787347ffa22464bdc3937e8ad25b71c71daeb85b98b350bcb6c54aec"
+    },
+    "src/kernels/cuda/dec_gdn_rec.cu": {
+      "bytes": 21069,
+      "sha256": "ae4736b253f5d964d3df5b82b619ee8c959664847f9576cfe336b8f9ce294cf8"
+    },
+    "src/kernels/cuda/dec_moe.cuh": {
+      "bytes": 126743,
+      "sha256": "8c87d80157888502eb9a8bd38bc9927b60dd37750b9848c4e2b713980142b900"
+    },
+    "src/kernels/cuda/gu2.cuh": {
+      "bytes": 18739,
+      "sha256": "9a9f26aa467cba14805c59447fe4b3f6344698e7ad29a0eb364eda76bac10127"
+    },
+    "src/kernels/cuda/iq_kernels.cu": {
+      "bytes": 152631,
+      "sha256": "6ca2f102ac445c26aef166fad1db7871531f64df877d094f44fc5f2889512ee4"
+    },
+    "src/kernels/cuda/pk_moe.cuh": {
+      "bytes": 12037,
+      "sha256": "fab7b4e8bfc45cc43a68723a1e07a742090b1c940df05ca60bcd1be7e5007bd5"
+    },
+    "src/prefill/fp4/moe_fp4.cu": {
+      "bytes": 26020,
+      "sha256": "d7bc05745bbbf9f855e3c15765dfa5f67e300b650604e7c96a67ef332ed77bc4"
+    },
+    "LICENSE": {
+      "bytes": 1069,
+      "sha256": "93e7240a1399b9cea1a65918ea14baea87d4f1fea60262afaaefca081a80df15"
+    },
+    "THIRD_PARTY_LICENSES": {
+      "bytes": 18214,
+      "sha256": "32dfe92b468cbfdd8e299e4eb083c1679427fb161e7ac24107dfaf49545465a9"
+    },
+    "src/kernels/cuda/qsa_select.cu": {
+      "bytes": 61797,
+      "sha256": "9eec4eb7d7f9c4935dac74bdfc658d9d64c8cc7af35b5a7ddf94c61b27e10102"
+    },
+    "include/basalt/ggml/ggml.h": {
+      "bytes": 3771,
+      "sha256": "9d4a4839574149d3abb757e220d4e6ff54d1728c71cc847db4487735096e9c24"
+    },
+    "src/prefill/mmq/instances/mmq_nvfp4.cu": {
+      "bytes": 396,
+      "sha256": "749e81cec7607838d5293bf226af9a4f3b803b2fae10457dcb8096d63e073fa9"
+    },
+    "src/prefill/mmq/mma.cuh": {
+      "bytes": 4430,
+      "sha256": "497216e1343df1719c5130f9ef65526d6be328f11780db95c0c04c2788748963"
+    },
+    "src/prefill/mmq/mmq.cuh": {
+      "bytes": 42593,
+      "sha256": "ec0898bf8b6a4275d3418baf9c7547a4647cc803a9cbc57ed5e8e94931cdb620"
+    },
+    "src/prefill/mmq/mmq_common.cuh": {
+      "bytes": 11473,
+      "sha256": "120e191a857c20b60cfdc5ac87021c01792dd77b6e82e68df5b4b4099cf703a8"
+    },
+    "src/prefill/mmq/mmq_config.cuh": {
+      "bytes": 23568,
+      "sha256": "dc64b5d6b11ff035f274cdca4d05763d798cefd049f02d00ac1cc03cc5d47f30"
+    },
+    "src/prefill/mmq/mmq_host.cu": {
+      "bytes": 2692,
+      "sha256": "50bf4b5f78844b3a6aff05e3cba2955196b7aff807413549c5c7b228b2df6d46"
+    },
+    "src/prefill/mmq/mmq_load_tiles.cuh": {
+      "bytes": 33659,
+      "sha256": "d288e6553f9f634c186ae11963ee3125dbc14b523cfd641e04afb01693e8aab4"
+    },
+    "src/prefill/mmq/mmq_vec_dot.cuh": {
+      "bytes": 8774,
+      "sha256": "a526c9c30e5a982d84c50d12a7e106fb6992320256b99b785e2e47c235eeb866"
+    },
+    "src/prefill/mmq/quantize.cu": {
+      "bytes": 4530,
+      "sha256": "77a435fa87b3c29078926c48dbdb0f8c5ab5ead4612a10c9b7a9848a30e73aa8"
+    },
+    "src/prefill/mmq/quantize.cuh": {
+      "bytes": 911,
+      "sha256": "bf0593b56a6aa5d3bb858f7b78a15e5a9e67f8c23a09d1934b405f624b468efa"
+    },
+    "src/prefill/mmq/vecdotq.cuh": {
+      "bytes": 3015,
+      "sha256": "fa2b33ae167e32ea0d04ad4453ea82bac0ad03d36a451c4c804f563f51f4ae73"
+    },
+    "src/kernels/cuda/qsa_prompt_attn.cu": {
+      "bytes": 42626,
+      "sha256": "6e646f65f4c896daeb8c2264477214218dd05af0ea3d88331e088dcd3eda137c"
+    },
+    "src/kernels/cuda/qsa_dec_attn.cu": {
+      "bytes": 39228,
+      "sha256": "111705c1330b4cea7c552ac710828a72f5e47ba73666479944fbb7309a39fcb2"
+    }
+  },
+  "policy": "Unchanged source bytes; MIT and Infernix Apache-2.0 notices retained. NVIDIA static input_scale is replaced by original Basalt dynamic activation quantization.",
+  "qsa_adaptation": {
+    "compiled_file": "qsa-indexer.cu",
+    "upstream_file": "src/kernels/cuda/qsa_select.cu",
+    "upstream_lines": "158-269,1062-1101",
+    "changes": [
+      "actual F16/F32 key loads and all byte strides",
+      "actual F32 head weights and scalar scales",
+      "full score matrix, no causal or dead-tail policy",
+      "three C exports and host-only admission",
+      "mode1 current QFN warp-shfl_down oracle for parity"
+    ]
+  },
+  "mmq_adaptation": {
+    "compile_closure": "mmq-nvfp4-closure.json",
+    "mode": 3,
+    "policy": "D4F32q8, nativeNVFP4weights, published tailfold/fastmath; no native2 bitidentity claim",
+    "pool": "callerFixedPool,noallocationinrun",
+    "fixup_reserved_sms": 256
+  },
+  "calibrated_adaptation": {
+    "file": "calibrated-a4.cu",
+    "source": "src/prefill/fp4/moe_fp4.cu",
+    "upstream_quantizer_lines": "90-185",
+    "license": "Apache-2.0/Infernix notices retained",
+    "changes": [
+      "per-expert per-role preserved static input_scale",
+      "separate gate and up quantization/products",
+      "original hidden down quantization and s_down after down",
+      "caller-owned persistent workspace and aux; existing GEMM unchanged"
+    ],
+    "status": "qualification receipts external; current dynamic/static capability states documented in README"
+  },
+  "attention_adaptation": {
+    "compiled_file": "basalt-attention.cu",
+    "header": "qfn_basalt_attention.h",
+    "source_files": [
+      "src/kernels/cuda/qsa_prompt_attn.cu",
+      "src/kernels/cuda/qsa_dec_attn.cu",
+      "include/basalt/kernels/pdl.hpp"
+    ],
+    "license": "Basalt MIT, complete existing LICENSE retained",
+    "geometry": "D256,H=12*Hkv,F32Q/gate/output,F16KV; explicit native strides",
+    "changes": [
+      "direct native KV byte strides instead of page tables; selected IDs and per-query positions replace steps",
+      "per-entry causal/OOB/missing masking preserves holes/repeats/order",
+      "actual scalar attention scale and separate native optional sigmoid gate",
+      "pure host workspace admission and caller-owned persistent decode scratch",
+      "query launch windows and64-bit selected-index arithmetic avoid grid/index overflow",
+      "bounded power-of-two Q prescale exponent avoids qup overflow for tiny finite Q",
+      "separate CABI, explicit prepare prewarms real PDL module/cache/attributes before capture"
+    ],
+    "numeric_policy": "Published prompt high/low F16 tensor-core decomposition and decode FP32/64-cell reduction/merge; precise default CUDA FP32 flags, source exp2f/__expf; not native bitidentity",
+    "status": "Candidate compiled/host/GPU/model qualifications reported separately; old DLL APIs/math retained"
+  }
+}

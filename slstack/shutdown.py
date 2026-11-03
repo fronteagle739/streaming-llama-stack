@@ -121,6 +121,18 @@ class ProgressOwnedProcesses(OwnedProcesses):
         super().__init__(child)
         self.spec = spec or {}
 
+    def refresh(self):
+        # The live-process bound must not count retired compiler invocations.
+        completed = getattr(self, 'completed_identities', [])
+        completed.extend(self.retired_identities)
+        self.retired_identities = []
+        for pid, identity in list(self.identities.items()):
+            if identity.process() is None:
+                completed.append(identity)
+                del self.identities[pid]
+        self.completed_identities = completed
+        return super().refresh()
+
     @classmethod
     def from_owned(cls, owned, spec):
         result = cls.__new__(cls)
@@ -173,7 +185,8 @@ class ProgressOwnedProcesses(OwnedProcesses):
             errors.append(repr(error));survivors = list(self.identities)
         return dict(confirmed=not survivors and not errors, surviving_owned_pids=survivors,
             errors=errors, identities=[dataclasses.asdict(x) for x in self.identities.values()],
-            retired_identities=[dataclasses.asdict(x) for x in self.retired_identities],
+            retired_identities=[dataclasses.asdict(x) for x in
+                getattr(self, 'completed_identities', []) + self.retired_identities],
             forced_kill=forced, force_reason=force_reason, cooperative=True,
             cooperative_request_errors=request_errors, shutdown_elapsed_s=progress.window.elapsed(),
             shutdown_idle_s=progress.window.idle())

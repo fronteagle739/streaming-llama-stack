@@ -55,7 +55,8 @@ void llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pas
 // Submit/cleanup contracts: https://learn.microsoft.com/windows/win32/api/ioringapi/nf-ioringapi-submitioring
 // https://learn.microsoft.com/windows/win32/api/ioringapi/nf-ioringapi-closeioring
 struct llama_dsv41_engram_prompt_cache::implementation {
-    static constexpr uint32_t depth=256,page_size=8192,row_bytes=264;
+    static constexpr uint32_t depth=256,page_size=8192;
+    uint32_t row_bytes=264; // DSV4.1 Engram rows; QFNSTREAM prepare_rows_early sets the model's row size
     struct table {std::vector<uint32_t> ids;std::vector<uint8_t> data;};
     std::array<table,2> tables;
     std::array<uint64_t,2> bases{};
@@ -272,11 +273,12 @@ public:
                 io.submitted+=submitted;staged.clear();++submits;
             }else throw std::runtime_error("Required Engram IoRing Submit failed; no serial fallback");
         };
-        const auto began=GetTickCount64();
+        const auto began=GetTickCount64();auto last_progress=began;
         for(uint32_t i=0;i<depth;++i)if(!issue(i))break;
         submit();
         while(io.submitted){
-            require((!stopped||!stopped())&&GetTickCount64()-began<120000,"Engram preload cancelled or exceeded120s");
+            // progress-based liveness: a slow volume (an HDD scan) may take minutes, a stalled one fails after 120 s idle
+            require((!stopped||!stopped())&&GetTickCount64()-last_progress<120000,"Engram preload cancelled or made no progress for 120s");
             uint32_t completed=0;
             for(;completed<64;++completed){
                 IORING_CQE c{};const auto hr=api.PopIoRingCompletion(io.ring,&c);
@@ -295,6 +297,7 @@ public:
                 }
                 issue(id-1);
             }
+            if(completed)last_progress=GetTickCount64();
             require(io.submitted+staged.size()<=depth,"Engram queued and submitted slots exceed fixed depth");
             // Keep the same bounded slot ring. Amortize tiny completion groups,
             // but replenish before outstanding reads fall below half its depth.
@@ -324,6 +327,24 @@ public:
                        const std::array<uint64_t,2>& offsets,uint64_t admitted,llama_dsv41::engram_history initial,
                        std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache,const uint8_t* text_mask){
         prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
+        configure_early(admitted,std::move(prior_cache));
+    }
+    // QFNSTREAM: precomputed rows, then the same early-loader configuration as prepare_early.
+    void prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>& offsets,uint32_t bytes_per_row,
+                            const std::array<uint64_t,2>& table_rows,uint64_t admitted){
+        require(!attempted&&bytes_per_row>0&&bytes_per_row<=4096&&!ids[0].empty(),"Invalid or repeated precomputed Engram row set");attempted=true;
+        row_bytes=bytes_per_row;host_plan=4*1024*1024;
+        for(size_t i=0;i<2;++i){
+            auto& t=tables[i];t.ids=std::move(ids[i]);std::sort(t.ids.begin(),t.ids.end());
+            t.ids.erase(std::unique(t.ids.begin(),t.ids.end()),t.ids.end());t.ids.shrink_to_fit();
+            require(t.ids.empty()||uint64_t(t.ids.back())<table_rows[i],"Precomputed Engram ID exceeds its table");
+            host_plan=add(host_plan,add(uint64_t(t.ids.capacity())*sizeof(uint32_t),uint64_t(t.ids.size())*row_bytes));
+        }
+        require(host_plan<=admitted,"Precomputed Engram rows exceed explicit host admission");
+        bases=offsets;prepared=true;
+        configure_early(admitted,nullptr);
+    }
+    void configure_early(uint64_t admitted,std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior_cache){
         early_mode=true;prior=std::move(prior_cache);
         early_rings=env_u32("LLAMADECODE_ENGRAM_RINGS",4,1,8);
         const uint32_t depth=env_u32("LLAMADECODE_ENGRAM_DEPTH",1024,32,4096);
@@ -589,12 +610,13 @@ public:
             else throw std::runtime_error("Required Engram IoRing Submit failed; no serial fallback");
         };
         std::vector<HANDLE> events;for(const auto& r:io.rings)events.push_back(r.event);
-        auto last=clock::now();double overlap_ms=0;bool weight_active=weight_at_start;
+        auto last=clock::now();double overlap_ms=0;bool weight_active=weight_at_start;auto last_progress=clock::now();
         while(true){
             const auto now=clock::now();
             if(weight_active)overlap_ms+=std::chrono::duration<double,std::milli>(now-last).count();
             last=now;weight_active=llama_dsv41_engram_weight_pass.load(std::memory_order_relaxed);
-            require((!stopped||!stopped())&&since(began)<120000,"Engram preload cancelled or exceeded120s");
+            require((!stopped||!stopped())&&std::chrono::duration<double,std::milli>(clock::now()-last_progress).count()<120000,
+                    "Engram preload cancelled or made no progress for 120s");
             bool progress=false;
             for(auto& r:io.rings){
                 for(uint32_t k=0;k<1024;++k){
@@ -618,6 +640,7 @@ public:
                     (s1-1<early_small?r.free_small:r.free_large).push_back(s1-1);progress=true;
                 }
             }
+            if(progress)last_progress=clock::now();
             if(ready_tables.load(std::memory_order_relaxed)==0&&done[0]==need[0]){
                 ready_tables.store(1,std::memory_order_release);table0_ms=since(began);
                 llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_LOADED table=0 rows=%zu wall_ms=%llu early=1\n",tables[0].ids.size(),(unsigned long long)table0_ms);
@@ -664,6 +687,10 @@ public:
         }
         std::fflush(stderr);
     }
+    const std::vector<uint32_t>& ids_of(uint32_t table)const{
+        require(table<2&&ready_tables.load(std::memory_order_acquire)>table,"Engram table not loaded");return tables[table].ids;}
+    const uint8_t* rows_of(uint32_t table)const{
+        require(table<2&&ready_tables.load(std::memory_order_acquire)>table,"Engram table not loaded");return tables[table].data.data();}
     bool read(uint32_t table,uint64_t offset,void* destination,size_t bytes)const{
         if(table>=2||ready_tables.load(std::memory_order_acquire)<=table||bytes!=row_bytes||!destination||offset<bases[table]||(offset-bases[table])%row_bytes)return false;
         const auto id=(offset-bases[table])/row_bytes;if(id>UINT32_MAX)return false;
@@ -733,6 +760,28 @@ void llama_dsv41_engram_prompt_cache::prepare_early(const llama_dsv41::engram_la
  p->prepare_early(l,t,n,o,b,initial,std::move(prior),text_mask);
 #else
  (void)l;(void)t;(void)n;(void)o;(void)b;(void)initial;(void)prior;(void)text_mask;throw std::runtime_error("Engram IoRing requires Windows");
+#endif
+}
+void llama_dsv41_engram_prompt_cache::prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>&o,uint32_t row_bytes,
+        const std::array<uint64_t,2>& table_rows,uint64_t b){
+#ifdef _WIN32
+ p->prepare_rows_early(std::move(ids),o,row_bytes,table_rows,b);
+#else
+ (void)ids;(void)o;(void)row_bytes;(void)table_rows;(void)b;throw std::runtime_error("Engram IoRing requires Windows");
+#endif
+}
+const std::vector<uint32_t>& llama_dsv41_engram_prompt_cache::table_ids(uint32_t table)const{
+#ifdef _WIN32
+ return p->ids_of(table);
+#else
+ (void)table;throw std::runtime_error("Engram IoRing requires Windows");
+#endif
+}
+const uint8_t* llama_dsv41_engram_prompt_cache::table_rows(uint32_t table)const{
+#ifdef _WIN32
+ return p->rows_of(table);
+#else
+ (void)table;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
 }
 void llama_dsv41_engram_prompt_cache::load_early(const wchar_t*path,void*file,uint64_t n,const std::function<bool()>&stop){

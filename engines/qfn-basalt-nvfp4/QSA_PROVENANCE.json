@@ -1,0 +1,12 @@
+{
+  "basalt_commit": "a04edb960cf3b7e5df2db2d70169ca615bcfbf21",
+  "basalt_source": "src/kernels/cuda/qsa_select.cu",
+  "basalt_source_sha256": "9eec4eb7d7f9c4935dac74bdfc658d9d64c8cc7af35b5a7ddf94c61b27e10102",
+  "oracle_path": "engines/streaming-llama/prefill_llama.cpp/ggml/src/ggml-cuda/lightning-indexer.cu",
+  "oracle_source_sha256": "afc6f82b3f4b06d5fe40821aad8a27dcf0f535fa81ef91070d54852e9c60cc33",
+  "oracle_source_bytes": 6174,
+  "oracle_snapshot": "vendor/lightning-indexer.cu",
+  "adapter": "qsa-indexer.cu",
+  "numerical_policy": "Basalt3xTF32 full scores, current-QFN weights/scales and byte strides; possible near-cutoff selection changes require owner full-model gates; mode1 retains current scalar arithmetic",
+  "oracle_path_base": "project root"
+}

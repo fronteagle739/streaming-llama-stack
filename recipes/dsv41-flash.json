@@ -1,0 +1,530 @@
+{
+  "schema": 1,
+  "model": "dsv41",
+  "source": {
+    "repo": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+    "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170",
+    "files": [
+      {
+        "name": ".gitattributes",
+        "bytes": 1594,
+        "hash_algorithm": "sha1",
+        "hash": "a8a050df998304d9f6ab196df1d56a6a6b0cb438"
+      },
+      {
+        "name": "LICENSE",
+        "bytes": 1084,
+        "hash_algorithm": "sha1",
+        "hash": "d62e3bef9f054f21b7fc616365850fbf879a99ff"
+      },
+      {
+        "name": "README.md",
+        "bytes": 5231,
+        "hash_algorithm": "sha1",
+        "hash": "3b2d135a2f20a462d773716575d793dcb0c71e84"
+      },
+      {
+        "name": "config.json",
+        "bytes": 3311,
+        "hash_algorithm": "sha1",
+        "hash": "09917a9139b22d5bf8be52132787f435147b1020"
+      },
+      {
+        "name": "encoding/README.md",
+        "bytes": 12164,
+        "hash_algorithm": "sha1",
+        "hash": "1d094a2c20234cf6c04bcd1b4627cc30f42297d5"
+      },
+      {
+        "name": "encoding/encoding.py",
+        "bytes": 37962,
+        "hash_algorithm": "sha1",
+        "hash": "3c7c357dc9ae3ed37adacb8572a2e9498b7d1bcb"
+      },
+      {
+        "name": "encoding/test_encoding.py",
+        "bytes": 22449,
+        "hash_algorithm": "sha1",
+        "hash": "63ea61ae6d35efba3e35c5a5a50b9ac077b2d469"
+      },
+      {
+        "name": "encoding/tests/test_input_1.json",
+        "bytes": 2761,
+        "hash_algorithm": "sha1",
+        "hash": "c7435727e24c5f7b5cf28b470cf03814101eb37a"
+      },
+      {
+        "name": "encoding/tests/test_input_2.json",
+        "bytes": 527,
+        "hash_algorithm": "sha1",
+        "hash": "132bb05a51e79204324f160cfde2880b5d0077ba"
+      },
+      {
+        "name": "encoding/tests/test_input_3.json",
+        "bytes": 2554,
+        "hash_algorithm": "sha1",
+        "hash": "6d2612113c71fb9a897255ec694b7b8a41d0432b"
+      },
+      {
+        "name": "encoding/tests/test_input_4.json",
+        "bytes": 712,
+        "hash_algorithm": "sha1",
+        "hash": "86cd1f0a68075a412654ea10f9558c69162b271a"
+      },
+      {
+        "name": "encoding/tests/test_input_5.json",
+        "bytes": 1143,
+        "hash_algorithm": "sha1",
+        "hash": "2a2fa6a89e8118e896ec47abcc5bda30789e6532"
+      },
+      {
+        "name": "encoding/tests/test_output_1.txt",
+        "bytes": 2476,
+        "hash_algorithm": "sha1",
+        "hash": "3dc9bfe936d251bf69f6db738d1302bfa8c4c705"
+      },
+      {
+        "name": "encoding/tests/test_output_2.txt",
+        "bytes": 294,
+        "hash_algorithm": "sha1",
+        "hash": "78eb6be5de6f3cda7c5065b3c3bd01bac28ef1dc"
+      },
+      {
+        "name": "encoding/tests/test_output_3.txt",
+        "bytes": 2481,
+        "hash_algorithm": "sha1",
+        "hash": "90b2b6b74beaa471dfbbba1d7e7a5eb88c9e7da0"
+      },
+      {
+        "name": "encoding/tests/test_output_4.txt",
+        "bytes": 574,
+        "hash_algorithm": "sha1",
+        "hash": "efad296eb4ff95754f322476db4d26e72682a586"
+      },
+      {
+        "name": "encoding/tests/test_output_5.txt",
+        "bytes": 408,
+        "hash_algorithm": "sha1",
+        "hash": "a130bcc2c5682c94b6fd5194def54209f1794939"
+      },
+      {
+        "name": "inference/README.md",
+        "bytes": 2029,
+        "hash_algorithm": "sha1",
+        "hash": "e0b1d6ddfb4ab06a0dc9b4542826e6d7aa07a77c"
+      },
+      {
+        "name": "inference/config.json",
+        "bytes": 1982,
+        "hash_algorithm": "sha1",
+        "hash": "7a915cc69e21abbc6d7fb939cef5d09c72aa0d24"
+      },
+      {
+        "name": "inference/convert.py",
+        "bytes": 9458,
+        "hash_algorithm": "sha1",
+        "hash": "61bd2943648920ce599c4c86dc9bf6316e152fe8"
+      },
+      {
+        "name": "inference/engram.py",
+        "bytes": 8138,
+        "hash_algorithm": "sha1",
+        "hash": "a36bc6c6b8cbf2d3dbac850863c23b55a7ecb5c7"
+      },
+      {
+        "name": "inference/examples/example.txt",
+        "bytes": 332,
+        "hash_algorithm": "sha1",
+        "hash": "9200d36c90f601c0648ee23279abbb29b2228f13"
+      },
+      {
+        "name": "inference/examples/example_harmony.json",
+        "bytes": 2156,
+        "hash_algorithm": "sha1",
+        "hash": "fae1c2608f8e5b980fcc9dc311cda8e345ecde1c"
+      },
+      {
+        "name": "inference/examples/images/carrots.jpeg",
+        "bytes": 212495,
+        "hash_algorithm": "sha256",
+        "hash": "5df896a4a07e127281c60fc957f8b3d73f4735b3258a0bf762b4383557f8fa9a"
+      },
+      {
+        "name": "inference/examples/images/corn.jpeg",
+        "bytes": 56122,
+        "hash_algorithm": "sha1",
+        "hash": "5777d198b83de15eb21243f8aac49074922053fb"
+      },
+      {
+        "name": "inference/generate.py",
+        "bytes": 8722,
+        "hash_algorithm": "sha1",
+        "hash": "84d4873c4c59ea743e104920a77984f022bfb9f5"
+      },
+      {
+        "name": "inference/image_processor.py",
+        "bytes": 7699,
+        "hash_algorithm": "sha1",
+        "hash": "a50311ece615b72be2c9d4b649a05619c27681e7"
+      },
+      {
+        "name": "inference/kernel.py",
+        "bytes": 23790,
+        "hash_algorithm": "sha1",
+        "hash": "6fa7bd5aafbe1bc62887080963cc9fdd838d89f5"
+      },
+      {
+        "name": "inference/model.py",
+        "bytes": 61669,
+        "hash_algorithm": "sha1",
+        "hash": "46cc8310bb64852f3c36c9cc5dd13d47acabf6ee"
+      },
+      {
+        "name": "inference/requirements.txt",
+        "bytes": 98,
+        "hash_algorithm": "sha1",
+        "hash": "0ac24b86509757adc25e0d7518b16fffbf81a5b1"
+      },
+      {
+        "name": "inference/run.sh",
+        "bytes": 1759,
+        "hash_algorithm": "sha1",
+        "hash": "e2d52080a88d3053d963bac4bba75116ce73aed4"
+      },
+      {
+        "name": "inference/vision.py",
+        "bytes": 4457,
+        "hash_algorithm": "sha1",
+        "hash": "77af0bdef9f4649edebac2876cd1df50a147ce98"
+      },
+      {
+        "name": "model-00001-of-00048.safetensors",
+        "bytes": 970533624,
+        "hash_algorithm": "sha256",
+        "hash": "13bd121075f0b68cb7e8e8021a1011d42a81a83f557a2602fd9c07d52fddb0ec"
+      },
+      {
+        "name": "model-00002-of-00048.safetensors",
+        "bytes": 1323858272,
+        "hash_algorithm": "sha256",
+        "hash": "43616eebd88dd4f1f1b642772356fc160478d1d9d04edd240431e7d065d2eda7"
+      },
+      {
+        "name": "model-00003-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "41611994fc9b27829b757d72257570d65a976fe65b8c6df8641adcd139d65ded"
+      },
+      {
+        "name": "model-00004-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "e8e901b3cb1ab46f32729c7eaab37bd774a09094f0a02c51a60e883f779f2c39"
+      },
+      {
+        "name": "model-00005-of-00048.safetensors",
+        "bytes": 7405953784,
+        "hash_algorithm": "sha256",
+        "hash": "c5df71c02d6a22bcb20a0dbbcda9c6b65aa104f44415102a9a6a03bee92bb9de"
+      },
+      {
+        "name": "model-00006-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "a5d42afde2aee33619fb7a674b4c737c38d1f1d47a636a26f3edfb3b54164167"
+      },
+      {
+        "name": "model-00007-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "24856942add8f73f5e1fbaea1e9c9b6ff597fd1b4aa4651d789833dd3a5a2ab9"
+      },
+      {
+        "name": "model-00008-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "7bf5f7afb5d2bacad49feffb049989fb365d6dbf96986e76265bd7a7a3469564"
+      },
+      {
+        "name": "model-00009-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "e6ae47e9daca138fda8c04f833c8328eb21671c37d1c8e2c3f7a82aac26649f6"
+      },
+      {
+        "name": "model-00010-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "835e9a8b0a28cc571cb1cf9e6014b3d5eb84ac41990a8aa4519e1ac435d7e23c"
+      },
+      {
+        "name": "model-00011-of-00048.safetensors",
+        "bytes": 7405953784,
+        "hash_algorithm": "sha256",
+        "hash": "5df968edefe59033e451ff8512bef57da2cf97b57b4e7a1380118489dd02915b"
+      },
+      {
+        "name": "model-00012-of-00048.safetensors",
+        "bytes": 7389759032,
+        "hash_algorithm": "sha256",
+        "hash": "4f97bf292f58178ecdf593b55252a401d6e9102f18625a4fccc52b8ee57e7be0"
+      },
+      {
+        "name": "model-00013-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "1b8567854887396840eb5392ca763101308064a142cb36156159096e581659eb"
+      },
+      {
+        "name": "model-00014-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "e5ba6d7e4380728ad70b8208676075a898f80a64c3618060f1b81e4218a159d1"
+      },
+      {
+        "name": "model-00015-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "f4b29d936024e68f44fb14d0ffffb15b42b27be04b4a0296acdae695afa94c30"
+      },
+      {
+        "name": "model-00016-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "3aa67228351c80e708dab4ac7f6e56b19000649cce2cd655def3168a3de4115c"
+      },
+      {
+        "name": "model-00017-of-00048.safetensors",
+        "bytes": 7405956128,
+        "hash_algorithm": "sha256",
+        "hash": "b704eec7b7aa1bad6c9d57fa7f61f2db28862e8e5fc2468fd9d872689c778c7d"
+      },
+      {
+        "name": "model-00018-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "1405cf03376739f46e72e6cdd4d404969f1b94c717bb01782a300e2fbbd17e29"
+      },
+      {
+        "name": "model-00019-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "a84beaded1913e8d6119ac111f25040c8ec42e59f200dbe04c3a991cac512669"
+      },
+      {
+        "name": "model-00020-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "038914f79cf5499da90f0bfb8e1b7761cc37d5f4dd132e2431a6d02c9fb9fdfe"
+      },
+      {
+        "name": "model-00021-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "2ba49f59c8cec144e41370f9f820f268899d0b5cd0501e881908ca65bccd2dc2"
+      },
+      {
+        "name": "model-00022-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "52f12cceca5e2fdd0191dfbd33b808b6c7ce844cf9351c119413c5ba3bcd28c8"
+      },
+      {
+        "name": "model-00023-of-00048.safetensors",
+        "bytes": 7400713088,
+        "hash_algorithm": "sha256",
+        "hash": "d6e47e8b7147c64eb6619732694dda811e1a9f8af1894977919af9522724ca31"
+      },
+      {
+        "name": "model-00024-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "9d611d65374d37f5e02fdae14e680cb69bf55af8a8478802ac465b97c65be22b"
+      },
+      {
+        "name": "model-00025-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "8db532a7cbb23cd4b5aa775636ca13af95b758501290fb935074348f660a29cd"
+      },
+      {
+        "name": "model-00026-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "2d6d7261937d2a98c7398a55ed48dbf129d9b4f188aa9148e46ea9f720255115"
+      },
+      {
+        "name": "model-00027-of-00048.safetensors",
+        "bytes": 7395337384,
+        "hash_algorithm": "sha256",
+        "hash": "8e76de6a5cdc7ac0923526d1c1a2e6459c55bbfa692793b29cdfe07b4f9fbc52"
+      },
+      {
+        "name": "model-00028-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "3c0e5ad6a4e8e811c1a55fd8f5b59c9fa329b241c671997c28fc7a01944d5a77"
+      },
+      {
+        "name": "model-00029-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "392a950bcb062b89f683abc52d49a17e92c66f80cd1cb6fb92b71091da75319b"
+      },
+      {
+        "name": "model-00030-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "0b44d1364e578fc26dc0cc86564e49a92871a51063fb7f2f3b51cb020de44ab0"
+      },
+      {
+        "name": "model-00031-of-00048.safetensors",
+        "bytes": 7395337384,
+        "hash_algorithm": "sha256",
+        "hash": "d3230ffc32e11c5a34505c5acaeaff642aed5c770b297695e1f7a94071d361ac"
+      },
+      {
+        "name": "model-00032-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "96d284016ac885415859346d971c0de43bd9e7947337edfb53c34462866ef1d7"
+      },
+      {
+        "name": "model-00033-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "313953b3b6aaa6d4c60bbcfc177dda5d8d1380c9fe72d82560ba078f55278a8d"
+      },
+      {
+        "name": "model-00034-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "98eb27655774796bb3feadb35ec64a9849104b88c4c6ae7cabf6fc1ee317a056"
+      },
+      {
+        "name": "model-00035-of-00048.safetensors",
+        "bytes": 7395337384,
+        "hash_algorithm": "sha256",
+        "hash": "4a321a28c048389039e4595641fe0b1f130428c61fc8f655545afe0083d37cd9"
+      },
+      {
+        "name": "model-00036-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "97c7910a8a14002dd941f45f6ddb2bd335eaf6fa05f4a76b2ff9285d6557b65d"
+      },
+      {
+        "name": "model-00037-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "d37ee013b805344619536e299c73adf92df03744aa0a242f2c5465590015e5be"
+      },
+      {
+        "name": "model-00038-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "7713bf7a78319eb1c6214b312e0a2da8cac88d77dce851d50f1113d78f8975a4"
+      },
+      {
+        "name": "model-00039-of-00048.safetensors",
+        "bytes": 7395337384,
+        "hash_algorithm": "sha256",
+        "hash": "658a77d47d217995b9b78612e69ee0d0e33f6c2240f4ec629fecdca3ecb03f4c"
+      },
+      {
+        "name": "model-00040-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "6a9dbcc8d5894ba614b5e962764f45f6d0df7f14f1287b17f173d1f2cd762186"
+      },
+      {
+        "name": "model-00041-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "458308f08ed29b34850bd6b9d10bf769620729d3725c77f7bc0c1d14e01b47cc"
+      },
+      {
+        "name": "model-00042-of-00048.safetensors",
+        "bytes": 7389761368,
+        "hash_algorithm": "sha256",
+        "hash": "3d283a4ed6eb2d5013bacc97c3500361926a3261957943434513304df52adfd7"
+      },
+      {
+        "name": "model-00043-of-00048.safetensors",
+        "bytes": 1323837624,
+        "hash_algorithm": "sha256",
+        "hash": "4ae12b941c3facf8616ce62dd45bc6868076c2aeb82106f98123ea6c5bb64182"
+      },
+      {
+        "name": "model-00044-of-00048.safetensors",
+        "bytes": 2652728736,
+        "hash_algorithm": "sha256",
+        "hash": "3e8ac315c2bcca3e83c5e6e25c5758a75c03732063a6ff0c1b0e24b9ff49f6e6"
+      },
+      {
+        "name": "model-00045-of-00048.safetensors",
+        "bytes": 2573998176,
+        "hash_algorithm": "sha256",
+        "hash": "9c73b27c4343236790008979d5e0b565f687aa64440031b9e096fed1ab8039c5"
+      },
+      {
+        "name": "model-00046-of-00048.safetensors",
+        "bytes": 2706402896,
+        "hash_algorithm": "sha256",
+        "hash": "1dccc19a3741972c661de734572dc7d4b899e6e99bfbdf3ae4e057c707e5b339"
+      },
+      {
+        "name": "model-00047-of-00048.safetensors",
+        "bytes": 101535150936,
+        "hash_algorithm": "sha256",
+        "hash": "76a05106ece259be83d1bfea0dcb54f23377864ee60fd321690f35e6698a2af5"
+      },
+      {
+        "name": "model-00048-of-00048.safetensors",
+        "bytes": 101537926640,
+        "hash_algorithm": "sha256",
+        "hash": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 7470294,
+        "hash_algorithm": "sha1",
+        "hash": "54c85064dd92c8550471302e9ae59bedbbf96ca4"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 6367257,
+        "hash_algorithm": "sha1",
+        "hash": "6a15814dd25c934028034531da744c689f87ff21"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 801,
+        "hash_algorithm": "sha1",
+        "hash": "f3dad388a2bbfd6a8605bd02754acd86d9ca5112"
+      }
+    ],
+    "total_bytes": 510311045295
+  },
+  "format": "GGUF",
+  "packer": "scripts/convert_dsv41_gguf.py",
+  "options": {
+    "expert_format": "native-fp4",
+    "expert_layout": "flashinfer-sm120-mxfp8-mxfp4-v1",
+    "dense_format": "q8"
+  },
+  "expected": {
+    "bytes": null,
+    "sha256": null,
+    "status": "Native conversion output identity unmeasured; Q4 reference is not a native-FP4 output hash",
+    "q4_reference_bytes": 518596067328,
+    "q4_reference_sha256": "2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f"
+  },
+  "components": [
+    "main",
+    "dspark",
+    "vision"
+  ],
+  "notes": "Keep existing DSpark/MTP and vision sidecars; the engine consumes GGUF, not the shared envelope. No NVFP4 source is claimed for this FP8 checkpoint."
+}

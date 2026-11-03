@@ -103,6 +103,7 @@ option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 # utils
 option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 option(LLAMA_DSV41_OFFLINE_PRODUCER "Build the opt-in original V4.1 offline streaming producer" OFF)
+option(LLAMA_QFN_ENGINE "Build the opt-in Qwen3.8 Flash Next streaming engine (QFNSTREAM)" OFF)
 
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
@@ -196,6 +197,13 @@ add_subdirectory(src)
 if (LLAMA_DSV41_OFFLINE_PRODUCER)
     find_package(Threads REQUIRED)
     add_subdirectory(tools/dsv41-prefill)
+endif()
+
+# Qwen3.8 Flash Next streaming engine: same independence as the V4.1 producer (ggml + weight fetcher +
+# Engram row loader, no model registry).
+if (LLAMA_QFN_ENGINE)
+    find_package(Threads REQUIRED)
+    add_subdirectory(tools/qfn-engine)
 endif()
 
 #

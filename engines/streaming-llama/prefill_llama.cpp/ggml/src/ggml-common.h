@@ -93,6 +93,9 @@ typedef sycl::half2 ggml_half2;
 // QR = QK / number of values before dequantization
 // QI = number of 32 bit integers before dequantization
 
+#define QI2_0 (QK2_0 / 32)
+#define QR2_0 1
+
 #define QI4_0 (QK4_0 / (4 * QR4_0))
 #define QR4_0 2
 
@@ -166,6 +169,13 @@ typedef sycl::half2 ggml_half2;
 #else // _MSC_VER
 #define GGML_EXTENSION __extension__
 #endif // _MSC_VER
+
+#define QK2_0 64
+typedef struct {
+    ggml_half d;              // delta (scale)
+    uint8_t qs[QK2_0 / 4];    // 2 bits per element: 00=-1, 01=0, 10=+1, 11=+2 (times d)
+} block_q2_0;
+static_assert(sizeof(block_q2_0) == sizeof(ggml_half) + QK2_0 / 4, "wrong q2_0 block size/padding");
 
 #define QK4_0 32
 typedef struct {

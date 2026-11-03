@@ -427,7 +427,9 @@ extern "C" {
         // GGML_TYPE_IQ4_NL_4_8 = 37,
         // GGML_TYPE_IQ4_NL_8_8 = 38,
         GGML_TYPE_MXFP4   = 39, // MXFP4 (1 block)
-        GGML_TYPE_COUNT   = 40,
+        // 40, 41: reserved (upstream NVFP4 / Q1_0 ids), not supported in this tree
+        GGML_TYPE_Q2_0    = 42, // QFNSTREAM: upstream ggml-org Q2_0, block 64: f16 d + 2-bit codes, w = (q-1)*d
+        GGML_TYPE_COUNT   = 43,
     };
 
     // precision
@@ -586,6 +588,12 @@ extern "C" {
         GGML_OP_DSV41_CANDIDATE_BLOCKS,
         GGML_OP_DSV41_SELECTED_MASK,
         GGML_OP_DSV41_MASKED_HALF,
+        GGML_OP_GATED_DELTA_NET,   // QFNSTREAM: upstream gated delta net (Qwen3.8 Flash Next linear attention)
+        GGML_OP_QFN_QSA_SELECT,    // QFNSTREAM: QSA top-pool selection expanded to cell indices
+        GGML_OP_QFN_QSA_ATTN,      // QFNSTREAM: gated GQA attention over the selected cells
+        GGML_OP_QFN_SLOT_MAP,      // QFNSTREAM: expert ids -> cache slots, doorbell on a miss
+        GGML_OP_QFN_HC_MIX,        // QFNSTREAM: gated mean of the hyper-connection streams
+        GGML_OP_QFN_HC_COMBINE,    // QFNSTREAM: block output scattered back into the streams
 
         GGML_OP_COUNT,
     };
@@ -2536,6 +2544,88 @@ extern "C" {
         bool                  left,
         bool                  lower,
         bool                  uni);
+
+    // QFNSTREAM: upstream ggml-org gated delta net.
+    //   q, k  : [S_k, H_k, n_tokens, n_seqs]   v: [S_v, H_v, n_tokens, n_seqs]   (S_k == S_v, H_v % H_k == 0)
+    //   g     : [1, H_v, n_tokens, n_seqs] (scalar log-decay) or [S_v, H_v, n_tokens, n_seqs] (KDA)
+    //   beta  : [1, H_v, n_tokens, n_seqs]   state: [S_v, S_v, H_v, n_seqs] initial state s0 (stored transposed)
+    //   result: [S_v*H_v, n_tokens*n_seqs + K*S_v*n_seqs]: the outputs, then K state snapshots (slot 0 = final).
+    GGML_API struct ggml_tensor * ggml_gated_delta_net(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * g,
+            struct ggml_tensor  * beta,
+            struct ggml_tensor  * state,
+            int64_t               K);
+
+    // QFNSTREAM: Qwen sparse attention selection.
+    //   score: F32 [n_pool_k, n_tokens] pool scores (rectified sums, >= 0); pools at or beyond a token's visible count
+    //          are ignored, so the score rows may be wider than the visible range.
+    //   pos  : I32 [n_tokens] absolute cell position of each token (cell == position, one sequence).
+    //   A token at position p sees the complete pools b < (p+1)/ratio. When at most n_top are visible it keeps all
+    //   of them, else the n_top highest scores (exact radix threshold; equal scores keep the lower pool index).
+    //   result: I32 [n_top*ratio + ratio - 1, n_tokens]: the kept pools' cells in ascending pool order, then the
+    //   tail cells (p+1)/ratio*ratio .. p, then -1 padding.
+    GGML_API struct ggml_tensor * ggml_qfn_qsa_select(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * score,
+            struct ggml_tensor  * pos,
+            int                   n_top,
+            int                   ratio);
+
+    // QFNSTREAM: Qwen sparse attention over the cells ggml_qfn_qsa_select chose.
+    //   q    : F32 [D, H, n_tokens] (contiguous, normed and rotated), gate: F32 [D, H, n_tokens] or NULL
+    //   k, v : F16 [D, H_kv, n_kv] caches (cell == position), H % H_kv == 0, H/H_kv <= 16, D == 256
+    //   sel  : I32 [n_sel, n_tokens] cell lists (valid cells first, -1 after); pos: I32 [n_tokens]
+    //   result: F32 [D, H, n_tokens] = softmax(scale q.k over the token's cells <= pos) . v, times sigmoid(gate)
+    GGML_API struct ggml_tensor * ggml_qfn_qsa_attn(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * q,
+            struct ggml_tensor  * gate,
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * sel,
+            struct ggml_tensor  * pos,
+            float                 scale);
+
+    // QFNSTREAM decode v3: the doorbell block in mapped (host-visible) memory, written by the device on a miss
+    struct ggml_qfn_bell {
+        volatile int32_t req;      // device: request value (seq * 64 + layer) once the selection below is published
+        volatile int32_t ack;      // host: the request value it has served (the experts are in their slots)
+        int32_t layer, n;
+        int32_t sel[64];
+        volatile int32_t error;    // device: first miss request in record mode, or timed-out request; discard the step
+        int32_t timeout_ms;        // host: <0 records first miss without waiting; 0 = 500 ms; >0 wait timeout
+    };
+    //   sel  : I32 [K, n_tokens] routed experts; table: I32 [n_expert] slot of each expert of this layer or -1 (may live in
+    //   mapped host memory); seq: I32 [1] token counter (device). bell: device address of a ggml_qfn_bell or 0 (then a miss
+    //   yields slot 0; discard/replay a step with a miss). result: I32 [K, n_tokens] slots.
+    // QFNSTREAM fused hyper-connection ops (bit-identical to the unfused graph, same summation order)
+    GGML_API struct ggml_tensor * ggml_qfn_hc_mix(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * xn,       // F32 [n_embd, hc, n_tokens]
+            struct ggml_tensor  * gate,     // F32 [n_embd*hc, n_tokens] logits
+            float                 scale);
+    GGML_API struct ggml_tensor * ggml_qfn_hc_combine(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * residual, // F32 [n_embd, hc, n_tokens]
+            struct ggml_tensor  * block,    // F32 [n_embd, n_tokens]
+            struct ggml_tensor  * inject);  // F32 [hc, n_tokens] logits
+
+    GGML_API struct ggml_tensor * ggml_qfn_slot_map(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * sel,
+            struct ggml_tensor  * table,
+            struct ggml_tensor  * seq,
+            void                * bell,
+            int                   layer);
+
+    // Optional device-memory atomic latch (I32, reset to zero before each record-only attempt).
+    // Required for a mapped host bell on devices without native mapped-host atomic support.
+    // The winning thread still publishes layer/selection/error to the original mapped bell.
+    GGML_API void ggml_qfn_slot_map_set_record_latch(struct ggml_tensor * slot_map, void * device_latch);
 
     GGML_API struct ggml_tensor * ggml_lightning_indexer(
         struct ggml_context * ctx,

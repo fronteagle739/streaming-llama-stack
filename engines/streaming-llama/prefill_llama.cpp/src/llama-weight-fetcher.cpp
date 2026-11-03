@@ -590,6 +590,13 @@ struct wf_context {
     HANDLE                       ds_fence_handle = NULL;
     cudaExternalSemaphore_t      ds_ext_sem = {};
     std::atomic<uint64_t>        ds_fence_counter{0};
+    // Captured-doorbell service has its own timeline. The ordinary DS fence
+    // also serves unrelated loads/drains and must never be repurposed.
+    ID3D12Fence *                ds_service_fence = nullptr;
+    HANDLE                       ds_service_handle = NULL;
+    cudaExternalSemaphore_t      ds_service_semaphore = {};
+    uint64_t                     ds_service_next = 1;
+    uint64_t                     ds_service_first = 0, ds_service_last = 0, ds_service_submitted = 0;
     // Per-layer: fence value signaled when DMA completes
     std::vector<uint64_t>        ds_layer_fence_val;
 
@@ -2847,6 +2854,16 @@ static bool wf_ds_fence_wait(wf_context * wf, uint64_t val, ID3D12Fence * fence)
         return false;
     }
     if (completed >= val) return true;
+    // LLAMA_WF_DS_FENCE_SPIN_US: poll before sleeping; a thread wake per small decode miss wave is latency.
+    static const long spin_us = [] { const char * e = std::getenv("LLAMA_WF_DS_FENCE_SPIN_US"); return e && *e ? std::strtol(e, nullptr, 10) : 0L; }();
+    if (spin_us > 0) {
+        const auto spin_start = std::chrono::steady_clock::now();
+        do {
+            YieldProcessor();
+            completed = fence->GetCompletedValue();
+            if (completed != UINT64_MAX && completed >= val) return true;
+        } while (completed != UINT64_MAX && std::chrono::steady_clock::now() - spin_start < std::chrono::microseconds(spin_us));
+    }
 
     HANDLE evt = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (!evt) {
@@ -4913,6 +4930,11 @@ void wf_destroy(wf_context * wf) {
     if (wf->ds_initialized || wf->required_dstorage) {
         // DirectStorage cleanup
         if (wf->ds_queue) wf->ds_queue->Release();
+        // The service API requires engine graphs destroyed and both consumer
+        // streams proven idle before provider destruction (see public header).
+        if (wf->ds_service_semaphore) cudaDestroyExternalSemaphore(wf->ds_service_semaphore);
+        if (wf->ds_service_handle) CloseHandle(wf->ds_service_handle);
+        if (wf->ds_service_fence) wf->ds_service_fence->Release();
         if (wf->ds_ext_sem) cudaDestroyExternalSemaphore(wf->ds_ext_sem);
         if (wf->ds_fence_handle) CloseHandle(wf->ds_fence_handle);
         if (wf->ds_fence) wf->ds_fence->Release();
@@ -6646,7 +6668,8 @@ static bool wf_ready_generation(wf_context*wf,int stage,int bank,uint64_t genera
 static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * extents, int n,
                              void * cuda_stream, uint64_t * bytes, double * milliseconds,
                              int ready_stage, uint64_t generation, uint64_t * deferred_fence,
-                             void (*overlap)(void *) = nullptr, void * overlap_user = nullptr) {
+                             void (*overlap)(void *) = nullptr, void * overlap_user = nullptr,
+                             uint64_t service_ticket = 0) {
     std::lock_guard<std::mutex> stats_lock(g_wf_extent_stats_mutex);
     if(deferred_fence)*deferred_fence=0;
     if (bytes) *bytes = 0;
@@ -6656,7 +6679,14 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
             bank < 0 || bank >= (int) wf->ds_compute_banks.size() || n < 0 || (n && !extents) ||
             wf->ds_failed.load(std::memory_order_acquire)) return false;
     if (ready_stage>=0&&!wf_ready_generation(wf,ready_stage,bank,generation)) return false;
-    if (n == 0) return true;
+    if (service_ticket && (!wf->ds_service_fence || !wf->ds_service_semaphore ||
+            !wf->ds_service_first || service_ticket < wf->ds_service_first ||
+            service_ticket > wf->ds_service_last || service_ticket <= wf->ds_service_submitted ||
+            deferred_fence || ready_stage >= 0 || overlap || cuda_stream)) {
+        WF_ERR("Captured service fetch refused: invalid epoch/ticket or incompatible completion mode");
+        return false;
+    }
+    if (n == 0 && !service_ticket) return true;
     const auto & target = wf->ds_compute_banks[bank];
     const uint64_t quarter = target.quarter_bytes, capacity = quarter * target.quarters.size();
     // LLAMADECODE: expert-miss extents use ds4-win's split-read mechanism
@@ -6734,6 +6764,13 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
         }
     }
     const uint64_t fence = ++wf->ds_fence_counter;
+    // Service reads release the captured GPU copy from the same submission: DirectStorage signals right after the
+    // reads, with no host wake and second submit. The host still verifies the wave and aborts the epoch on an error.
+    static const bool service_inline = [] { const char * e = std::getenv("LLAMA_WF_DS_SERVICE_INLINE"); return !(e && *e == '0'); }();
+    if (service_ticket && service_inline) {
+        MemoryBarrier();
+        wf->ds_queue->EnqueueSignal(wf->ds_service_fence, service_ticket);
+    }
     wf->ds_queue->EnqueueSignal(wf->ds_fence, fence);
     wf->ds_queue->Submit();
     using wf_clock = std::chrono::high_resolution_clock;
@@ -6746,11 +6783,20 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
     const auto fenced_at = wf_clock::now(); g_wf_extent_stats.fence_ms += std::chrono::duration<double, std::milli>(fenced_at - overlapped_at).count();
     if (!wf_dstorage_wave_succeeded(wf, wf->ds_queue, -1, -1)) return false;
     const auto verified_at = wf_clock::now(); g_wf_extent_stats.verify_ms += std::chrono::duration<double, std::milli>(verified_at - fenced_at).count();
-    if (deferred_fence) {
+    if (service_ticket) {
+        // Descriptor writes precede the real imported-fence visibility edge.
+        // All CUDA consumers were pre-enqueued by the engine before launch.
+        if (!service_inline) {
+            MemoryBarrier();
+            wf->ds_queue->EnqueueSignal(wf->ds_service_fence, service_ticket);
+            wf->ds_queue->Submit();
+        }
+        wf->ds_service_submitted = service_ticket;
+    } else if (deferred_fence) {
         if(!wf_ready_generation(wf,ready_stage,bank,generation))return false;
         *deferred_fence=fence;
     } else if (!wf_cuda_wait_ds_fence(wf, fence, (cudaStream_t) cuda_stream)) return false;
-    if(!deferred_fence)g_wf_extent_stats.cuda_ms += ms_since(verified_at);
+    if(!deferred_fence && !service_ticket)g_wf_extent_stats.cuda_ms += ms_since(verified_at);
     ++g_wf_extent_stats.batches;
     wf->stat_bytes_read_nvme.fetch_add(total);
     if (bytes) *bytes = total;
@@ -6758,7 +6804,144 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
     return true;
 #else
     (void) wf; (void) bank; (void) extents; (void) n; (void) cuda_stream;
-    (void) ready_stage; (void) generation; (void) overlap; (void) overlap_user;
+    (void) ready_stage; (void) generation; (void) overlap; (void) overlap_user; (void) service_ticket;
+    return false;
+#endif
+}
+
+bool wf_service_fence_prepare(wf_context * wf, void ** cuda_semaphore) {
+    if (cuda_semaphore) *cuda_semaphore = nullptr;
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    std::lock_guard<std::mutex> lock(g_wf_extent_stats_mutex);
+    if (!wf || !cuda_semaphore || !wf->required_dstorage || !wf->params.ds_compute_direct ||
+            !wf->ds_initialized || !wf->d3d_device || !wf->ds_queue || wf_has_failed(wf) ||
+            wf->ds_service_first) {
+        WF_ERR("Captured service prepare refused: requires idle healthy required-DS direct provider");
+        return false;
+    }
+    if (wf->ds_service_semaphore) {
+        *cuda_semaphore = reinterpret_cast<void *>(wf->ds_service_semaphore);
+        return true;
+    }
+    ID3D12Fence * fence = nullptr;
+    HANDLE handle = NULL;
+    cudaExternalSemaphore_t semaphore = {};
+    HRESULT status = wf->d3d_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&fence));
+    if (SUCCEEDED(status)) status = wf->d3d_device->CreateSharedHandle(fence, nullptr, GENERIC_ALL, nullptr, &handle);
+    if (FAILED(status)) {
+        WF_ERR("Captured service prepare failed: D3D12 shared fence 0x%08lx", (unsigned long) status);
+        if (handle) CloseHandle(handle);
+        if (fence) fence->Release();
+        return false;
+    }
+    cudaExternalSemaphoreHandleDesc descriptor = {};
+    descriptor.type = cudaExternalSemaphoreHandleTypeD3D12Fence;
+    descriptor.handle.win32.handle = handle;
+    const cudaError_t imported = cudaImportExternalSemaphore(&semaphore, &descriptor);
+    if (imported != cudaSuccess) {
+        WF_ERR("Captured service prepare failed: CUDA fence import %s", cudaGetErrorString(imported));
+        CloseHandle(handle); fence->Release();
+        return false;
+    }
+    wf->ds_service_fence = fence;
+    wf->ds_service_handle = handle;
+    wf->ds_service_semaphore = semaphore;
+    *cuda_semaphore = reinterpret_cast<void *>(semaphore);
+    return true;
+#else
+    (void) wf;
+    WF_ERR("Captured service prepare unsupported: requires Windows DirectStorage and CUDA");
+    return false;
+#endif
+}
+
+bool wf_service_begin_epoch(wf_context * wf, uint32_t layers, uint64_t * first_ticket, uint64_t * last_ticket) {
+    if (first_ticket) *first_ticket = 0;
+    if (last_ticket) *last_ticket = 0;
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    std::lock_guard<std::mutex> lock(g_wf_extent_stats_mutex);
+    if (!wf || !first_ticket || !last_ticket || !wf->ds_service_semaphore || wf_has_failed(wf) ||
+            wf->ds_service_first || !layers || layers > 64 ||
+            !wf->ds_service_next || wf->ds_service_next > UINT64_MAX - layers) {
+        WF_ERR("Captured service epoch refused: unprepared/busy/failed provider, invalid layer count or ticket overflow");
+        return false;
+    }
+    wf->ds_service_first = wf->ds_service_next;
+    wf->ds_service_last = wf->ds_service_first + layers - 1;
+    wf->ds_service_submitted = wf->ds_service_first - 1;
+    wf->ds_service_next = wf->ds_service_last + 1;
+    *first_ticket = wf->ds_service_first;
+    *last_ticket = wf->ds_service_last;
+    return true;
+#else
+    (void) wf; (void) layers;
+    WF_ERR("Captured service epoch unsupported: requires Windows DirectStorage and CUDA");
+    return false;
+#endif
+}
+
+bool wf_fetch_extents_service(wf_context * wf, int bank, const wf_extent * extents, int n,
+        uint64_t ticket, uint64_t * bytes, double * milliseconds) {
+    if (bytes) *bytes = 0;
+    if (milliseconds) *milliseconds = 0;
+    if (!ticket) {
+        WF_ERR("Captured service fetch refused: ticket zero is not a service completion mode");
+        return false;
+    }
+    const bool ok = wf_fetch_extents_impl(wf, bank, extents, n, nullptr, bytes, milliseconds,
+                                         -1, 0, nullptr, nullptr, nullptr, ticket);
+    if (!ok) WF_ERR("Captured service fetch failed for ticket %llu; no ready signal fabricated; abort epoch required",
+                    (unsigned long long) ticket);
+    return ok;
+}
+
+bool wf_service_finish_epoch(wf_context * wf, uint64_t last_ticket, bool abort) {
+#if defined(WF_HAS_DSTORAGE) && defined(WF_HAS_CUDA)
+    std::lock_guard<std::mutex> lock(g_wf_extent_stats_mutex);
+    if (!wf || !wf->ds_service_first || !wf->ds_service_fence || !wf->ds_queue || !wf->ds_fence ||
+            last_ticket != wf->ds_service_last || (!abort && wf_has_failed(wf))) {
+        WF_ERR("Captured service retirement refused: invalid epoch or failed normal completion; abort required");
+        return false;
+    }
+    // The engine joined its worker before entering. Claim the same submission
+    // slot as direct extent reads so the CPU release follows every lower DS
+    // ready signal. A data error does not itself prove the queue is retired.
+    for (;;) {
+        int expected = -1;
+        if (wf->dma_in_flight_buf.compare_exchange_strong(expected, 1000)) break;
+        if (wf_has_failed(wf)) {
+            WF_ERR("Captured service abort cannot acquire storage ownership; reload required, epoch retained");
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    struct release_slot { wf_context * wf; ~release_slot() { wf->dma_in_flight_buf.store(-1); } } slot{wf};
+    if (wf->ds_fence_counter.load() >= UINT64_MAX - 1) {
+        WF_ERR("Captured service retirement internal fence exhausted; reload required, epoch retained");
+        return false;
+    }
+    const uint64_t drain = ++wf->ds_fence_counter;
+    wf->ds_queue->EnqueueSignal(wf->ds_fence, drain);
+    wf->ds_queue->Submit();
+    if (!wf_ds_fence_wait(wf, drain)) {
+        WF_ERR("Captured service retirement could not prove DS queue drain; reload required, epoch retained");
+        return false;
+    }
+    // This is ONLY the inactive/aborted-descriptor release. Normal data-ready
+    // signals always came from DS after verified reads in the service arm.
+    MemoryBarrier();
+    const HRESULT released = wf->ds_service_fence->Signal(last_ticket);
+    if (FAILED(released)) {
+        WF_ERR("Captured service retirement ready release failed 0x%08lx; reload required, epoch retained",
+               (unsigned long) released);
+        return false;
+    }
+    wf->ds_service_first = wf->ds_service_last = 0;
+    wf->ds_service_submitted = last_ticket;
+    return true;
+#else
+    (void) wf; (void) last_ticket; (void) abort;
+    WF_ERR("Captured service retirement unsupported: requires Windows DirectStorage and CUDA");
     return false;
 #endif
 }

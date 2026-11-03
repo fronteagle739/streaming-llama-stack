@@ -93,6 +93,14 @@ def main():
     start.add_argument('--lora', action='append')
     start.add_argument('--serving', choices=['single_engine', 'native'],
                        help='Single-RTX serving: single_engine (default; ULTRA producer prefill + ds4 decode in one process) or native (ds4-win server)')
+    qfn = sub.add_parser('qfn', help='Serve Qwen3.8 Flash Next on this RTX with streamed weights (OpenAI API)')
+    qfn.add_argument('--model', help='The Qwen3.8 Flash Next .basalt pack')
+    qfn.add_argument('--port', type=int)
+    qfn.add_argument('--context', type=int)
+    qfn.add_argument('--quality-speed', choices=['max_quality', 'balanced', 'max_speed'])
+    qfn.add_argument('--model-settings', help='Per-machine model router settings JSON')
+    qfn.add_argument('--dry-run', action='store_true', help='Show resolved QFN configuration; start nothing and write nothing')
+    qfn.add_argument('--preload', action='store_true', help='Load the engine at start instead of on the first request')
     guarded = sub.add_parser('guarded')
     guarded.add_argument('--cwd', default=str(ROOT))
     guarded.add_argument('argv', nargs=argparse.REMAINDER)
@@ -115,6 +123,19 @@ def main():
         cfg['webui'] = True
     cfg.setdefault('env_overrides', {}).update({k[4:]: v for k, v in vars(args).items()
                                               if k.startswith('env_') and v is not None})
+    if args.command == 'qfn':
+        for key in ('port', 'context', 'quality_speed', 'model_settings'):
+            if getattr(args, key, None) is not None:cfg[key if key != 'quality_speed' else 'qfn_quality_speed'] = getattr(args, key)
+        if args.preload:cfg['qfn_preload'] = True
+        cfg['task'] = cfg.get('qfn_task', 'QFNSINGLE')
+        if args.dry_run:
+            from .model_settings import apply
+            from .envvars import redact_cfg
+            print(json.dumps(dict(command='qfn',config=redact_cfg(apply(cfg,'qfn'))),indent=2))
+            return 0
+        from .qfn_single import serve
+        serve(cfg)
+        return 0
     if args.command == 'decode':
         from .decode import run
         result = run(cfg, model=args.model, selected=args.backend, check=args.check)

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "model_key": "dsv41-q4-1017",
+  "bias": {"min": 0, "max": 1.36125, "max_quality": 0, "balanced": 0.35, "max_speed": 1.36125},
+  "router_spreads": {"file": "presets/dsv41-affinity-spreads.txt", "reference_mean": 0.6327, "reference_bias": 0},
+  "cache": {"half_life": 16, "restore_hot_experts": true},
+  "engine": {"tile": 4096, "read_parts": 8, "prefill": "ultra-cone", "decode": "ds4-decode", "cone_keep": 2541},
+  "calibration": {"status": "reference-settings", "selection": {
+    "max_quality": {"bias": 0, "why": "Existing unbiased DSV4.1 named point."},
+    "balanced": {"bias": 0.35, "why": "Existing delivered DSV4.1 Balanced point."},
+    "max_speed": {"bias": 1.36125, "why": "Existing delivered DSV4.1 Max speed point; not a new machine calibration."}
+  }}
+}
