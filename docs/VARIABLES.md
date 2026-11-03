@@ -139,6 +139,7 @@ Native controls take effect at token boundaries. The response reports requested 
 | `--qfn-mmq-stream-k` | Explicit runtime value | 0/1: experimental QFN MMQ accumulation mode.0 selects complete-K output tiles in dense/routed and grouped MMQ;1/unset preserves upstream stream-k. Other models unchanged unless explicitly opted in. Prior engine batch-invariance failures remain reported. |
 | `--qfn-moe-chunk` | Explicit runtime value | Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly. |
 | `--qfn-moe-pass` | Explicit runtime value | 0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden. |
+| `--qfn-future-blas-workspace-mib` | Explicit runtime value | Persistent cuBLAS workspace in MiB for future-service model graphs. Integer1..256; default12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends32MiB on SM12x;32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix. |
 | `--qfn-fused-expert-reduce` | Explicit runtime value | Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path. |
 | `--qfn-paired-gdn` | Explicit runtime value | Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; default off, refuses unsupported layouts, retains original scalar/reference path and all sampling/state capabilities. |
 | `--qfn-prefill-release-cache` | Explicit runtime value | 0/1: independently release the VRAM decode slab before prefill and restore identical capacity/prompt-ranked entries from the experts pack afterward. Unset follows QFN_MOE_PASS. Reload/reseed time counts toward TTFT; no capacity reduction fallback. |
@@ -22993,7 +22994,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:
         return p;
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4478`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         // expert-miss extents: one DirectStorage request per extent part (a 1.32 MiB expert is one request,
@@ -74818,7 +74819,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:
             }}
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4471`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4481`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             if (!std::getenv(setting.first)) _putenv_s(setting.first, setting.second);
@@ -96180,7 +96181,7 @@ QFN opt-in BF16 carry; unset preserves F32 carry.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:927`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:928`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         ggml_init_params ip = { (8 * nl + 16) * ggml_tensor_overhead(), nullptr, true };
@@ -96198,7 +96199,7 @@ QFN opt-in decode-v3 execution path.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4491`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4501`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             if (!std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR") && !(residual && *residual == '1')) _putenv_s("QFN_NATIVE_NVFP4_DECODE_VECTOR", "1");
@@ -96210,7 +96211,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
             }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4492`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4502`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             const char * mtp = std::getenv("QFN_MTP");
@@ -96222,7 +96223,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         }
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4522`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4532`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             if (m && *m && *m != '0') p->load_mtp(); // owner default off; --mtp 1 remains fully supported
@@ -96240,7 +96241,7 @@ QFN diagnostic per-layer carry digest output.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4351`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4361`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         {
@@ -96252,7 +96253,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
             if (!ple_joined && hp->is_ple(il)) {
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4376`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4386`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             }
@@ -96270,7 +96271,7 @@ QFN diagnostic layer whose graph intermediates are logged.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1633`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1634`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     std::vector<std::pair<std::string, ggml_tensor *>> dbg_list;
@@ -96288,7 +96289,7 @@ QFN number of token carry rows included in diagnostic output.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4379`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4389`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 // layer-by-layer check against the reference tool's DUMP l_last lines
@@ -96306,7 +96307,7 @@ QFN exact token-split matmul control for multi-token decode.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2616`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2617`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -96318,7 +96319,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
             const double tb = now_ms();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3922`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3932`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         auto * G = new v3graph();
@@ -96336,7 +96337,7 @@ QFN opt-in fused hyper-connection kernels; unset preserves the unfused graph.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1194`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1195`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     // Qualified at 100K: fused HC is the default; QFN_FUSED_HC=0 retains the reference path.
@@ -96354,7 +96355,7 @@ QFN graph VRAM reserve used when admitting the decode expert cache, in MiB.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1864`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1865`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         size_t free_b = 0, total_b = 0;
@@ -96420,7 +96421,7 @@ Positive integer tokens, <= appended prompt length and admitted VRAM bound; used
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4294`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4304`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         require(!mp || !*mp || std::strcmp(mp, "0") == 0 || std::strcmp(mp, "1") == 0, "QFN_MOE_PASS must be 0 or 1");
@@ -96438,7 +96439,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4291`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4301`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -96450,13 +96451,31 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         require(!mc || !*mc || moe_pass, "QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk");
 ```
 
+### QFN_FUTURE_BLAS_WORKSPACE_MIB
+
+Persistent cuBLAS workspace in MiB for future-service model graphs. Integer1..256; default12 retains the delivered warm-chat fix. Admitted before automatic cache sizing and retained across warm graph parents. CUDA13.2 recommends32MiB on SM12x;32 is an unqualified regression-attribution candidate until measured. Does not disable the persistent-workspace warm-chat fix.
+
+Scope: qfn-engine. Class: advanced.
+
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3324`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+
+```text
+    void prepare_future_service() {
+        if (!v3_future || service_exec) return;
+        if (const char * value = std::getenv("QFN_FUTURE_BLAS_WORKSPACE_MIB")) {
+            char * end = nullptr;
+            const long mib = std::strtol(value, &end, 10);
+            require(*value && end && !*end && mib >= 1 && mib <= 256,
+                    "QFN_FUTURE_BLAS_WORKSPACE_MIB must be an integer from1 to256");
+```
+
 ### QFN_MTP
 
 QFN MTP drafter control; unset or 0 defaults to off (owner 2026-11-02); --mtp 1 or QFN_MTP=1 enables full drafting/sampler support.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4490`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4500`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             const char * residual = std::getenv("QFN_NATIVE_NVFP4_DECODE_RESIDUAL");
@@ -96468,7 +96487,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
                 _putenv_s("QFN_V3_CUDA_GRAPH", "1");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4519`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4529`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         {
@@ -96498,7 +96517,7 @@ QFN number of proposed MTP draft tokens per verification round.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2930`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2931`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         alloc_snapshots();
@@ -96516,7 +96535,7 @@ QFN MTP diagnostic probe and layer dump control.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3082`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3083`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // the first row pairs with the residual before p0: h_last (zeros at position 0); carry rows before p0
@@ -96558,7 +96577,7 @@ Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554`
     if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:671`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 "QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be 0 or 1");
@@ -96570,7 +96589,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         const char * vector_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR");
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4498`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -96612,7 +96631,7 @@ Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555`
     if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:675`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
                 "QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1");
@@ -96624,7 +96643,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         for (const auto & e : pack.experts) nvfp4 = nvfp4 || e.is_nvfp4();
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4489`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4499`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         if (p->pack.native_nvfp4_packed && p->opt.nvfp4_decode_mode == 6) {
@@ -96672,7 +96691,7 @@ Single CUDA kernel for F32 router-weighted expert reduction in prefill and decod
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4451`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4461`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     try {
@@ -96720,7 +96739,7 @@ Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; defa
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4457`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4467`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         p->log("[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\n", int(p->fused_expert_reduce));
@@ -96738,7 +96757,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1867`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1868`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;
@@ -96750,7 +96769,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         const bool tail_carry = !restoring && !mtp_ok && !(rc && *rc == '1');
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4296`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4306`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         const char * mc = std::getenv("QFN_MOE_CHUNK");
@@ -96768,7 +96787,7 @@ QFN optional exclusive host RAM expert victim tier, in GiB; unset retains its bu
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2124`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2125`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
 
@@ -96786,7 +96805,7 @@ QFN decode-v3 expert-miss doorbell service deadline in milliseconds.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3738`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3748`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         bell_h->req = -1; bell_h->ack = -1; bell_h->error = 0;
@@ -96804,7 +96823,7 @@ QFN opt-in static decode-v3 CUDA graph replay.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4058`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4068`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         };
@@ -96816,7 +96835,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
             if (v3_replay) require(cudaMemsetAsync(replay_miss_latch, 0, sizeof(int32_t), stream()) == cudaSuccess,
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4494`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4504`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
                 _putenv_s("QFN_DECODE_V3", "1");
@@ -96828,7 +96847,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         p->admit_nvfp4(); // DLL/ABI/format/workspace validation precedes CUDA and model allocations
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4531`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4541`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             require(!p->v3_future || (p->v3_on && !p->v3_replay),
@@ -96864,7 +96883,7 @@ Explicit CPU-only DirectStorage future service for V3 decode; requires QFN_DECOD
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4493`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4503`. Unset read: Wrapper/conditional default: see the literal call and consumer below.
 
 ```text
             if (!(mtp && *mtp && *mtp != '0') && !std::getenv("QFN_DECODE_V3")) {
@@ -96876,7 +96895,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         p->admit_qsa_indexer(); // independent of expert format; before CUDA/model allocations
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4526`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4536`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             p->v3_on = p->v3_replay || std::strcmp(v3, "1") == 0;
@@ -103932,7 +103951,7 @@ Physical VRAM kept free at the QFN decode handoff, in MiB; default 128 as DSV4.1
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1877`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             uint64_t nv_free = 0;
@@ -103950,7 +103969,7 @@ Decode-graph growth margin beside the QFN handoff reserve, in MiB.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1879`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             require(nvml_free_bytes(nv_free), "the decode cache sizing needs NVML physical free VRAM");
@@ -103968,7 +103987,7 @@ Percentage of each layer cache share seeded by the QFN prefill or reload; defaul
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2060`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2061`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             return h[a] != h[b] ? h[a] > h[b] : prank(a) < prank(b); });
@@ -103986,7 +104005,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1538`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1539`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             // DSV4.1 cache affinity: the penalty applies to router probabilities, per-layer calibrated.
@@ -104004,7 +104023,7 @@ Path of the per-layer router spread calibration used to scale the QFN residency 
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1487`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1488`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             affinity_spread.assign(hp->n_layer, 0.0212f);
@@ -104022,7 +104041,7 @@ Path to write per-layer router spreads measured at bias zero on the segmented de
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1514`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1515`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     }
@@ -104034,7 +104053,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
         for (uint32_t l = 0; l < hp->n_layer; ++l) {
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4560`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4570`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         wf_extent_fetch_stats(ds_before, &requests_before, &batches_before);
@@ -104052,7 +104071,7 @@ Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.c
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4350`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4360`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         double t_wait = 0, t_comp = 0;
@@ -104088,7 +104107,7 @@ Half-life in decode steps of the QFN expert cache recency-weighted use count.
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4456`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4466`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
         }
@@ -104124,7 +104143,7 @@ Cap on the prompt count a seeded expert starts with in the QFN cache use score; 
 
 Scope: qfn-engine. Class: advanced.
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2085`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2086`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
             owner[slot] = (int32_t) (il * NE + e);
@@ -104166,7 +104185,7 @@ Source: `engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556`
         raise ValueError('The original unequal-calibration long suite requires shared-input policy0; use the separate equal-GU component arm for policy1')
 ```
 
-Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:666`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
+Source: `engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:667`. Unset read: NULL from getenv; the literal consumer below supplies any fallback.
 
 ```text
     }

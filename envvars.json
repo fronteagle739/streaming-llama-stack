@@ -8114,18 +8114,12 @@
     ],
     "doc": "DS4_CUDA_MMQ_Q81_PERSISTENT: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_cuda.cu:1135",
       "engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356",
-      "engines/ds4-win/ds4_cuda.cu:1993",
-      "engines/ds4-win/cuda/mmq/ds4_mmq.cu:362"
+      "engines/ds4-mac/ds4_cuda.cu:1135",
+      "engines/ds4-win/cuda/mmq/ds4_mmq.cu:362",
+      "engines/ds4-win/ds4_cuda.cu:1993"
     ],
     "code_defaults": [
-      {
-        "source": "engines/ds4-mac/ds4_cuda.cu:1135",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
-        "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
-      },
       {
         "source": "engines/ds4-mac/cuda/mmq/ds4_mmq.cu:356",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
@@ -8133,7 +8127,7 @@
         "consumer": "    // is not forbidden by capture-mode restrictions, and so the kernel\n    // pointer arg baked into the captured graph stays valid at replay.\n    if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {\n        const size_t bytes = 256 * 1024;\n        cudaError_t err = cudaMalloc(&g_q81_scratch_ptr, bytes);\n        if (err != cudaSuccess) {\n            fprintf(stderr, \"ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; \""
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:1993",
+        "source": "engines/ds4-mac/ds4_cuda.cu:1135",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
         "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
@@ -8143,6 +8137,12 @@
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {",
         "consumer": "    // is not forbidden by capture-mode restrictions, and so the kernel\n    // pointer arg baked into the captured graph stays valid at replay.\n    if (getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") && !g_q81_scratch_ptr) {\n        const size_t bytes = 256 * 1024;\n        cudaError_t err = cudaMalloc(&g_q81_scratch_ptr, bytes);\n        if (err != cudaSuccess) {\n            fprintf(stderr, \"ds4_mmq_init: cudaMalloc(q81_scratch %zu B) failed: %s; \""
+      },
+      {
+        "source": "engines/ds4-win/ds4_cuda.cu:1993",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {",
+        "consumer": "                    \"ds4: DS4_CUDA_MMQ=0 - MXFP4 MMQ disabled\\n\");\n        } else if (g_n_gpus > 1 &&\n                   getenv(\"DS4_CUDA_MMQ_Q81_PERSISTENT\") != NULL) {\n            fprintf(stderr,\n                    \"ds4: persistent MMQ Q8_1 scratch is unavailable with multi-GPU MXFP4\\n\");\n        } else {\n            int device = 0;"
       }
     ]
   },
@@ -10386,18 +10386,12 @@
     ],
     "doc": "DS4_CUDA_NO_DIRECT_IO: advanced engine setting; built-in default retained",
     "reads": [
-      "engines/ds4-mac/ds4_cuda.cu:4413",
       "engines/ds4-mac/cuda/mmq/ds4_repack.cu:72",
-      "engines/ds4-win/ds4_cuda.cu:9510",
-      "engines/ds4-win/cuda/mmq/ds4_repack.cu:88"
+      "engines/ds4-mac/ds4_cuda.cu:4413",
+      "engines/ds4-win/cuda/mmq/ds4_repack.cu:88",
+      "engines/ds4-win/ds4_cuda.cu:9510"
     ],
     "code_defaults": [
-      {
-        "source": "engines/ds4-mac/ds4_cuda.cu:4413",
-        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
-        "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
-        "consumer": "        }\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
-      },
       {
         "source": "engines/ds4-mac/cuda/mmq/ds4_repack.cu:72",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
@@ -10405,16 +10399,22 @@
         "consumer": "    if (st.st_blksize > 1) m.direct_align = (uint64_t)st.st_blksize;\n#if defined(__linux__) && defined(O_DIRECT)\n    if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {\n        char proc_path[64];\n        snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", m.fd);\n        int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n        if (direct_fd >= 0) {"
       },
       {
-        "source": "engines/ds4-win/ds4_cuda.cu:9510",
+        "source": "engines/ds4-mac/ds4_cuda.cu:4413",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
-        "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
+        "consumer": "        }\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
       },
       {
         "source": "engines/ds4-win/cuda/mmq/ds4_repack.cu:88",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {",
         "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n    if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == nullptr) {\n        char proc_path[64];\n        snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", m.fd);\n        int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n        if (direct_fd >= 0) {"
+      },
+      {
+        "source": "engines/ds4-win/ds4_cuda.cu:9510",
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {",
+        "consumer": "#endif\n#if defined(__linux__) && defined(O_DIRECT)\n        if (getenv(\"DS4_CUDA_NO_DIRECT_IO\") == NULL) {\n            char proc_path[64];\n            snprintf(proc_path, sizeof(proc_path), \"/proc/self/fd/%d\", fd);\n            int direct_fd = open(proc_path, O_RDONLY | O_DIRECT);\n            if (direct_fd >= 0) {"
       }
     ]
   },
@@ -21490,7 +21490,7 @@
     "doc": "DirectStorage request split for each expert read: default 8 parts; 0 or 1 disables splitting, 2..64 selects the part count.",
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/src/llama-weight-fetcher.cpp:6697",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4478"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488"
     ],
     "code_defaults": [
       {
@@ -21500,7 +21500,7 @@
         "consumer": "    // split into read_parts equal 4 KiB-unit subreads.\n    static const uint32_t read_parts = [] {\n        const char * e = std::getenv(\"DS4_DS_READ_PARTS\");\n        const long v = e && *e ? std::strtol(e, nullptr, 10) : 8;\n        const uint32_t p = (uint32_t) (v <= 1 ? 1 : std::min<long>(v, 64));\n        fprintf(stderr, \"LLAMADECODE_MISS_READ_PARTS read_parts=%u source=%s\\n\", p, e && *e ? \"DS4_DS_READ_PARTS\" : \"ds4-default\");\n        return p;"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4478",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!std::getenv(\"DS4_DS_READ_PARTS\")) _putenv_s(\"DS4_DS_READ_PARTS\", \"8\");",
         "consumer": "        // expert-miss extents: one DirectStorage request per extent part (a 1.32 MiB expert is one request,\n        // >= 256 KiB as the RAID measurements require); the fetcher's default splits into 8 parts\n        if (!std::getenv(\"DS4_DS_READ_PARTS\")) _putenv_s(\"DS4_DS_READ_PARTS\", \"8\");\n        require(p->pack.open(opts.model, err), err);\n        p->hp = &p->pack.hp;\n        // Native-packed NVFP4 decode default, the DSV4.1 method: packed-vector FP4 kernels on the bytes prefill streams,\n        // one model graph and one service graph per token. Explicit settings win; MTP keeps the segmented path."
@@ -51479,33 +51479,21 @@
     "var": "DSV41_BOUNDED_CACHE",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; '0'; Wrapper/conditional default: see the literal call and consumer below",
+    "code_default": "'0'; Wrapper/conditional default: see the literal call and consumer below; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_BOUNDED_CACHE. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:29",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:31",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_bounded_cache.py:58",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_BOUNDED_CACHE')",
-        "consumer": "                restore.append(lambda limit=old: mx.set_cache_limit(limit))\n            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_BOUNDED_CACHE']",
-        "consumer": "            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\""
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1103",
         "unset": "'0'",
@@ -51529,6 +51517,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_BOUNDED_CACHE', '1')",
         "consumer": "\ndef test_compressor_missing_history_fails(model, monkeypatch):\n    monkeypatch.setenv(\"DSV41_BOUNDED_CACHE\", \"1\")\n    cache = model.make_cache()\n    mx.eval(model(helper.token_ids()[:, :17], cache=cache).logits)\n    lc = cache[0].layers[2]\n    with pytest.raises(ValueError, match=\"no longer retained\"):"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:143",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_BOUNDED_CACHE')",
+        "consumer": "                restore.append(lambda limit=old: mx.set_cache_limit(limit))\n            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:144",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_BOUNDED_CACHE']",
+        "consumer": "            elif experiment == \"unbounded_cache\":\n                old = os.environ.get(\"DSV41_BOUNDED_CACHE\")\n                os.environ[\"DSV41_BOUNDED_CACHE\"] = \"0\"\n                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\""
       }
     ]
   },
@@ -51645,15 +51645,13 @@
     "var": "DSV41_COMPILE_PRIMITIVES",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; Wrapper/conditional default: see the literal call and consumer below; '0'",
+    "code_default": "Wrapper/conditional default: see the literal call and consumer below; '0'; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_COMPILE_PRIMITIVES. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
       "vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:225",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:816",
@@ -51661,21 +51659,11 @@
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:1408",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/moe_prefill.py:46",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_down_bf16_cpu.py:52",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_ffn_expert_pad_cpu.py:165",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_COMPILE_PRIMITIVES')",
-        "consumer": "                language._v41_expert_select = mx.compile(namespace[node.name])\n                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_COMPILE_PRIMITIVES']",
-        "consumer": "                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST\n                hc.COMPILE_POST = True"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/custom_kernels/deepseek_v41/test_grouped_gemm.py:386",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
@@ -51723,6 +51711,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_COMPILE_PRIMITIVES', '0')",
         "consumer": "    monkeypatch.setenv(\"DSV41_PREFILL_GROUPED_MXFP4\", \"1\")\n    monkeypatch.setenv(\"DSV41_PREFILL_GROUPED_MIN_ROWS\", \"64\")\n    monkeypatch.setenv(\"DSV41_COMPILE_PRIMITIVES\", \"0\")\n    up = Mock(side_effect=lambda x, ids, **kw: x * (ids[:, None, None] + 1))\n    up.num_experts = 8\n    mlp = SimpleNamespace(training=False, up_proj=up,\n                          gate_proj=lambda x, ids, **kw: np.ones_like(x),"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:174",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_COMPILE_PRIMITIVES')",
+        "consumer": "                language._v41_expert_select = mx.compile(namespace[node.name])\n                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:175",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_COMPILE_PRIMITIVES']",
+        "consumer": "                restore.append(lambda f=original_select: setattr(language, \"_v41_expert_select\", f))\n                old = os.environ.get(\"DSV41_COMPILE_PRIMITIVES\")\n                os.environ[\"DSV41_COMPILE_PRIMITIVES\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_COMPILE_PRIMITIVES\", None) if old is None else os.environ.__setitem__(\"DSV41_COMPILE_PRIMITIVES\", old))\n            elif experiment == \"compile_hc\":\n                old = hc.COMPILE_POST\n                hc.COMPILE_POST = True"
       }
     ]
   },
@@ -52042,32 +52042,20 @@
     "var": "DSV41_FAST_RMS_NORM",
     "flag": null,
     "default": null,
-    "code_default": "None; Assigned by the runtime; see literal consumer; '0'; Wrapper/conditional default: see the literal call and consumer below",
+    "code_default": "'0'; Wrapper/conditional default: see the literal call and consumer below; None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control DSV41_FAST_RMS_NORM. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
-      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:34",
-      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36"
+      "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/test_sinkhorn_metal.py:36",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
+      "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
-        "unset": "None",
-        "read": "os.environ.get('DSV41_FAST_RMS_NORM')",
-        "consumer": "                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['DSV41_FAST_RMS_NORM']",
-        "consumer": "            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)\n                original = language._hc_split_sinkhorn_ops"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v41/language.py:221",
         "unset": "'0'",
@@ -52085,6 +52073,18 @@
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "monkeypatch.setenv('DSV41_FAST_RMS_NORM', '1')",
         "consumer": "    monkeypatch.setenv(\"DSV41_FAST_RMS_NORM\", \"0\")\n    expected = norm(x)\n    monkeypatch.setenv(\"DSV41_FAST_RMS_NORM\", \"1\")\n    actual = norm(x)\n    mx.eval(actual, expected)\n    # Native reduction order can put a BF16 result on the adjacent rounding\n    # value. The real QAT model is separately held to the long retrieval gate."
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:147",
+        "unset": "None",
+        "read": "os.environ.get('DSV41_FAST_RMS_NORM')",
+        "consumer": "                restore.append(lambda: os.environ.pop(\"DSV41_BOUNDED_CACHE\", None) if old is None else os.environ.__setitem__(\"DSV41_BOUNDED_CACHE\", old))\n            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/runtime_profile.py:148",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['DSV41_FAST_RMS_NORM']",
+        "consumer": "            elif experiment == \"fast_rms_norm\":\n                old = os.environ.get(\"DSV41_FAST_RMS_NORM\")\n                os.environ[\"DSV41_FAST_RMS_NORM\"] = \"1\"\n                restore.append(lambda: os.environ.pop(\"DSV41_FAST_RMS_NORM\", None) if old is None else os.environ.__setitem__(\"DSV41_FAST_RMS_NORM\", old))\n            elif experiment == \"metal_sinkhorn\":\n                importlib.reload(hc)\n                original = language._hc_split_sinkhorn_ops"
       }
     ]
   },
@@ -68179,7 +68179,7 @@
       "engines/streaming-llama/prefill_llama.cpp/src/llama-dsv41-weights.cpp:1228",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:937",
       "engines/streaming-llama/prefill_llama.cpp/tools/dsv41-prefill/main.cpp:977",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4471"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4481"
     ],
     "defaults_by_scope": {
       "rtx-llama": "1",
@@ -68223,7 +68223,7 @@
         "consumer": "        // against 1,238 tok/s with the ordinary layer-0 overlapped load. Opt-in only.\n        const char*early_direct=std::getenv(\"LLAMA_DSV41_ENGRAM_EARLY_DIRECT\");\n        if(!(engram_early_cold&&sweep->early_engram_queued())&&direct_open&&early_direct&&std::strcmp(early_direct,\"1\")==0){const char*overlap=std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\");\n            if(weights.engram_prefetch_host_bytes&&options.engram_tile_lookahead&&overlap&&std::strcmp(overlap,\"1\")==0){\n                const std::vector<int32_t> first(tokens.begin(),tokens.begin()+first_sweep_tokens);\n                success(sweep->start_next_engram(first,early_tail,error),error);\n            }}"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4471",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4481",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * e = std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\")) {",
         "consumer": "            if (!std::getenv(setting.first)) _putenv_s(setting.first, setting.second);\n        }\n        if (const char * e = std::getenv(\"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP\")) {\n            require(!std::strcmp(e, \"0\") || !std::strcmp(e, \"1\"), \"LLAMA_DSV41_ENGRAM_PROMPT_OVERLAP must be 0 or 1\");\n            p->ple_prompt_overlap = !std::strcmp(e, \"1\");\n        }\n        (void) llama_dsv41_engram_early_enabled(); // validate even before a request arrives"
@@ -85547,28 +85547,28 @@
     "var": "MLX_MIMO_KV_BITS",
     "flag": null,
     "default": null,
-    "code_default": "Assigned by the runtime; see literal consumer; None",
+    "code_default": "None; Assigned by the runtime; see literal consumer",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control MLX_MIMO_KV_BITS. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
-      "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86"
+      "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86",
+      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['MLX_MIMO_KV_BITS']",
-        "consumer": "    args = parser.parse_args()\n    if args.kv_bits:\n        os.environ[\"MLX_MIMO_KV_BITS\"] = str(args.kv_bits)\n    if args.max_context and args.kv_bits == 8:\n        os.environ[\"MLX_MIMO_CAPACITY_TOKENS\"] = str(args.max_context)\n        os.environ[\"MLX_MIMO_CAPACITY_LIMIT\"] = str(int(getattr(args, \"wired_limit_mb\", 0) or 0) * 2**20)\n    args.func(args)"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:86",
         "unset": "None",
         "read": "os.environ.get('MLX_MIMO_KV_BITS')",
         "consumer": "            else:\n                caches.append(QuantizedKVCache(group_size=64, bits=8)\n                              if os.environ.get(\"MLX_MIMO_KV_BITS\") == \"8\" else KVCache())\n        return caches\n\n\nclass Model(nn.Module):"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:2382",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['MLX_MIMO_KV_BITS']",
+        "consumer": "    args = parser.parse_args()\n    if args.kv_bits:\n        os.environ[\"MLX_MIMO_KV_BITS\"] = str(args.kv_bits)\n    if args.max_context and args.kv_bits == 8:\n        os.environ[\"MLX_MIMO_CAPACITY_TOKENS\"] = str(args.max_context)\n        os.environ[\"MLX_MIMO_CAPACITY_LIMIT\"] = str(int(getattr(args, \"wired_limit_mb\", 0) or 0) * 2**20)\n    args.func(args)"
       }
     ]
   },
@@ -90362,33 +90362,21 @@
     "var": "MLX_VLM_PIPELINE_LAYERS",
     "flag": null,
     "default": null,
-    "code_default": "Assigned by the runtime; see literal consumer; None; ''",
+    "code_default": "None; Assigned by the runtime; see literal consumer; ''",
     "classification": "advanced",
     "scopes": [
       "mac-mlx"
     ],
     "doc": "Advanced backend control MLX_VLM_PIPELINE_LAYERS. Set explicitly only for the selected backend; its literal read and fallback are documented below.",
     "reads": [
-      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
-      "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
       "vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951",
       "vendor/mac-mlx/mlx_vlm/models/mimo_v2/mimo_v2.py:40",
+      "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
+      "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
       "vendor/mac-mlx/mlx_vlm/server/cli.py:53",
       "vendor/mac-mlx/mlx_vlm/server/cli.py:184"
     ],
     "code_defaults": [
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
-        "unset": "Assigned by the runtime; see literal consumer",
-        "read": "os.environ['MLX_VLM_PIPELINE_LAYERS']",
-        "consumer": "    require_gpu: bool,\n):\n    os.environ[\"MLX_VLM_PIPELINE_LAYERS\"] = pipeline_layers\n    model_path = get_model_path(model)\n    group = _PipelineGroup(rank, size)\n\n    raw_config = json.loads((Path(model_path) / \"config.json\").read_text())"
-      },
-      {
-        "source": "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
-        "unset": "None",
-        "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
-        "consumer": "        self.pipeline_size = group.size()\n        n_layers = len(core.layers)\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
-      },
       {
         "source": "vendor/mac-mlx/mlx_vlm/models/deepseek_v4/language.py:951",
         "unset": "None",
@@ -90400,6 +90388,18 @@
         "unset": "None",
         "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
         "consumer": "        n_layers = len(self.model.layers)\n\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/models/text_only.py:118",
+        "unset": "None",
+        "read": "os.environ.get('MLX_VLM_PIPELINE_LAYERS')",
+        "consumer": "        self.pipeline_size = group.size()\n        n_layers = len(core.layers)\n        raw_counts = os.environ.get(\"MLX_VLM_PIPELINE_LAYERS\") or os.environ.get(\n            \"MLX_PIPELINE_LAYERS\", \"\"\n        )\n        if raw_counts:\n            counts = [int(part.strip()) for part in raw_counts.split(\",\") if part.strip()]"
+      },
+      {
+        "source": "vendor/mac-mlx/mlx_vlm/rpc_pipeline.py:421",
+        "unset": "Assigned by the runtime; see literal consumer",
+        "read": "os.environ['MLX_VLM_PIPELINE_LAYERS']",
+        "consumer": "    require_gpu: bool,\n):\n    os.environ[\"MLX_VLM_PIPELINE_LAYERS\"] = pipeline_layers\n    model_path = get_model_path(model)\n    group = _PipelineGroup(rank, size)\n\n    raw_config = json.loads((Path(model_path) / \"config.json\").read_text())"
       },
       {
         "source": "vendor/mac-mlx/mlx_vlm/server/cli.py:53",
@@ -91643,11 +91643,11 @@
     ],
     "doc": "QFN opt-in BF16 carry; unset preserves F32 carry.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:927"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:928"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:927",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:928",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{ const char * cb = std::getenv(\"QFN_CARRY_BF16\"); carry_bf16 = cb && *cb == '1'; }",
         "consumer": "        ggml_init_params ip = { (8 * nl + 16) * ggml_tensor_overhead(), nullptr, true };\n        sctx = ggml_init(ip);\n        { const char * cb = std::getenv(\"QFN_CARRY_BF16\"); carry_bf16 = cb && *cb == '1'; }\n        kcache.assign(nl, nullptr); vcache.assign(nl, nullptr); idx_raw.assign(nl, nullptr); idx_pool.assign(nl, nullptr);\n        gdn_state.assign(nl, nullptr); conv_state.assign(nl, nullptr);\n        const int64_t conv_ch = (int64_t) hp->ssm_state * hp->ssm_group * 2 + (int64_t) hp->ssm_state * hp->ssm_dt_rank;\n        for (uint32_t il = 0; il < nl; ++il) {"
@@ -91665,25 +91665,25 @@
     ],
     "doc": "QFN opt-in decode-v3 execution path.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4491",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4492",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4522"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4501",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4502",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4532"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4491",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4501",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {",
         "consumer": "            if (!std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\") && !(residual && *residual == '1')) _putenv_s(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\", \"1\");\n            const char * mtp = std::getenv(\"QFN_MTP\");\n            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");\n                _putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");\n            }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4492",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4502",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "_putenv_s(\"QFN_DECODE_V3\", \"1\");",
         "consumer": "            const char * mtp = std::getenv(\"QFN_MTP\");\n            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");\n                _putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");\n            }\n        }"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4522",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4532",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * v3 = std::getenv(\"QFN_DECODE_V3\")) {",
         "consumer": "            if (m && *m && *m != '0') p->load_mtp(); // owner default off; --mtp 1 remains fully supported\n        }\n        if (const char * v3 = std::getenv(\"QFN_DECODE_V3\")) {\n            p->v3_replay = std::strcmp(v3, \"replay\") == 0;\n            p->v3_on = p->v3_replay || std::strcmp(v3, \"1\") == 0;\n        }\n        if (const char * future = std::getenv(\"QFN_V3_FUTURE_SERVICE\")) {"
@@ -91701,18 +91701,18 @@
     ],
     "doc": "QFN diagnostic per-layer carry digest output.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4351",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4376"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4361",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4386"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4351",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4361",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const bool dump = std::getenv(\"QFN_DUMP_CARRY\") && *std::getenv(\"QFN_DUMP_CARRY\") == '1';",
         "consumer": "        {\n            static const bool cone = [] { const char * e = std::getenv(\"QFN_PREFILL_CONE\"); return !(e && *e == '0'); }();\n            const bool dump = std::getenv(\"QFN_DUMP_CARRY\") && *std::getenv(\"QFN_DUMP_CARRY\") == '1';\n            pf_keep_from = !cone || mtp_ok || dump || req.all_top1 ? p0 : (req.full_from >= 0 ? std::min(req.full_from, n - 1) : n - 1);\n        }\n        for (uint32_t il = 0; il < hp->n_layer; ++il) {\n            if (!ple_joined && hp->is_ple(il)) {"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4376",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4386",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * dd = std::getenv(\"QFN_DUMP_CARRY\"); dd && *dd == '1') {",
         "consumer": "            }\n            if (cbuf) seed_layer(il, bank);\n            if (const char * dd = std::getenv(\"QFN_DUMP_CARRY\"); dd && *dd == '1') {\n                // layer-by-layer check against the reference tool's DUMP l_last lines\n                std::vector<float> r;\n                const int kt = std::getenv(\"QFN_DUMP_TOKENS\") ? std::atoi(std::getenv(\"QFN_DUMP_TOKENS\")) : 4;\n                for (int64_t t = p0; t < std::min<int64_t>(n, p0 + kt); ++t) {"
@@ -91730,11 +91730,11 @@
     ],
     "doc": "QFN diagnostic layer whose graph intermediates are logged.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1633"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1634"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1633",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1634",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (dump_layer == -2) { const char * d = std::getenv(\"QFN_DUMP_LAYER\"); dump_layer = d && *d ? std::atoi(d) : -1; }",
         "consumer": "    std::vector<std::pair<std::string, ggml_tensor *>> dbg_list;\n    void dbg(gctx & g, uint32_t il, ggml_tensor * t, const char * name) {\n        if (dump_layer == -2) { const char * d = std::getenv(\"QFN_DUMP_LAYER\"); dump_layer = d && *d ? std::atoi(d) : -1; }\n        if ((int) il != dump_layer || t->type != GGML_TYPE_F32) return;\n        ggml_tensor * c = ggml_cont(g.ctx, t);\n        ggml_set_output(c);\n        ggml_build_forward_expand(g.gf, c);"
@@ -91752,11 +91752,11 @@
     ],
     "doc": "QFN number of token carry rows included in diagnostic output.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4379"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4389"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4379",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4389",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const int kt = std::getenv(\"QFN_DUMP_TOKENS\") ? std::atoi(std::getenv(\"QFN_DUMP_TOKENS\")) : 4;",
         "consumer": "                // layer-by-layer check against the reference tool's DUMP l_last lines\n                std::vector<float> r;\n                const int kt = std::getenv(\"QFN_DUMP_TOKENS\") ? std::atoi(std::getenv(\"QFN_DUMP_TOKENS\")) : 4;\n                for (int64_t t = p0; t < std::min<int64_t>(n, p0 + kt); ++t) {\n                    carry_row(t, r);\n                    double sum = 0, l2 = 0;\n                    for (float x : r) { sum += x; l2 += (double) x * x; }"
@@ -91774,18 +91774,18 @@
     ],
     "doc": "QFN exact token-split matmul control for multi-token decode.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2616",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3922"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2617",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3932"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2616",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2617",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool exact_env = [] { const char * e = std::getenv(\"QFN_EXACT_SPLIT\"); return e && *e == '1'; }();",
         "consumer": "        }\n        const bool snap = snapshots && n > 1;\n        static const bool exact_env = [] { const char * e = std::getenv(\"QFN_EXACT_SPLIT\"); return e && *e == '1'; }();\n        split_tokens = n > 1 && (snap || exact_env);\n        std::vector<int32_t> slots((size_t) (K * nt)), sel((size_t) (K * nt));\n        for (uint32_t il = 0; il <= hp->n_layer; ++il) {\n            const double tb = now_ms();"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3922",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3932",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool exact_env = [] { const char * e = std::getenv(\"QFN_EXACT_SPLIT\"); return e && *e == '1'; }();",
         "consumer": "        auto * G = new v3graph();\n        G->n = n; G->bias = bias; G->snap = snap; G->logical_policy = verify_active; G->nbp = n > 1 ? 2 : 1;\n        static const bool exact_env = [] { const char * e = std::getenv(\"QFN_EXACT_SPLIT\"); return e && *e == '1'; }();\n        split_tokens = n > 1 && (snap || exact_env);\n        const int64_t E = hp->n_embd, HC = hp->hc, K = hp->n_expert_used, nt = n, R = hp->kpool;\n        ggml_init_params ip = { 65536 * ggml_tensor_overhead() + ggml_graph_overhead_custom(65536, false), nullptr, true };\n        G->ctx = ggml_init(ip);"
@@ -91803,11 +91803,11 @@
     ],
     "doc": "QFN opt-in fused hyper-connection kernels; unset preserves the unfused graph.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1194"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1195"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1194",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1195",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool on = [] { const char * e = std::getenv(\"QFN_FUSED_HC\"); return !e || *e == '1'; }();",
         "consumer": "    // Qualified at 100K: fused HC is the default; QFN_FUSED_HC=0 retains the reference path.\n    bool fused_hc() const {\n        static const bool on = [] { const char * e = std::getenv(\"QFN_FUSED_HC\"); return !e || *e == '1'; }();\n        return on;\n    }\n\n    ggml_tensor * hc_combine(gctx & g, ggml_tensor * residual, ggml_tensor * block_out, ggml_tensor * inject) {"
@@ -91825,11 +91825,11 @@
     ],
     "doc": "QFN graph VRAM reserve used when admitting the decode expert cache, in MiB.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1864"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1865"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1864",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1865",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * gr = std::getenv(\"QFN_GRAPH_RESERVE_MIB\");",
         "consumer": "        size_t free_b = 0, total_b = 0;\n        require(cudaMemGetInfo(&free_b, &total_b) == cudaSuccess, \"cannot query VRAM\");\n        const char * gr = std::getenv(\"QFN_GRAPH_RESERVE_MIB\");\n        const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;\n        uint64_t avail = free_b > graph_reserve + opt.vram_margin + (64u << 10) ? free_b - graph_reserve - opt.vram_margin - (64u << 10) : 0;\n        const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");\n        // Without MTP the carry lives in the slab's tail: the same memory serves prefill and then decode, so nothing"
@@ -91904,13 +91904,13 @@
     "doc": "Positive integer tokens, <= appended prompt length and admitted VRAM bound; used with QFN_MOE_PASS=1. Empty explicitly selects the engine's unset/automatic policy. Automatic sizing uses ggml lifetime-plan bytes plus16KiB/token backend allowance and512MiB margin. Invalid/unfit explicit numeric values fail loudly.",
     "empty_is_default": true,
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4294"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4304"
     ],
     "minimum": 1,
     "numeric_type": "int",
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4294",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4304",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * mc = std::getenv(\"QFN_MOE_CHUNK\");",
         "consumer": "        require(!mp || !*mp || std::strcmp(mp, \"0\") == 0 || std::strcmp(mp, \"1\") == 0, \"QFN_MOE_PASS must be 0 or 1\");\n        moe_pass = mp && *mp == '1';\n        const char * mc = std::getenv(\"QFN_MOE_CHUNK\");\n        require(!mc || !*mc || moe_pass, \"QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk\");\n        const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");\n        require(!rc || !*rc || std::strcmp(rc, \"0\") == 0 || std::strcmp(rc, \"1\") == 0, \"QFN_PREFILL_RELEASE_CACHE must be 0 or 1\");\n        const bool release_cache = rc && *rc ? *rc == '1' : moe_pass;"
@@ -91928,7 +91928,7 @@
     ],
     "doc": "0/1: candidate separate routed/shared MoE pass after unchanged attention tiles; default0 retains the unfused control pending qualification. Enables prefill decode-cache release unless explicitly overridden.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4291"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4301"
     ],
     "allowed_values": [
       "0",
@@ -91936,7 +91936,7 @@
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4291",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4301",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * mp = std::getenv(\"QFN_MOE_PASS\");",
         "consumer": "        }\n        if (cbuf) reset_cache();\n        const char * mp = std::getenv(\"QFN_MOE_PASS\");\n        require(!mp || !*mp || std::strcmp(mp, \"0\") == 0 || std::strcmp(mp, \"1\") == 0, \"QFN_MOE_PASS must be 0 or 1\");\n        moe_pass = mp && *mp == '1';\n        const char * mc = std::getenv(\"QFN_MOE_CHUNK\");\n        require(!mc || !*mc || moe_pass, \"QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk\");"
@@ -91955,13 +91955,13 @@
     "reads": [
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3324"
     ],
-    "code_default": "12 MiB",
+    "code_default": "NULL from getenv; the literal consumer below supplies any fallback",
     "code_defaults": [
       {
         "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3324",
-        "unset": "12 MiB",
-        "read": "std::getenv(\"QFN_FUTURE_BLAS_WORKSPACE_MIB\")",
-        "consumer": "Integer1..256 MiB; allocate before expert cache sizing and retain until all future parents retire."
+        "unset": "NULL from getenv; the literal consumer below supplies any fallback",
+        "read": "if (const char * value = std::getenv(\"QFN_FUTURE_BLAS_WORKSPACE_MIB\")) {",
+        "consumer": "    void prepare_future_service() {\n        if (!v3_future || service_exec) return;\n        if (const char * value = std::getenv(\"QFN_FUTURE_BLAS_WORKSPACE_MIB\")) {\n            char * end = nullptr;\n            const long mib = std::strtol(value, &end, 10);\n            require(*value && end && !*end && mib >= 1 && mib <= 256,\n                    \"QFN_FUTURE_BLAS_WORKSPACE_MIB must be an integer from1 to256\");"
       }
     ]
   },
@@ -91975,19 +91975,19 @@
     ],
     "doc": "QFN MTP drafter control; unset or 0 defaults to off (owner 2026-11-02); --mtp 1 or QFN_MTP=1 enables full drafting/sampler support.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4490",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4519",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4500",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4529",
       "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-main.cpp:219"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4490",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4500",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * mtp = std::getenv(\"QFN_MTP\");",
         "consumer": "            const char * residual = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");\n            if (!std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\") && !(residual && *residual == '1')) _putenv_s(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\", \"1\");\n            const char * mtp = std::getenv(\"QFN_MTP\");\n            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");\n                _putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4519",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4529",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * m = std::getenv(\"QFN_MTP\");",
         "consumer": "        {\n            // the drafter and its snapshots take their VRAM before the expert cache sizes itself from what is left\n            const char * m = std::getenv(\"QFN_MTP\");\n            if (m && *m && *m != '0') p->load_mtp(); // owner default off; --mtp 1 remains fully supported\n        }\n        if (const char * v3 = std::getenv(\"QFN_DECODE_V3\")) {\n            p->v3_replay = std::strcmp(v3, \"replay\") == 0;"
@@ -92011,11 +92011,11 @@
     ],
     "doc": "QFN number of proposed MTP draft tokens per verification round.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2930"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2931"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2930",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2931",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * d = std::getenv(\"QFN_MTP_DRAFTS\"); d && *d) mtp_drafts = std::max(0, std::min(DEC_NMAX - 1, std::atoi(d)));",
         "consumer": "        alloc_snapshots();\n        alloc_verify_state(); // admitted before the cache is sized; never shrinks an explicit capacity\n        if (const char * d = std::getenv(\"QFN_MTP_DRAFTS\"); d && *d) mtp_drafts = std::max(0, std::min(DEC_NMAX - 1, std::atoi(d)));\n        mtp_ok = true;\n        log(\"[qfn] MTP drafter: %zu-token draft head, 512 resident experts (%.0f MiB), %d drafts per step\\n\",\n            draft_ids.size(), (ggml_backend_buffer_get_size(mbuf) + ggml_backend_buffer_get_size(mexp_buf)) / 1048576.0, mtp_drafts);\n    }"
@@ -92033,11 +92033,11 @@
     ],
     "doc": "QFN MTP diagnostic probe and layer dump control.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3082"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3083"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3082",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3083",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * pr = std::getenv(\"QFN_MTP_PROBE\");",
         "consumer": "            // the first row pairs with the residual before p0: h_last (zeros at position 0); carry rows before p0\n            // may be stale (decoded tokens never write carry)\n            const char * pr = std::getenv(\"QFN_MTP_PROBE\");\n            std::vector<int32_t> arg;\n            if (pr && *pr == '1') mtp_probe_out = &arg;\n            mtp_run(seq.data() + t0, (int) m, t0, dl, t0 - 1, t0 == p0, (t0 == p0 && p0 > 0) ? h_last.data() : nullptr);\n            mtp_probe_out = nullptr;"
@@ -92061,9 +92061,9 @@
     "doc": "Experimental two-component gate/up/down activation quantization for short native-packed NVFP4 mode6 (nt1..4, including short final prefill); default0 retains original arithmetic. Reuses grouped FP4 GEMMs, adds products before SwiGLU/globals, uses extra persistent scratch and may reduce cache slots. Long prefill unchanged; short non-mode6 with1 fails. Both fused-mid schedules supported; numerical/performance qualification pending.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:63",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:551",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:671",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4498"
     ],
     "code_defaults": [
       {
@@ -92073,19 +92073,19 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:551",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:554",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL', '0')",
-        "consumer": "                        help='Equal gate/up globals, eager/captured changes; compare full output hashes across explicit policy0/1 receipts')\n    args=parser.parse_args();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')"
+        "consumer": "                        help='Equal gate/up globals, eager/captured changes; compare full output hashes across explicit policy0/1 receipts')\n    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:670",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:671",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * residual_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");",
         "consumer": "                \"QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be 0 or 1\");\n        const bool shared_gu = shared_gu_env && !std::strcmp(shared_gu_env, \"1\");\n        const char * residual_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");\n        require(!residual_env || !std::strcmp(residual_env, \"0\") || !std::strcmp(residual_env, \"1\"),\n                \"QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1\");\n        const bool residual = residual_env && !std::strcmp(residual_env, \"1\");\n        const char * vector_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\");"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4488",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4498",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * residual = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");",
         "consumer": "        }\n        if (p->pack.native_nvfp4_packed && p->opt.nvfp4_decode_mode == 6) {\n            const char * residual = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");\n            if (!std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\") && !(residual && *residual == '1')) _putenv_s(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\", \"1\");\n            const char * mtp = std::getenv(\"QFN_MTP\");\n            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");"
@@ -92107,9 +92107,9 @@
     "doc": "Opt-in DSV packed FP4 fused vector decode with dynamic Q8_1 activations and original QFN UE4M3 per16 weight scales/tails; requires explicit native-packed decode mode6, conflicts with FP4 residual activations. Both fused-mid schedules retained. No expert weight inversion; persistent activation scratch. Default0 pending full100K numerical/performance and sampler qualification.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:72",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:552",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4489"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:675",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4499"
     ],
     "code_defaults": [
       {
@@ -92119,19 +92119,19 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_DECODE_VECTOR must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:552",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:555",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR', '0')",
-        "consumer": "    args=parser.parse_args();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):"
+        "consumer": "    args=parser.parse_args();ROOT=args.workspace.resolve();PROGRESS=args.progress_log.resolve();receipt=args.receipt.resolve();lease=args.lease.resolve()\n    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:674",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:675",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * vector_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\");",
         "consumer": "                \"QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1\");\n        const bool residual = residual_env && !std::strcmp(residual_env, \"1\");\n        const char * vector_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\");\n        require(!vector_env || !std::strcmp(vector_env, \"0\") || !std::strcmp(vector_env, \"1\"),\n                \"QFN_NATIVE_NVFP4_DECODE_VECTOR must be 0 or 1\");\n        const bool vector_decode = vector_env && !std::strcmp(vector_env, \"1\");\n        for (const auto & e : pack.experts) nvfp4 = nvfp4 || e.is_nvfp4();"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4489",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4499",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (!std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\") && !(residual && *residual == '1')) _putenv_s(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\", \"1\");",
         "consumer": "        if (p->pack.native_nvfp4_packed && p->opt.nvfp4_decode_mode == 6) {\n            const char * residual = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");\n            if (!std::getenv(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\") && !(residual && *residual == '1')) _putenv_s(\"QFN_NATIVE_NVFP4_DECODE_VECTOR\", \"1\");\n            const char * mtp = std::getenv(\"QFN_MTP\");\n            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");"
@@ -92155,7 +92155,7 @@
     "doc": "Short native-packed NVFP4 mode6 fused SwiGLU/down pack; independent calibrated gate/up/down scales retained.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:36",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:572"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575"
     ],
     "code_defaults": [
       {
@@ -92165,7 +92165,7 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_FUSED_MID\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0; // measured: the short schedule is slower in prefill, decode unchanged\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_FUSED_MID must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:572",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:575",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_FUSED_MID', '0')",
         "consumer": "    result=dict(status='IN-PROGRESS',qualification='Synthetic layout/arithmetic only; whole-model KL/top1/recall pending',\n                host_fixture_data_budget_bytes=1536*2**20,gpu_allocation_budget_bytes=12*2**30,\n                short_mode6_fused_mid=os.environ.get('QFN_NATIVE_NVFP4_FUSED_MID','0'),\n                source_sha256_before=hashes(),native_cases=[],compatibility_cases=[])\n    if args.residual_self_test:\n        result.update(test_arm='residual-self-test',short_mode6_residual=residual_flag,residual_cases=[])\n    if args.vector_self_test:"
@@ -92186,11 +92186,11 @@
     ],
     "doc": "Single CUDA kernel for F32 router-weighted expert reduction in prefill and decode. Preserves rounded products and ascending expert-slot additions, including strided views. Default on after byte-exact GPU/full-vocabulary gates and repeated exact100K gains; 0 retains the original MUL/ADD path.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4451"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4461"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4451",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4461",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * e = std::getenv(\"QFN_FUSED_EXPERT_REDUCE\")) {",
         "consumer": "    try {\n        p->opt = opts;\n        if (const char * e = std::getenv(\"QFN_FUSED_EXPERT_REDUCE\")) {\n            require(!std::strcmp(e, \"0\") || !std::strcmp(e, \"1\"), \"QFN_FUSED_EXPERT_REDUCE must be 0 or 1\");\n            p->fused_expert_reduce = !std::strcmp(e, \"1\");\n        }\n        p->log(\"[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\\n\", int(p->fused_expert_reduce));"
@@ -92214,7 +92214,7 @@
     "doc": "Native-packed NVFP4 long mode6 route grouping: 0 retains original warp scan, 1 selects stable CTA256 contiguous-token grouping with fixed 2 KiB shared storage. Flag1 refuses long requests (nt>4) in modes0..5 at workspace/run admission instead of ignoring the policy. Short requests retain every existing supported mode and compact/vector path. Full route/tail validation retained. Experimental; CUDA grouping arrays and whole-model numeric/performance qualification required before default promotion.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:45",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:580"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:583"
     ],
     "code_defaults": [
       {
@@ -92224,7 +92224,7 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_GROUP_PARALLEL\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_GROUP_PARALLEL must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:580",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:583",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_GROUP_PARALLEL', '0')",
         "consumer": "    if args.grouping_self_test:\n        result.update(test_arm='grouping-self-test',grouping_cases=[],\n                      grouping_policy=os.environ.get('QFN_NATIVE_NVFP4_GROUP_PARALLEL','0'))\n    if args.share_gu_input_self_test:\n        result.update(test_arm='share-gu-input-self-test',shared_gu_policy=shared_gu_flag,shared_gu_cases=[])\n    c=None;primary=None\n    def save():receipt.write_text(json.dumps(result,indent=2)+'\\n')"
@@ -92245,11 +92245,11 @@
     ],
     "doc": "Opt-in joined GDN qkv/gate projection over adjacent original Q6_K GPU rows; default off, refuses unsupported layouts, retains original scalar/reference path and all sampling/state capabilities.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4457"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4467"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4457",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4467",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * e = std::getenv(\"QFN_PAIRED_GDN\")) {",
         "consumer": "        p->log(\"[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\\n\", int(p->fused_expert_reduce));\n        if (const char * e = std::getenv(\"QFN_LFU_HALF_LIFE\"); e && *e) p->opt.lfu_half_life = (float) std::atof(e);\n        if (const char * e = std::getenv(\"QFN_PAIRED_GDN\")) {\n            require(!std::strcmp(e, \"0\") || !std::strcmp(e, \"1\"), \"QFN_PAIRED_GDN must be 0 or 1\");\n            p->paired_gdn = !std::strcmp(e, \"1\");\n        }\n        // Shared Engram settings, QFN-scoped measured queue defaults."
@@ -92268,8 +92268,8 @@
     ],
     "doc": "0/1: independently release the VRAM decode slab before prefill and restore identical capacity/prompt-ranked entries from the experts pack afterward. Unset follows QFN_MOE_PASS. Reload/reseed time counts toward TTFT; no capacity reduction fallback.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1867",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4296"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1868",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4306"
     ],
     "allowed_values": [
       "0",
@@ -92277,13 +92277,13 @@
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1867",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1868",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");",
         "consumer": "        const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;\n        uint64_t avail = free_b > graph_reserve + opt.vram_margin + (64u << 10) ? free_b - graph_reserve - opt.vram_margin - (64u << 10) : 0;\n        const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");\n        // Without MTP the carry lives in the slab's tail: the same memory serves prefill and then decode, so nothing\n        // is freed or reloaded at the handoff and the prefill seeds the hot experts from its banks.\n        // Explicit slot counts select the same slab layout as automatic sizing; they only fix its capacity.\n        const bool tail_carry = !restoring && !mtp_ok && !(rc && *rc == '1');"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4296",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4306",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");",
         "consumer": "        const char * mc = std::getenv(\"QFN_MOE_CHUNK\");\n        require(!mc || !*mc || moe_pass, \"QFN_MOE_CHUNK requires QFN_MOE_PASS=1; refusing to ignore the requested chunk\");\n        const char * rc = std::getenv(\"QFN_PREFILL_RELEASE_CACHE\");\n        require(!rc || !*rc || std::strcmp(rc, \"0\") == 0 || std::strcmp(rc, \"1\") == 0, \"QFN_PREFILL_RELEASE_CACHE must be 0 or 1\");\n        const bool release_cache = rc && *rc ? *rc == '1' : moe_pass;\n        if (release_cache) release_cache_for_prefill();\n        alloc_carry();"
@@ -92300,11 +92300,11 @@
     ],
     "doc": "QFN optional exclusive host RAM expert victim tier, in GiB; unset retains its built-in disabled default.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2124"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2125"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2124",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2125",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * g = std::getenv(\"QFN_RAM_TIER_GIB\");",
         "consumer": "\n    void alloc_ram_tier() {\n        const char * g = std::getenv(\"QFN_RAM_TIER_GIB\");\n        const double gib = g && *g ? std::atof(g) : 0.0;\n        ram_of.assign((size_t) hp->n_layer * hp->n_expert, -1);\n        if (gib <= 0) return;\n        const uint64_t blob = pack.experts[0].blob;"
@@ -92322,11 +92322,11 @@
     ],
     "doc": "QFN decode-v3 expert-miss doorbell service deadline in milliseconds.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3738"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3748"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3738",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:3748",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "{ const char * t = std::getenv(\"QFN_V3_BELL_MS\"); bell_h->timeout_ms = t && *t ? std::max(1, std::min(1500, std::atoi(t))) : 500; }",
         "consumer": "        bell_h->req = -1; bell_h->ack = -1; bell_h->error = 0;\n        // bounded below the Windows GPU timeout (TDR, 2 s by default) so a stuck host cannot reset the shared GPU\n        { const char * t = std::getenv(\"QFN_V3_BELL_MS\"); bell_h->timeout_ms = t && *t ? std::max(1, std::min(1500, std::atoi(t))) : 500; }\n        if (v3_future) {\n            require(service_exec && service_h && service_control_h && !v3_replay,\n                    \"QFN_FUTURE_SERVICE: explicit mode unavailable; no alternate decode fallback\");\n            if (!side) require(cudaStreamCreateWithFlags(&side, cudaStreamNonBlocking) == cudaSuccess,"
@@ -92344,25 +92344,25 @@
     ],
     "doc": "QFN opt-in static decode-v3 CUDA graph replay.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4058",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4494",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4531"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4068",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4504",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4541"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4058",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4068",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool v3_cuda_graph = [] { const char * e = std::getenv(\"QFN_V3_CUDA_GRAPH\"); return e && *e == '1'; }();",
         "consumer": "        };\n        st.stage_ms += now_ms() - ts;\n        static const bool v3_cuda_graph = [] { const char * e = std::getenv(\"QFN_V3_CUDA_GRAPH\"); return e && *e == '1'; }();\n        for (uint32_t attempt = 0; ; ++attempt) {\n            require(attempt < hp->n_layer + 1, \"QFNV3OPT replay exhausted n_layer + 1 attempts\");\n            bell_h->error = 0;\n            if (v3_replay) require(cudaMemsetAsync(replay_miss_latch, 0, sizeof(int32_t), stream()) == cudaSuccess,"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4494",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4504",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "_putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");",
         "consumer": "                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");\n                _putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");\n            }\n        }\n        p->admit_qsa_indexer(); // independent of expert format; before CUDA/model allocations\n        p->admit_nvfp4(); // DLL/ABI/format/workspace validation precedes CUDA and model allocations"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4531",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4541",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * capture = std::getenv(\"QFN_V3_CUDA_GRAPH\");",
         "consumer": "            require(!p->v3_future || (p->v3_on && !p->v3_replay),\n                    \"QFN_V3_FUTURE_SERVICE1 requires QFN_DECODE_V3=1; no replay/eager substitution\");\n            const char * capture = std::getenv(\"QFN_V3_CUDA_GRAPH\");\n            require(!p->v3_future || (capture && !std::strcmp(capture, \"1\")),\n                    \"QFN_V3_FUTURE_SERVICE1 requires QFN_V3_CUDA_GRAPH1\");\n        }\n        p->prepare_future_service(); // graph/fence/mappings admitted before automatic cache sizing"
@@ -92406,18 +92406,18 @@
     ],
     "doc": "Explicit CPU-only DirectStorage future service for V3 decode; requires QFN_DECODE_V3=1 and QFN_V3_CUDA_GRAPH=1; default off; two actual graph submissions per token.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4493",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4526"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4503",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4536"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4493",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4503",
         "unset": "Wrapper/conditional default: see the literal call and consumer below",
         "read": "_putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");",
         "consumer": "            if (!(mtp && *mtp && *mtp != '0') && !std::getenv(\"QFN_DECODE_V3\")) {\n                _putenv_s(\"QFN_DECODE_V3\", \"1\");\n                _putenv_s(\"QFN_V3_FUTURE_SERVICE\", \"1\");\n                _putenv_s(\"QFN_V3_CUDA_GRAPH\", \"1\");\n            }\n        }\n        p->admit_qsa_indexer(); // independent of expert format; before CUDA/model allocations"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4526",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4536",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * future = std::getenv(\"QFN_V3_FUTURE_SERVICE\")) {",
         "consumer": "            p->v3_on = p->v3_replay || std::strcmp(v3, \"1\") == 0;\n        }\n        if (const char * future = std::getenv(\"QFN_V3_FUTURE_SERVICE\")) {\n            require(!std::strcmp(future, \"0\") || !std::strcmp(future, \"1\"), \"QFN_V3_FUTURE_SERVICE must be 0 or 1\");\n            p->v3_future = !std::strcmp(future, \"1\");\n            require(!p->v3_future || (p->v3_on && !p->v3_replay),\n                    \"QFN_V3_FUTURE_SERVICE1 requires QFN_DECODE_V3=1; no replay/eager substitution\");"
@@ -100881,11 +100881,11 @@
     ],
     "doc": "Physical VRAM kept free at the QFN decode handoff, in MiB; default 128 as DSV4.1.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1877"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1877",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * rs = std::getenv(\"QFN_VRAM_RESERVE_MIB\");",
         "consumer": "            uint64_t nv_free = 0;\n            require(nvml_free_bytes(nv_free), \"the decode cache sizing needs NVML physical free VRAM\");\n            const char * rs = std::getenv(\"QFN_VRAM_RESERVE_MIB\");\n            const char * mg = std::getenv(\"QFN_VRAM_MARGIN_MIB\");\n            const uint64_t keep = ((rs && *rs ? (uint64_t) std::atoll(rs) : 128ull) + (mg && *mg ? (uint64_t) std::atoll(mg) : (restoring ? 512ull : 1100ull))) << 20;\n            avail = nv_free > keep + (64u << 10) ? nv_free - keep - (64u << 10) : 0;\n            log(\"[qfn] decode handoff VRAM: NVML free %.2f GiB (CUDA free %.2f GiB), kept %.2f GiB\\n\","
@@ -100903,11 +100903,11 @@
     ],
     "doc": "Decode-graph growth margin beside the QFN handoff reserve, in MiB.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1879"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1878",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1879",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * mg = std::getenv(\"QFN_VRAM_MARGIN_MIB\");",
         "consumer": "            require(nvml_free_bytes(nv_free), \"the decode cache sizing needs NVML physical free VRAM\");\n            const char * rs = std::getenv(\"QFN_VRAM_RESERVE_MIB\");\n            const char * mg = std::getenv(\"QFN_VRAM_MARGIN_MIB\");\n            const uint64_t keep = ((rs && *rs ? (uint64_t) std::atoll(rs) : 128ull) + (mg && *mg ? (uint64_t) std::atoll(mg) : (restoring ? 512ull : 1100ull))) << 20;\n            avail = nv_free > keep + (64u << 10) ? nv_free - keep - (64u << 10) : 0;\n            log(\"[qfn] decode handoff VRAM: NVML free %.2f GiB (CUDA free %.2f GiB), kept %.2f GiB\\n\",\n                nv_free / 1073741824.0, free_b / 1073741824.0, keep / 1073741824.0);"
@@ -100925,11 +100925,11 @@
     ],
     "doc": "Percentage of each layer cache share seeded by the QFN prefill or reload; default 100.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2060"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2061"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2060",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2061",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const uint32_t reload_pct = [] { const char * e = std::getenv(\"QFN_CACHE_RELOAD_PCT\"); return e && *e ? (uint32_t) std::atoi(e) : 100u; }();",
         "consumer": "            return h[a] != h[b] ? h[a] > h[b] : prank(a) < prank(b); });\n        // The seed may fill only part of the slab: each seeded byte is a copy on the compute stream; misses fill the rest.\n        static const uint32_t reload_pct = [] { const char * e = std::getenv(\"QFN_CACHE_RELOAD_PCT\"); return e && *e ? (uint32_t) std::atoi(e) : 100u; }();\n        const uint32_t count = std::min((uint32_t) ((uint64_t) quota * reload_pct / 100), NE);\n        uint64_t bytes = 0;\n        if (reload && count) {\n            // Reuse QFN's bounded direct-extent loader and DSV4.1's prompt"
@@ -100947,11 +100947,11 @@
     ],
     "doc": "1 keeps the earlier QFN logit-unit residency bias instead of the DSV4.1 probability penalty.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1538"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1539"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1538",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1539",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool logit_units = [] { const char * e = std::getenv(\"QFN_AFFINITY_LOGIT\"); return e && *e == '1'; }();",
         "consumer": "            // DSV4.1 cache affinity: the penalty applies to router probabilities, per-layer calibrated.\n            // QFN_AFFINITY_LOGIT=1 keeps the earlier logit-unit bias.\n            static const bool logit_units = [] { const char * e = std::getenv(\"QFN_AFFINITY_LOGIT\"); return e && *e == '1'; }();\n            choose = logit_units ? ggml_add(ctx, logits, ggml_scale(ctx, r, bias))\n                                 : ggml_add(ctx, probs, ggml_scale(ctx, r, bias * affinity_factor(il)));\n        }\n        if (affinity_calibrating) {"
@@ -100969,11 +100969,11 @@
     ],
     "doc": "Path of the per-layer router spread calibration used to scale the QFN residency penalty.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1487"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1488"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1487",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1488",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * path = std::getenv(\"QFN_AFFINITY_SPREADS\"); path && *path) {",
         "consumer": "            affinity_spread.assign(hp->n_layer, 0.0212f);\n            if (hp->n_layer == 48) affinity_spread.assign(measured, measured + 48);\n            if (const char * path = std::getenv(\"QFN_AFFINITY_SPREADS\"); path && *path) {\n                std::ifstream in(path);\n                std::string magic, id;\n                unsigned long long bytes = 0;\n                uint32_t experts = 0, nl = 0;"
@@ -100991,18 +100991,18 @@
     ],
     "doc": "Path to write per-layer router spreads measured at bias zero on the segmented decode path.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1514",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4560"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1515",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4570"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1514",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:1515",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * path = std::getenv(\"QFN_AFFINITY_CALIBRATE\");",
         "consumer": "    }\n    void calibrate_write() {\n        const char * path = std::getenv(\"QFN_AFFINITY_CALIBRATE\");\n        std::ofstream out(path);\n        out << \"DS4AFFINITY1 \" << pack.experts[0].blob * hp->n_expert * hp->n_layer << \" \" << hp->n_expert << \" \" << hp->n_layer << \" qfn\\n\";\n        char line[64];\n        for (uint32_t l = 0; l < hp->n_layer; ++l) {"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4560",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4570",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * cal = std::getenv(\"QFN_AFFINITY_CALIBRATE\"); cal && *cal && s.residency_bias == 0) {",
         "consumer": "        wf_extent_fetch_stats(ds_before, &requests_before, &batches_before);\n        p->bell_prepare_ms = p->bell_fetch_ms = p->bell_ack_ms = 0;\n        if (const char * cal = std::getenv(\"QFN_AFFINITY_CALIBRATE\"); cal && *cal && s.residency_bias == 0) {\n            require(!p->v3_on, \"QFN_AFFINITY_CALIBRATE uses the segmented decode path\");\n            p->affinity_calibrating = true;\n            p->calibrate_sum.assign(p->hp->n_layer, 0.0);\n            p->calibrate_n.assign(p->hp->n_layer, 0);"
@@ -101020,11 +101020,11 @@
     ],
     "doc": "0 runs attention and experts on every last-layer prompt row instead of stopping at the caches for rows nothing reads.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4350"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4360"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4350",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4360",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const bool cone = [] { const char * e = std::getenv(\"QFN_PREFILL_CONE\"); return !(e && *e == '0'); }();",
         "consumer": "        double t_wait = 0, t_comp = 0;\n        {\n            static const bool cone = [] { const char * e = std::getenv(\"QFN_PREFILL_CONE\"); return !(e && *e == '0'); }();\n            const bool dump = std::getenv(\"QFN_DUMP_CARRY\") && *std::getenv(\"QFN_DUMP_CARRY\") == '1';\n            pf_keep_from = !cone || mtp_ok || dump || req.all_top1 ? p0 : (req.full_from >= 0 ? std::min(req.full_from, n - 1) : n - 1);\n        }\n        for (uint32_t il = 0; il < hp->n_layer; ++il) {"
@@ -101064,11 +101064,11 @@
     ],
     "doc": "Half-life in decode steps of the QFN expert cache recency-weighted use count.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4456"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4466"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4456",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:4466",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "if (const char * e = std::getenv(\"QFN_LFU_HALF_LIFE\"); e && *e) p->opt.lfu_half_life = (float) std::atof(e);",
         "consumer": "        }\n        p->log(\"[qfn] fused expert weighted reduction: %d (F32 products, ascending slot sum)\\n\", int(p->fused_expert_reduce));\n        if (const char * e = std::getenv(\"QFN_LFU_HALF_LIFE\"); e && *e) p->opt.lfu_half_life = (float) std::atof(e);\n        if (const char * e = std::getenv(\"QFN_PAIRED_GDN\")) {\n            require(!std::strcmp(e, \"0\") || !std::strcmp(e, \"1\"), \"QFN_PAIRED_GDN must be 0 or 1\");\n            p->paired_gdn = !std::strcmp(e, \"1\");\n        }"
@@ -101108,11 +101108,11 @@
     ],
     "doc": "Cap on the prompt count a seeded expert starts with in the QFN cache use score; default 1, since larger counts crowd out the decode working set; 0 keeps the full count.",
     "reads": [
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2085"
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2086"
     ],
     "code_defaults": [
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2085",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:2086",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "static const double seed_lfu_max = [] { const char * e = std::getenv(\"QFN_SEED_LFU_MAX\"); return e && *e ? std::atof(e) : 1.0; }();",
         "consumer": "            owner[slot] = (int32_t) (il * NE + e);\n            // QFN_SEED_LFU_MAX caps the prompt count: uncapped counts outlive the decode's own working set.\n            static const double seed_lfu_max = [] { const char * e = std::getenv(\"QFN_SEED_LFU_MAX\"); return e && *e ? std::atof(e) : 1.0; }();\n            lfu[slot] = seed_lfu_max > 0 ? std::min((double) h[e], seed_lfu_max) : (double) h[e];\n            lfu_step[slot] = 0;\n            resident_host[(size_t) il * NE + e] = 1.0f;\n        }"
@@ -101135,8 +101135,8 @@
     "doc": "Experimental exact input sharing for native-packed long mode6 prefill. Flag1 requires every exported gate/up calibration pair to be bit-identical, checked at host admission and in the DLL; it reuses unchanged gate input/scale planes for up while retaining both GEMMs and independent down globals. Default0 retains separate quantizers, unequal-calibration packs, original modes and all short/decode arithmetic. Invalid values and long non-mode6 requests fail loudly. Source candidate only; GPU, whole-model and throughput qualification pending.",
     "reads": [
       "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_bridge.cu:54",
-      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:553",
-      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:666"
+      "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556",
+      "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:667"
     ],
     "code_defaults": [
       {
@@ -101146,13 +101146,13 @@
         "consumer": "    static const int value=[](){\n        char option[8]{};SetLastError(ERROR_SUCCESS);\n        const DWORD n=GetEnvironmentVariableA(\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT\",option,sizeof(option));\n        if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;\n        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');\n        std::fprintf(stderr,\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be exactly 0 or 1 before admission\\n\");return -1;\n    }();return value;"
       },
       {
-        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:553",
+        "source": "engines/streaming-llama/flashinfer-sm120/qfn_native_nvfp4_check.py:556",
         "unset": "'0'",
         "read": "os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT', '0')",
         "consumer": "    residual_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_RESIDUAL','0')\n    vector_flag=os.environ.get('QFN_NATIVE_NVFP4_DECODE_VECTOR','0')\n    shared_gu_flag=os.environ.get('QFN_NATIVE_NVFP4_SHARE_GU_INPUT','0')\n    if shared_gu_flag not in ('0','1'):raise ValueError('Shared gate/up input policy must be exactly0/1')\n    if sum((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test))>1:raise ValueError('Choose one component arm')\n    if shared_gu_flag=='1' and not any((args.vector_self_test,args.residual_self_test,args.grouping_self_test,args.share_gu_input_self_test)):\n        raise ValueError('The original unequal-calibration long suite requires shared-input policy0; use the separate equal-GU component arm for policy1')"
       },
       {
-        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:666",
+        "source": "engines/streaming-llama/prefill_llama.cpp/tools/qfn-engine/qfn-engine.cpp:667",
         "unset": "NULL from getenv; the literal consumer below supplies any fallback",
         "read": "const char * shared_gu_env = std::getenv(\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT\");",
         "consumer": "    }\n    void admit_nvfp4() {\n        const char * shared_gu_env = std::getenv(\"QFN_NATIVE_NVFP4_SHARE_GU_INPUT\");\n        require(!shared_gu_env || !std::strcmp(shared_gu_env, \"0\") || !std::strcmp(shared_gu_env, \"1\"),\n                \"QFN_NATIVE_NVFP4_SHARE_GU_INPUT must be 0 or 1\");\n        const bool shared_gu = shared_gu_env && !std::strcmp(shared_gu_env, \"1\");\n        const char * residual_env = std::getenv(\"QFN_NATIVE_NVFP4_DECODE_RESIDUAL\");"
