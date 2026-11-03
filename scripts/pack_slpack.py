@@ -8,6 +8,7 @@ unless the separate download action is requested.
 from __future__ import annotations
 import argparse
 import contextlib
+import copy
 import hashlib
 import json
 import os
@@ -17,10 +18,30 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.slpack import ModelWriter, ModelFile
+from scripts.slpack import ModelWriter, ModelFile, VerificationWriter, file_identity
 from scripts.dsv41_fp4_layout import NVFP4, pack_nvfp4_blob
 
 BLOB = 2764816
+
+
+def canonical_metadata(meta):
+    """Retain every field; replace machine-dependent provenance with identities."""
+    meta = copy.deepcopy(meta)
+    checkpoint = meta.get('checkpoint')
+    if checkpoint is None:
+        return meta
+    meta['format'], meta['version'] = 'slpack', 1
+    meta['converter']['tool'] = 'scripts/pack_slpack.py'
+    checkpoint['dir'] = 'source'
+    auxiliary = checkpoint['sections_from']
+    auxiliary['path'] = 'auxiliary/sha256-' + auxiliary['meta_sha256']
+    if auxiliary['profile_export'] is not None:
+        if auxiliary['profile_runtime_args'] != ['--expert-profile-save', auxiliary['profile_export']]:
+            raise ValueError('Unsupported profile runtime arguments; preserve and implement before canonicalizing')
+        profile = 'profiles/' + auxiliary['section_sha256']['profile'] + '.profile'
+        auxiliary['profile_export'] = profile
+        auxiliary['profile_runtime_args'] = ['--expert-profile-save', profile]
+    return meta
 
 
 def native_descriptor(layout):
@@ -34,14 +55,19 @@ def native_descriptor(layout):
 
 class NativeWriter(ModelWriter):
     """One source expert at a time, with a byte-exact inverse before emission."""
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, *, verify_against=None):
+        self.verification = VerificationWriter(verify_against, canonical_metadata) if verify_against else None
+        if self.verification is None:
+            super().__init__(path)
+        else:
+            self.entries = self.verification.entries
         self.source_layout = None
         self.expert_count = 0
 
     def add_chunks(self, name, chunks):
+        emit = self.verification.add_chunks if self.verification is not None else super().add_chunks
         if name != 'experts':
-            return super().add_chunks(name, chunks)
+            return emit(name, chunks)
         def converted():
             pending = bytearray()
             for chunk in chunks:
@@ -56,7 +82,7 @@ class NativeWriter(ModelWriter):
                     yield packed
             if pending:
                 raise ValueError('Incomplete NVFP4 expert blob')
-        return super().add_chunks(name, converted())
+        return emit(name, converted())
 
     def add_bytes(self, name, data):
         if name == 'experts.layout':
@@ -81,8 +107,20 @@ class NativeWriter(ModelWriter):
             if 'qfn_native_nvfp4' in meta:
                 raise ValueError('Metadata already describes a native relayout')
             meta['qfn_native_nvfp4'] = native_descriptor(self.source_layout)
+            meta = canonical_metadata(meta)
             data = (json.dumps(meta, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n').encode()
         return super().add_bytes(name, data)
+
+    def readback(self, name, offset=0, size=None):
+        if self.verification is not None:
+            return self.verification.readback(name, offset, size)
+        return super().readback(name, offset, size)
+
+    def close(self):
+        return self.verification.close() if self.verification is not None else super().close()
+
+    def abort(self):
+        return self.verification.abort() if self.verification is not None else super().abort()
 
 
 def check_source(source, recipe):
@@ -91,8 +129,10 @@ def check_source(source, recipe):
     rows = recipe['source']['files']
     if not rows:
         raise ValueError('Recipe has no pinned source file identities')
+    identities = {}
     for row in rows:
         path = source / row['name']
+        before = file_identity(path)
         if path.stat().st_size != row['bytes']:
             raise ValueError('Source length differs: ' + row['name'])
         digest = hashlib.new(row['hash_algorithm'])
@@ -102,7 +142,11 @@ def check_source(source, recipe):
             digest.update(chunk)
         if digest.hexdigest() != row['hash']:
             raise ValueError('Pinned source hash differs: ' + row['name'])
+        if file_identity(path) != before:
+            raise ValueError('Pinned source changed while hashing: ' + row['name'])
+        identities[str(path)] = before
         print('source verified: ' + row['name'], flush=True)
+    return identities
 
 
 def main():
@@ -112,6 +156,8 @@ def main():
                         help='Compatible QFN auxiliary pack providing MTP/vision/profile/sampler defaults')
     parser.add_argument('--allow-legacy-base', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--verify-against', type=Path,
+                        help='Regenerate every section and calculate the canonical output hash using this verified pack; no full output copy')
     parser.add_argument('--recipe', type=Path, default=ROOT/'recipes/qfn-nvfp4.json')
     parser.add_argument('--name', default='Qwen3.8-Flash-Next NVIDIA-NVFP4 with existing QFN MTP and vision')
     parser.add_argument('--dense-q8-0', action='store_true', help='Use Q8_0 dense projections instead of Q6_K')
@@ -126,6 +172,10 @@ def main():
     if args.host_budget_gib <= 0 or args.runtime_floor_gib < 4:
         parser.error('Positive explicit host budget and at least4GiB free physical floor required')
     args.out = args.out.resolve()
+    receipt_suffix = '.raw-import.verify.json' if args.verify_against is not None else '.verify.json'
+    receipt_path = Path(str(args.out) + receipt_suffix)
+    if receipt_path.exists():
+        parser.error('Receipt already exists; preserve it and select a fresh logical output path')
     args.scratch = args.scratch.resolve()
     args.scratch.mkdir(parents=True, exist_ok=True)
     if not args.worker:
@@ -147,8 +197,9 @@ def main():
     recipe = json.loads(args.recipe.read_text(encoding='utf8'))
     if recipe['model'] != 'qfn' or recipe['source']['revision'] != 'fc694b54fb0174e0913e6adf86691ef85a4ead47':
         raise ValueError('Wrong model or source revision')
-    check_source(args.source, recipe)
+    source_identities = check_source(args.source, recipe)
     # Only explicitly supplied auxiliary bytes are reused. Unknown sections/defaults fail in the importer.
+    auxiliary_identity = file_identity(args.sections_from)
     ModelFile(args.sections_from, allow_legacy=args.allow_legacy_base)
     package = Path(__file__).with_name('slpack_qfn_source')
     sys.path.insert(0, str(package))
@@ -162,12 +213,21 @@ def main():
         yield str(tokenizer_dir)
     args.tokenizer_scratch = tokenizer_scratch
     args.checkpoint, args.workers, args.force = args.source, 1, False
-    convert.from_checkpoint(args)
-    report = ModelFile(args.out).verify_all()
+    report = convert.from_checkpoint(args)
+    if args.verify_against is None:
+        report = ModelFile(args.out).verify_all()
+    for path, identity in source_identities.items():
+        if file_identity(path) != identity:
+            raise ValueError('Pinned source changed during import: ' + Path(path).name)
+    if file_identity(args.sections_from) != auxiliary_identity:
+        raise ValueError('Auxiliary source changed during import')
+    report['source_revision'] = recipe['source']['revision']
+    report['all_pinned_source_files_authenticated_and_unchanged'] = True
+    report['canonical_metadata_policy'] = 1
     report['routed_experts_inverse_exact'] = True
     report['whole_model_lossless'] = False
     report['auxiliary_sections_dependency_explicit'] = True
-    with Path(str(args.out)+'.verify.json').open('x', encoding='utf8') as stream:
+    with receipt_path.open('x', encoding='utf8') as stream:
         json.dump(report, stream, indent=2)
         stream.write('\n')
     print(json.dumps(report, indent=2))

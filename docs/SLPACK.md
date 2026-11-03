@@ -36,7 +36,11 @@ names, truncated payloads and unadvertised file tails are rejected.
 
 [`scripts/slpack.py`](../scripts/slpack.py) supplies an exclusive-create
 deterministic writer, bounded file-range/part streams, strict reader and full
-section/file hash verifier. Metadata reads default to a32MiB cap. Large tensor
+section/file hash verifier. Its verification writer consumes fully regenerated
+payloads and checks them against a reference before calculating a new virtual
+envelope hash; it creates no full payload copy. Readback for derived sections
+requires matching generated and freshly authenticated reference section hashes.
+Metadata reads default to a32MiB cap. Large tensor
 payloads use4MiB streaming reads. Architecture readers may keep narrower
 model-specific admission rules; envelope acceptance alone is not model support.
 
@@ -67,6 +71,8 @@ per-section SHA256 and full-file SHA256. It does not start a model or listener.
 The independent small fixtures in `tests/test_slpack.py` cover deterministic
 envelopes, arbitrary preserved fields, MTP/vision payloads, part padding,
 explicit legacy admission, malformed descriptors and source NVFP4 expert
-conversion against a direct values/scales/tail/calibration oracle. Set
-`SLPACK_FIXTURE_ROOT` to the caller's scratch directory; fixtures are retained.
+conversion against a direct values/scales/tail/calibration oracle.
+They also compare virtual/materialized file hashes, exercise main/MTP HC8
+readback and reject a corrupt reference despite matching generated descriptors.
+Set `SLPACK_FIXTURE_ROOT` to the caller's scratch directory; fixtures are retained.
 These component tests do not replace a full-model quality or performance gate.

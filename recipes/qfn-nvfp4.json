@@ -190,7 +190,10 @@
     "portable_import": {
       "bytes": null,
       "sha256": null,
-      "status": "Full fresh import not yet measured; format/tool provenance, relative profile references and caller-selected basenames differ from the historical reference metadata."
+      "status": "Full raw-import verification remains pending archive completion and memory/I/O admission. Canonical provenance policy1 removes physical directory/output basenames while preserving every metadata field; successful complete regeneration plus verified reference projection is required before recording an identity.",
+      "canonical_metadata_policy": 1,
+      "verification_mode": "scripts/pack_slpack.py --verify-against REFERENCE.slpack",
+      "creates_second_full_model_copy": false
     },
     "payload_sections": [
       {

@@ -66,7 +66,7 @@ caller-supplied scratch/output locations for review. Heavy packing or hashing
 must be admitted by the machine's scheduler and paused for timed benchmarks.
 
 `--allow-legacy-base` explicitly admits a historical auxiliary container.
-`--dense-q8-0`, `--mtp-dense`, `--name` and the source/auxiliary paths are
+`--dense-q8-0`, `--mtp-dense`, `--name` and source/auxiliary contents are
 explicit inputs, and alter the resulting identity. An unsupported base section,
 active sampler default or source tensor fails instead of being omitted.
 
@@ -75,7 +75,9 @@ The source importer and quantizers are vendored under
 their original MIT notice and source hashes. Their required Python dependencies
 are NumPy, `regex` and the existing guardian's `psutil` dependency. The format
 and default provenance strings identify the new tool. Profile references in
-new metadata use relative output names.
+new metadata use a relative content identity. The original `OUTPUT.slpack.profile`
+sidecar is retained alongside `profiles/PROFILE_SHA256.profile`; existing exact
+copies are reusable, and differing files are never overwritten.
 
 The reference native file is131,730,218,667bytes. Its recipe records all26
 payload-section hashes and the original container's historical whole-file
@@ -91,15 +93,57 @@ historical auxiliary artifact. The former missing auxiliary source dependency
 is resolved. NVIDIA's download alone does not contain the inherited tuned
 auxiliaries, so no raw-checkpoint-only full-file reproduction claim is made.
 
-**Determinism boundary:** a fresh import uses the new format/version/tool
-metadata and relative profile references. The historical reference retains its
-original absolute profile provenance inside its unchanged metadata payload.
-Source-directory, auxiliary-file and profile-output basenames, `--name`, dense
-encoding and an optional MTP replacement are additional explicit inputs. Use
-the same inputs, basenames, options and tool/dependency versions for repeatable
-fresh imports. A full fresh import has not yet been generated and hashed; its
-size/hash remain null in `expected.portable_import`. The migrated reference's
-131,730,218,667-byte identity is not assigned to that unmeasured result.
+**Determinism boundary:** new imports use canonical provenance policy1. Every
+metadata field remains present. Format/version/tool identify the new importer;
+`checkpoint.dir` is the logical relative label `source`, and the auxiliary
+path is `auxiliary/sha256-METADATA_SHA256`. Its size, version, fingerprint,
+copied-section hashes, sampler defaults and other provenance remain intact.
+Profile export and runtime arguments refer to `profiles/PROFILE_SHA256.profile`.
+Source filenames remain the pinned filenames. Physical source, auxiliary and
+output basenames therefore do not alter pack bytes. Model name, dense encoding,
+an optional MTP replacement, source contents and tool/dependency versions
+remain semantic inputs. Unknown profile runtime arguments fail explicitly.
+
+The historical reference retains its original provenance payload. A complete
+fresh import has not yet been regenerated and hashed; its size/hash remain
+null in `expected.portable_import`. The migrated reference's131,730,218,667-byte
+identity is not assigned to that unmeasured result.
+
+The complete raw importer can calculate its exact new identity without a second
+full model copy:
+
+```text
+python scripts/pack_slpack.py --source SOURCE_DIR --sections-from AUXILIARY_FILE --allow-legacy-base --out PLANNED.slpack --verify-against REFERENCE.slpack --scratch EMPTY_PACK_SCRATCH --host-budget-gib 6 --runtime-floor-gib 4
+```
+
+This mode authenticates every pinned source file, runs the same tokenizer,
+dense/PLE quantizers, native expert conversion and inverse checks, copied
+auxiliaries, calibration, sampler resolution and HC8 generator as normal
+packing. Each generated nonmetadata section must match the reference's order,
+offset, size and SHA256. HC8 reads reference dense bytes only after the generated
+section and a fresh whole-reference-section hash agree. Full regenerated
+metadata must equal the reference after only the declared canonical provenance
+changes; additional differences fail with field names. No fields are dropped.
+
+After regeneration, one full reference pass checks its exact header, zero
+alignment gaps and every original payload digest. Hashing substitutes the new
+header and actual regenerated metadata to calculate the exact would-be output
+size/SHA256. Source, auxiliary and reference file identities must remain
+unchanged. A successful `PLANNED.slpack.raw-import.verify.json` receipt certifies
+this complete import; `PLANNED.slpack` itself is not created. Tokenizer output,
+both small profile aliases, logs and receipts remain available. Any section or
+metadata mismatch prevents a successful receipt and expected identity.
+
+The small fixture validates the virtual hash against a materialized canonical
+file, both main/MTP HC8 readback and corrupt-reference rejection. A full real
+raw-import verification is still pending archive completion and scheduler/RAM
+admission. Budget6GiB with at least4GiB physical headroom; historical conversion
+peaked around3.8GB, which is an estimate for admission rather than a measured
+peak for this mode. Plan roughly133GB source authentication reads, another
+full source conversion read, the inherited auxiliary reads and fingerprints,
+about2.3GB HC8 readback authentication, and one132GB reference pass. A fresh
+full auxiliary download verification adds70GB of reads. No full-size model
+write occurs in this mode.
 
 For a locally archived original NVFP4 container, a complete native relayout can
 be regenerated and checked without writing another full copy:

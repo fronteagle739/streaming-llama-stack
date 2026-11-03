@@ -61,17 +61,13 @@ class Job:
     def hc8(self):
         """The `hc8` section, from the `dense` and `mtp/dense` sections already written."""
         t = time.time()
-        self.w.f.flush()
         at = {e[0]: (e[1], e[2]) for e in self.w.entries}
-        with open(self.w.path, "rb") as f:
-            def read(name, off, size):
-                f.seek(at[name][0] + off)
-                return f.read(size)
-            whole = lambda n: read(n, 0, at[n][1]) if n in at else None
-            try:
-                data = H.section(read, whole("dense.index"), whole("mtp/dense.index"))
-            except H.Hc8Error as e:
-                raise S.ConvertError(f"hc8: {e}")
+        read = self.w.readback
+        whole = lambda n: read(n, 0, at[n][1]) if n in at else None
+        try:
+            data = H.section(read, whole("dense.index"), whole("mtp/dense.index"))
+        except H.Hc8Error as e:
+            raise S.ConvertError(f"hc8: {e}")
         self.w.add_bytes("hc8", data)
         self._report("hc8", len(data), time.time() - t)
 
@@ -82,8 +78,9 @@ def from_checkpoint(a) -> None:
     import multiprocessing
     import checkpoint as C
     out, src = Path(a.out), Path(a.sections_from)
+    verification = getattr(a, 'verify_against', None)
     partial = Path(str(out) + ".partial")
-    if out.exists() and not a.force:
+    if verification is None and out.exists() and not a.force:
         die(f"{out} exists (use --force to overwrite)")
     if not src.is_file():
         die(f"missing input: {src}")
@@ -99,8 +96,6 @@ def from_checkpoint(a) -> None:
     if unknown:
         die(f"{src}: unsupported base sections would be dropped: {', '.join(unknown)}")
     profile_path = Path(str(out.resolve()) + ".profile") if "profile" in copied else None
-    if profile_path is not None and profile_path.exists():
-        die(f"{profile_path} exists; use a fresh output path to preserve its profile")
     q6k = not a.dense_q8_0
     try:
         ck = C.Checkpoint(a.checkpoint)
@@ -150,9 +145,9 @@ def from_checkpoint(a) -> None:
             l, e = struct.unpack_from("<2H", profile, 20 + 4 * i)
             if l >= nl or e >= ne:
                 die(f"{src}: profile pair {i} is outside the checkpoint geometry")
-    if partial.exists():
+    if verification is None and partial.exists():
         die(f"{partial} exists; preserve the previous attempt and use a fresh output path")
-    w = ModelWriter(str(partial))
+    w = ModelWriter(str(partial), verify_against=verification)
     job = Job(w)
     ok = False
     try:
@@ -264,20 +259,31 @@ def from_checkpoint(a) -> None:
                                   "profile_runtime_args": ["--expert-profile-save", profile_path.name]
                                                           if profile_path is not None else []}}
             job.bytes("meta", json.dumps(meta, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        w.close()
+        report = w.close()
         ok = True
     except S.ConvertError as e:
         die(str(e))
     finally:
         if not ok:
             try:
-                w.f.close()
+                w.abort()
             except OSError:
                 pass
-            print(f"failed conversion retained for inspection: {partial}", file=sys.stderr, flush=True)
+            print(f"failed conversion; existing input/output files retained: {out}", file=sys.stderr, flush=True)
     if profile is not None:
-        with profile_path.open("xb") as f:
-            f.write(profile)
+        # Keep the existing output-profile sidecar and the portable content identity.
+        canonical_profile = out.parent / 'profiles' / (hashlib.sha256(profile).hexdigest() + '.profile')
+        for destination in (profile_path, canonical_profile):
+            if destination.exists() and destination.read_bytes() != profile:
+                die(f"{destination}: existing profile differs; no file overwritten")
+        canonical_profile.parent.mkdir(parents=True, exist_ok=True)
+        for destination in (profile_path, canonical_profile):
+            if not destination.exists():
+                with destination.open("xb") as f:
+                    f.write(profile)
         print(f"profile: {profile_path}; use --expert-profile-save {profile_path} with the serve protocol")
-    os.replace(partial, out)
-    print(f"done: {len(job.rows)} sections, {out.stat().st_size / (1 << 30):.3f} GiB, {time.time() - job.t0:.1f} s -> {out}")
+    if verification is None:
+        os.replace(partial, out)
+    size = report['bytes'] if verification is not None else out.stat().st_size
+    print(f"done: {len(job.rows)} sections, {size / (1 << 30):.3f} GiB, {time.time() - job.t0:.1f} s -> {out}")
+    return report
