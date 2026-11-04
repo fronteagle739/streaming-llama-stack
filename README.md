@@ -41,13 +41,13 @@ is agreement. A dash means no matching measurement is available.
 | 100,000 | 0.35 | 4,440 | 46.25 | 0.0372 | 92.6% |
 | 100,000 | 0.68 | 4,150 | 50.12 | 0.137 | 88.3% |
 
-#### DeepSeek V4.1
+#### DeepSeek V4.1 (packed FP4 speed proxy)
 
 | Prompt length | Bias | Prefill | Decode | KL | Top-1 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100,000 | 0 | 2,614 | — | — | — |
-| 100,000 | 0.35 | — | — | — | — |
-| 100,000 | 1.36125 | — | — | — | — |
+| 100,000 | 0 | 2,793 | 7.911 | 0 | 100.0% |
+| 100,000 | 0.35 | 2,814 | 12.623 | 0.0526 | 94.5% |
+| 100,000 | 1.36125 | 2,785 | 27.670 | 0.475 | 80.5% |
 
 QFN timing uses 100 discarded warmup tokens and 128 measured tokens per mode
 on one continuing sequence, MTP off and eight read parts. Full-vocabulary
@@ -59,8 +59,11 @@ Reproduce QFN's exact fixture and timing protocol with the
 [100K guide](docs/QFN_100K_REPRO.md), and use the
 [calibration workflow](examples/single-machine/CALIBRATION.md) for KL/top-1.
 The portable timing wrapper has exact-fixture and CPU protocol checks;
-native wrapper qualification remains pending. The short DeepSeek 100K attempt did not complete every requested metric;
-unavailable decode or full-vocabulary quality measurements remain dashes.
+native wrapper qualification remains pending. DeepSeek timing discards 100
+decode evaluations and measures the next 128 at exact 100K, MTP off and
+eight read parts. Full-vocabulary KL and top-1 compare the same 128
+predictive rows against bias zero. These results measure the packed FP4
+speed proxy; they do not establish equivalence to the original weights.
 
 ### Download, pack and run
 
@@ -125,8 +128,8 @@ powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mod
 
 The DSV commands describe the supported conversion and launch route; they do
 not reproduce the 100K decode receipt automatically. Its exact
-fixture/benchmark command and a current matched 100K prefill,
-quality and speed qualification remain required. Preserve all main,
+fixture/benchmark command remains required for portable reproduction.
+The table reports the measured 100K protocol. Preserve all main,
 DSpark/MTP and vision outputs. The recipe's 518,596,067,328-byte Q4 main-only
 reference, SHA256
 `2cc6bc254f22a0238020e61e931c0cac865218aada1eed9c0036d9f4031c6e5f`,
