@@ -1,4 +1,4 @@
-"""Owner rule (no fixed timeouts): waits live while their signal shows progress and fail only
+"""Runtime contract (no fixed timeouts): waits live while their signal shows progress and fail only
 after a whole no-progress window, saying what stopped."""
 import sys
 import unittest

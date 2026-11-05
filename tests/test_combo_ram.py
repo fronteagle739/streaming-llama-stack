@@ -67,7 +67,7 @@ class _Job:
 
 
 class OwnedInitializationTest(unittest.TestCase):
-    """Owner rule: no fixed deadline. Alive + growing RSS keeps waiting; only exit or a
+    """Runtime contract: no fixed deadline. Alive + growing RSS keeps waiting; only exit or a
     no-progress window fails, with the real reason."""
     def clock(self):
         now=[0.]

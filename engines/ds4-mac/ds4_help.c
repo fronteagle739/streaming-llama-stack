@@ -350,6 +350,11 @@ static void print_server_api(FILE *fp, const help_colors *c) {
     title(fp, c, "HTTP API");
     opt(fp, c, "--host HOST", "Bind address. Default: 127.0.0.1");
     opt(fp, c, "--port N", "Bind port. Default: 8000");
+    opt(fp, c, "--qfn-state-listen-host IPv4", "QFN paired state: bind only this private Mac interface for an outbound RTX connection; omit to stream through SSH.");
+    opt(fp, c, "--qfn-async-catchup 0|1", "QFN owner snapshots use the shared ordered worker (default 1); 0 explicitly synchronizes at reply completion.");
+    opt(fp, c, "--qfn-catchup-defer 0|1", "Hold QFN sends until reply completion or bounded queue/buffer pressure (default 0). Strict producer reuse always joins.");
+    opt(fp, c, "--qfn-catchup-max-tokens N", "Maximum rows per queued QFN owner snapshot, 17..49152 (default 128).");
+    opt(fp, c, "--qfn-catchup-buffer-bytes N", "QFN queued plus in-flight owner bytes (default 2147483648, minimum 134217728); pressure joins before allocation.");
     opt(fp, c, "--cors", "Add Access-Control-Allow-* headers for browser JS clients.");
     opt(fp, c, "--trace FILE", "Write prompts, cache decisions, output, and tool calls.");
     opt(fp, c, "--batched-session N", "Keep N resident sessions and batch decode-ready requests.");

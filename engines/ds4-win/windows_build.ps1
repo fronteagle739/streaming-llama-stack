@@ -2,6 +2,9 @@ param(
     [ValidateSet("cuda", "cpu")]
     [string]$Target = "cuda",
     [string]$BuildTemp = $PSScriptRoot,
+    # Keep the task's executable/DLL names stable when source lineage changes.
+    [string]$OutputDirectory = $PSScriptRoot,
+    [string]$DirectStorageRuntimeDirectory = "",
     [ValidatePattern('^[0-9]+[a-z]?$')]
     [string]$CudaArchitecture = $(if ($env:SLSTACK_CUDA_ARCHITECTURES) { $env:SLSTACK_CUDA_ARCHITECTURES } else { '120a' }),
     [switch]$Draft3070,
@@ -12,6 +15,21 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$sourceRoot = $PSScriptRoot
+if (!(Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
+    throw "OutputDirectory must already exist: $OutputDirectory"
+}
+Set-Location -LiteralPath $OutputDirectory
+if ($Target -eq "cuda" -and -not $TestsOnly) {
+    $dsRuntime = if ($DirectStorageRuntimeDirectory) { $DirectStorageRuntimeDirectory } else {
+        Join-Path $sourceRoot "external\directstorage\native\bin\x64"
+    }
+    foreach ($name in @("dstorage.dll", "dstoragecore.dll")) {
+        if (!(Test-Path -LiteralPath (Join-Path $dsRuntime $name) -PathType Leaf)) {
+            throw "DirectStorage runtime pair is missing at $dsRuntime; supply an explicit existing qualified pair"
+        }
+    }
+}
 
 # Keep compiler intermediates and the reviewable command file with this checkout.
 if (!(Test-Path -LiteralPath $BuildTemp -PathType Container)) {
@@ -61,6 +79,7 @@ if (!(Test-Path $vsEnvCmd)) {
 Write-Host "VS environment: $vsEnvCmd$vsEnvArgs"
 
 $defines = @(
+    "/I`"$sourceRoot`"",
     "/D_CRT_SECURE_NO_WARNINGS",
     "/D_CRT_NONSTDC_NO_DEPRECATE",
     "/DWIN32_LEAN_AND_MEAN",
@@ -134,19 +153,19 @@ $sources = if ($ExternalDecode) {
 } else {
     $coreSources + $cliSources + $benchSources + $serverSources + $agentSources
 }
-$sources = $sources | Select-Object -Unique
+$sources = $sources | Select-Object -Unique | ForEach-Object { "`"$(Join-Path $sourceRoot $_)`"" }
 $common = @("/nologo", "/std:c11", "/O2", "/Zi", "/W3", "/wd4244", "/wd4267", "/wd4996") + $defines
 $compile = "cl " + (($common + "/c" + $sources) -join " ")
-$payloadTestSource = "tests\test_kv_payload_roundtrip.c"
+$payloadTestSource = "`"$(Join-Path $sourceRoot "tests\test_kv_payload_roundtrip.c")`""
 $payloadTestObject = "test_kv_payload_roundtrip.obj"
 $payloadTestCompile = "cl " + (($common + "/I." + "/c" + "/Fo$payloadTestObject" + $payloadTestSource) -join " ")
-$g3TransportTestSource = "tests\test_ds4_peer_transport_g3.c"
+$g3TransportTestSource = "`"$(Join-Path $sourceRoot "tests\test_ds4_peer_transport_g3.c")`""
 $g3TransportTestObject = "test_ds4_peer_transport_g3.obj"
 $g3TransportTestCompile = "cl " + (($common + "/I." + "/c" + "/Fo$g3TransportTestObject" + $g3TransportTestSource) -join " ")
-$g56SessionTestSource = "tests\test_ds4_peer_sessions_g56.c"
+$g56SessionTestSource = "`"$(Join-Path $sourceRoot "tests\test_ds4_peer_sessions_g56.c")`""
 $g56SessionTestObject = "test_ds4_peer_sessions_g56.obj"
 $g56SessionTestCompile = "cl " + (($common + "/I." + "/c" + "/Fo$g56SessionTestObject" + $g56SessionTestSource) -join " ")
-$g3TopologyTestSource = "tests\test_ds4_peer_topology_a.c"
+$g3TopologyTestSource = "`"$(Join-Path $sourceRoot "tests\test_ds4_peer_topology_a.c")`""
 $g3TopologyTestObject = "test_ds4_peer_topology_a.obj"
 $g3TopologyTestCompile = "cl " + (($common + "/I." + "/c" + "/Fo$g3TopologyTestObject" + $g3TopologyTestSource) -join " ")
 $coreObjects = $coreSources | ForEach-Object { [IO.Path]::ChangeExtension($_, ".obj") }
@@ -157,11 +176,11 @@ $agentObjects = $agentSources | ForEach-Object { [IO.Path]::ChangeExtension($_, 
 $backendObjects = @("ds4_lora.obj", "ds4_engram_ioring.obj", "ds4_cpu_fp4.obj")
 $win32Link = " ws2_32.lib bcrypt.lib"
 
-$loraCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_lora.cpp") -join " ")
+$loraCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "`"$(Join-Path $sourceRoot ds4_lora.cpp)`"") -join " ")
 # Engram raw-row reads through IoRing (ds4_engram.c calls it on Windows); APIs resolved at runtime.
-$engramIoringCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "ds4_engram_ioring.cpp") -join " ")
+$engramIoringCommand = "cl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3") + $defines + "/c" + "`"$(Join-Path $sourceRoot ds4_engram_ioring.cpp)`"") -join " ")
 # RAM-tier packed FP4 experts on the CPU (AVX-512 VNNI); its own unit so only it gets /arch:AVX512.
-$engramIoringCommand += "`nif errorlevel 1 exit /b %errorlevel%`ncl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3", "/arch:AVX512") + $defines + "/c" + "ds4_cpu_fp4.cpp") -join " ")
+$engramIoringCommand += "`nif errorlevel 1 exit /b %errorlevel%`ncl " + ((@("/nologo", "/std:c++17", "/EHsc", "/O2", "/W3", "/arch:AVX512") + $defines + "/c" + "`"$(Join-Path $sourceRoot ds4_cpu_fp4.cpp)`"") -join " ")
 $cudaCommand = ""
 $dstorageCommand = "rem no DirectStorage transport in this target"
 $cudaLink = ""
@@ -230,7 +249,7 @@ if ($Target -eq "cuda") {
     $errCheck = "`nif errorlevel 1 exit /b %errorlevel%"
     $draftArch = @()
     if ($Draft3070) { $draftArch = @("-gencode", "arch=compute_86,code=sm_86") }
-    $cudaCommand = "`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor " + (($nvccArch + $draftArch + $nvccDefines + "-c" + "-o" + "ds4_cuda.obj" + "ds4_cuda.cu") -join " ") + $errCheck
+    $cudaCommand = "`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor " + (($nvccArch + $draftArch + $nvccDefines + "-c" + "-o" + "ds4_cuda.obj" + "`"$(Join-Path $sourceRoot ds4_cuda.cu)`"") -join " ") + $errCheck
     $backendObjects += "ds4_cuda.obj"
 
     # [merge 2026-08-15] The vendored MMQ kernels are NEW from upstream (cuda/mmq/, added wholesale by
@@ -249,7 +268,7 @@ if ($Target -eq "cuda") {
     )
     foreach ($m in $mmqSources) {
         $obj = "mmq_" + [IO.Path]::GetFileNameWithoutExtension($m) + ".obj"
-        $cudaCommand += "`n`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor -Icuda/mmq " + (($nvccArch + $nvccDefines + "-c" + "-o" + $obj + $m) -join " ") + $errCheck
+        $cudaCommand += "`n`"$nvcc`" -std=c++17 -Xcompiler /Zc:preprocessor -I`"$(Join-Path $sourceRoot cuda/mmq)`" " + (($nvccArch + $nvccDefines + "-c" + "-o" + $obj + "`"$(Join-Path $sourceRoot $m)`"") -join " ") + $errCheck
         $backendObjects += $obj
     }
     $cudaLink = " /LIBPATH:`"$cudaLib`" cudart.lib cublas.lib cuda.lib ole32.lib d3d12.lib dxgi.lib"
@@ -259,12 +278,12 @@ if ($Target -eq "cuda") {
     # The optional GPU-destination proof gate creates a shareable D3D12 resource and imports it into
     # CUDA, so this translation unit also needs the CUDA runtime headers plus d3d12/dxgi at link.
     # dstorage.lib remains unnecessary: dstorage.dll is still resolved at runtime.
-    $dsInclude = "external\directstorage\native\include"
+    $dsInclude = Join-Path $sourceRoot "external\directstorage\native\include"
     if (!(Test-Path (Join-Path $dsInclude "dstorage.h"))) {
         throw "DirectStorage SDK headers were not found at $dsInclude"
     }
     $dsCommon = @("/nologo", "/std:c++17", "/EHsc", "/O2", "/Zi", "/W3", "/wd4244", "/wd4267") + $defines
-    $dstorageCommand = "cl " + (($dsCommon + "/I$dsInclude" + "/I`"$cudaInclude`"" + "/c" + "ds4_dstorage.cpp") -join " ")
+    $dstorageCommand = "cl " + (($dsCommon + "/I`"$dsInclude`"" + "/I`"$cudaInclude`"" + "/c" + "`"$(Join-Path $sourceRoot ds4_dstorage.cpp)`"") -join " ")
     $backendObjects += "ds4_dstorage.obj"
 }
 
@@ -352,9 +371,11 @@ try {
         # App-local DirectStorage redistributables. dstorage.dll loads dstoragecore.dll from its own
         # directory, so both must sit beside the executables; ds4 resolves dstorage.dll by explicit
         # path from the exe directory rather than the default search order.
-        $dsBin = "external\directstorage\native\bin\x64"
-        Copy-Item (Join-Path $dsBin "dstorage.dll"), (Join-Path $dsBin "dstoragecore.dll") `
-            -Destination . -Force
+        foreach ($name in @("dstorage.dll", "dstoragecore.dll")) {
+            $from = (Resolve-Path -LiteralPath (Join-Path $dsRuntime $name)).Path
+            $to = [IO.Path]::GetFullPath((Join-Path $OutputDirectory $name))
+            if ($from -ine $to) { Copy-Item -LiteralPath $from -Destination $to -Force }
+        }
     }
     exit $buildExit
 } finally {

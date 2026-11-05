@@ -1,4 +1,4 @@
-// QFNSTREAM: upstream ggml-org gated-delta-net-mma.cu (a91eab67d); uses the vendored qfn-mma.cuh.
+// QFN: upstream ggml-org gated-delta-net-mma.cu (a91eab67d); uses the vendored qfn-mma.cuh.
 #include "gated-delta-net-mma.cuh"
 #include "qfn-mma.cuh"
 

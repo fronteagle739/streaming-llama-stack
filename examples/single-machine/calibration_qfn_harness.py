@@ -143,6 +143,7 @@ def main():
     base_cfg = dict(cfg)
     def configured(settings_file):
         local = dict(base_cfg, model_settings=settings_file)
+        local['qfn_host_budget_gib'] = args.host_budget_gib
         local = apply(local, 'qfn')
         expected = read(settings_file)
         # Explicit local overrides cannot secretly defeat a requested setting sweep.
@@ -157,9 +158,11 @@ def main():
                             ('QFN_LFU_HALF_LIFE', expected['cache']['half_life']),
                             ('QFN_SEED_LFU_MAX', expected['cache']['seed_lfu_max'])):
             require(float(env[name]) == float(value), 'Local environment conflicts with calibration profile: ' + name)
+        from slstack.performance_contract import seal
+        local.setdefault('qfn_engram_scan_rings', int(local.get('env_overrides', {}).get('LLAMADECODE_ENGRAM_SCAN_RINGS', '1')))
+        local = seal(local, 'qfn')
         command = QfnEngine(local).command()
         port_index = command.index('--port'); del command[port_index:port_index + 2]
-        command += ['--host-budget-gib', str(args.host_budget_gib)]
         return local, command, env
     cfg, command, env = configured(args.settings)
     prefix = Path(args.output_prefix)

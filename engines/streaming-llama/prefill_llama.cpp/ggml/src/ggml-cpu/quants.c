@@ -26,7 +26,7 @@ void quantize_row_q2_0(const float * GGML_RESTRICT x, void * GGML_RESTRICT y, in
     quantize_row_q2_0_ref(x, y, k);
 }
 
-// QFNSTREAM: upstream ggml-org generic Q2_0 x Q8_0 dot (one Q2_0 block = two Q8_0 blocks)
+// QFN: upstream ggml-org generic Q2_0 x Q8_0 dot (one Q2_0 block = two Q8_0 blocks)
 void ggml_vec_dot_q2_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
     const int qk = QK2_0;
     const int nb = n / qk;

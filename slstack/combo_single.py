@@ -174,12 +174,21 @@ class SingleEngine:
         from .local_cache import Cache
         self.cache = Cache(self.cfg);self.pending_snapshot = None;self.restore_base = None;self.cache_error = None
         self.images = None
+        self.writer_registry = None
         self.poison = None;self.decoding = False;self.cut_turn = None
         self.producer_factory = producer_factory or self._launch_producer
         self.lease_factory = lease_factory or self._lease
         self.idle_seconds = float(cfg.get('single_engine_idle_seconds', max(60, cfg['lease_minutes'] * 60 - 60)))
         self.stop_tokens = [int(t) for t in cfg.get('single_engine_stop_tokens', [EOS_ID])]
         if not self.stop_tokens or any(not 0 <= t < 129280 for t in self.stop_tokens):raise ValueError('Single-engine stop tokens must be vocabulary ids')
+
+    def directions(self):
+        from .writer_directions import Registry, qualified
+        if not qualified(self.cfg):
+            raise ValueError('This producer has not qualified writer capture and attachment')
+        if self.writer_registry is None:
+            self.writer_registry = Registry(self.cfg['model'],Path(self.cfg['runtime_root'])/'writer-banks')
+        return self.writer_registry
 
     # --- resources -------------------------------------------------------
     def _lease(self):
@@ -240,7 +249,10 @@ class SingleEngine:
         finally:
             if self.leases is not None and self.poison is None:
                 leases, self.leases, self.lease_id = self.leases, None, None
-                leases.close();self.lease_changed()
+                # The producer has certified retirement. Publish that no GPU
+                # producer is bound before releasing its ledger reservation.
+                try:self.lease_changed()
+                finally:leases.close()
         return receipt
 
     def lease_changed(self):
@@ -279,6 +291,11 @@ class SingleEngine:
     # --- one request -----------------------------------------------------
     def prepare(self, body, metrics):
         """Render, then make the producer's frontier equal the full prompt."""
+        from .writer_directions import apply_selection
+        if 'direction_adapters' in body:
+            apply_selection(self,body['direction_adapters'])
+        elif self.writer_registry is not None:
+            apply_selection(self,list(self.writer_registry.default_rows))
         from .combo_session import render_body
         from .vision import has_images, Images, render_tokens, spans_match
         blocks=[];media_identity=''
@@ -565,17 +582,19 @@ class SingleProxy:
             name=cfg.get('model_name', 'DeepSeek-V4.1-Flash'), context_length=cfg['context'],
             top_provider=dict(context_length=cfg['context'], max_completion_tokens=cfg['context'], is_moderated=False),
             supported_parameters=['tools', 'tool_choice', 'max_tokens', 'stream', 'reasoning_effort'])]}
-        self.engine.lease_listener = lambda: self.window(True, self.engine.lease_id) if self.request_active else None
+        self.engine.lease_listener = lambda: self.window(True) if self.request_active else None
         self.window(False)
 
-    def window(self, active, lease_id=None):
+    def window(self, active):
         """The guardian's request window. Its deadline is a no-progress bound renewed by heartbeat()
         while the request makes progress, never a fixed request length."""
         if self.window_file is None:return
-        row = dict(active=active, run_id=self.run_id, owner_pid=os.getpid(), owner_created=psutil.Process().create_time(),
-                   lease_id=lease_id, deadline=time.time() + self.stall)
         started = time.monotonic()
         with self.window_lock:
+            # A heartbeat may have waited behind retirement/relaunch. Read the
+            # current lease here, rather than publishing a stale caller value.
+            row = dict(active=active, run_id=self.run_id, owner_pid=os.getpid(), owner_created=psutil.Process().create_time(),
+                       lease_id=self.engine.lease_id if active else None, deadline=time.time() + self.stall)
             while True:
                 try:atomic_json(self.window_file, row);return
                 except PermissionError:
@@ -598,7 +617,7 @@ class SingleProxy:
         def beat():
             while not stop.wait(self.beat_seconds):
                 if self.progressing():
-                    self.window(True, self.engine.lease_id)
+                    self.window(True)
                     if on_beat:on_beat()
         thread = threading.Thread(target=beat, name='single-window-heartbeat', daemon=True);thread.start()
         try:yield
@@ -652,7 +671,7 @@ def handler(proxy):
                 if engine.poison:raise RuntimeError('Single-engine owner is poisoned: ' + engine.poison)
                 if route == '/v1/stack/release':return self.send(200, engine.release())
                 if route == '/v1/stack/restore':
-                    proxy.window(True, engine.lease_id)
+                    proxy.window(True)
                     try:
                         reply = engine.restore()
                     finally:proxy.window(False)
@@ -682,6 +701,10 @@ def handler(proxy):
             try:self.send(200, dict(closing=True))
             except OSError:pass   # the stop proceeds even when the caller has gone
         def do_GET(self):
+            if self.path == '/v1/train/direction-model':
+                if not self.authorized():return self.send(401,dict(error=dict(message='Native Bearer authentication required')))
+                try:return self.send(200,proxy.engine.directions().model(capture=True,attach=True))
+                except (ValueError,RuntimeError,OSError) as exc:return self.send(409,dict(error=dict(message=str(exc))))
             if self.path in ('/health', '/healthz'):
                 return self.send(200, dict(status='ok', model_ready=True, context=proxy.cfg['context'], resident=proxy.engine.producer is not None))
             if self.path == '/v1/models':return self.send(200, proxy.models)
@@ -692,6 +715,10 @@ def handler(proxy):
             return self.send(404, dict(error=dict(message='Unknown native endpoint')))
         def do_POST(self):
             if not self.authorized():return self.send(401, dict(error=dict(message='Native Bearer authentication required')))
+            if self.path in ('/v1/train/direction-tokens','/v1/train/direction-prompt',
+                    '/v1/train/direction-register','/v1/train/direction-stack',
+                    '/v1/train/directions','/v1/train/direction-evaluate'):
+                return self.writer_control()
             try:body = self.read_body()
             except (ValueError, OSError) as exc:return self.send(400, dict(error=dict(message=str(exc))))
             if self.path == '/v1/quality-speed':
@@ -736,7 +763,7 @@ def handler(proxy):
                     predicted_n=metrics.get('live_completion_tokens', 0),
                     predicted_ms=1000.0 * max(0.0, time.monotonic()-metrics.get('decode_started', time.monotonic())))
             def prepared():
-                proxy.window(True, engine.lease_id)
+                proxy.window(True)
                 if streaming:
                     row = _chunk(cid, model, created, {})
                     row['choices'] = [];row['timings'] = live_timings();write(row)
@@ -748,7 +775,7 @@ def handler(proxy):
                     self.close_connection = True;headers = True;self.wfile.write(b': accepted\n\n');self.wfile.flush()
                     write(_chunk(cid, model, created, dict(role='assistant')))
                 try:
-                    proxy.request_active = True;proxy.window(True, engine.lease_id)
+                    proxy.request_active = True;proxy.window(True)
                     with proxy.heartbeat(progress_beat if streaming else None):
                         engine.run(body, emit, metrics, ready=prepared, client_gone=lambda: not alive[0])
                 finally:proxy.request_active = False;proxy.window(False)
@@ -797,6 +824,49 @@ def handler(proxy):
                 try:atomic_json(Path(proxy.cfg['runtime_root']) / ('single-request-' + secrets.token_hex(8) + '.json'), metrics)
                 except OSError:pass
                 engine.lock.release()
+        def writer_control(self):
+            engine=proxy.engine
+            if not engine.lock.acquire(blocking=False):return self.send(409,dict(error=dict(message='Another request owns this decoder')))
+            status,body,headers=200,None,None
+            try:
+                if engine.poison:raise RuntimeError('Single-engine owner is poisoned: '+engine.poison)
+                registry=engine.directions()
+                limits={'/v1/train/direction-register':48+80*5121*4,
+                        '/v1/train/direction-stack':48+80*8*5121*4,
+                        '/v1/train/direction-evaluate':41000}
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=limits.get(self.path,65536):raise ValueError('Writer control body exceeds its bound')
+                self.connection.settimeout(30)
+                payload=self.rfile.read(length)
+                if len(payload)!=length:raise ValueError('Truncated writer control request')
+                from . import writer_directions as writer
+                if self.path=='/v1/train/direction-register':body=registry.register(payload)
+                elif self.path=='/v1/train/direction-stack':body=registry.set_stack(payload)
+                elif self.path=='/v1/train/direction-tokens':
+                    body=writer.token_offsets(engine.tokenize(),payload.decode('utf-8','strict'))
+                elif self.path=='/v1/train/direction-prompt':
+                    from .combo_session import render_body
+                    _,tokens,_=ds4_render.render(render_body(json.loads(payload)),engine.tokenize())
+                    if not 1<=len(tokens)<=2048:raise ValueError('Direction prompt requires1..2048 tokens')
+                    body=dict(tokens=tokens)
+                else:
+                    proxy.request_active=True;proxy.window(True)
+                    body,headers=writer.capture(engine,payload,evaluate=self.path.endswith('direction-evaluate'))
+            except (ValueError,UnicodeError) as exc:
+                status,body,headers=400,dict(error=dict(message=str(exc),type='invalid_request_error')),None
+            except Exception as exc:
+                status,body,headers=503,dict(error=dict(message=str(exc),type='writer_control_refused')),None
+            finally:
+                # A sequential client can send its next call immediately after
+                # reading this reply. Publish retirement and unlock first;
+                # otherwise it races this handler's finally and gets HTTP409.
+                try:
+                    proxy.request_active=False;proxy.window(False)
+                finally:engine.lock.release()
+            if headers is None:return self.send(status,body)
+            self.send_response(status)
+            for key,value in headers.items():self.send_header(key,value)
+            self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
     return Handler
 
 

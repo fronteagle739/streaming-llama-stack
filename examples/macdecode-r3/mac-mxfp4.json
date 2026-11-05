@@ -1,5 +1,5 @@
 {
-  "model": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-MXFP4-requant.gguf",
+  "model": "SET_MODEL",
   "model_name": "DeepSeek-V4.1-1017 MXFP4 requant (lossy speed proxy)",
   "mac_bind": "127.0.0.1",
   "mac_port": 18081,
@@ -12,8 +12,8 @@
   "yoco_keep": 2541,
   "paired_local_prefill_max_tokens": 0,
   "vision_bridge_version": 1,
-  "vision_encoder": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-Q4/DeepSeek-V4.1-Flash-1017-Vision.gguf",
-  "mtp_model": "/Volumes/4TB/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-ds4-MXFP4-requant/DeepSeek-V4.1-Flash-1017-DSpark-MXFP4-requant.gguf",
+  "vision_encoder": "SET_VISION_ENCODER",
+  "mtp_model": "SET_MTP_MODEL",
   "env_overrides": {
     "DS4_DS41_DECODE_QUEUE2": "1",
     "DS4_DEBUG_LEVERS": "1",

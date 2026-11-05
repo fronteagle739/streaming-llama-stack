@@ -117,8 +117,14 @@ def _wait_for_command_receipt(job):
 
 
 def supervise(spec):
+    from .paging_limits import owned_paging_limit_bytes
+    paging_limit = owned_paging_limit_bytes(spec)
+    if paging_limit is not None and not spec.get('paging_telemetry'):
+        raise ValueError('An explicit owned-paging limit requires paging telemetry')
     for name, pin in {'job_guard.py':'56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648',
-                      'job_paging.py':'205f347b92be699b4f72863942568cc08d534ac19e8b7b154cad2521d6d2c120'}.items():
+                      # The reviewed 59c3f5f bounded diagnostics retain every
+                      # original enforcement statement; pin that actual body.
+                      'job_paging.py':'72e613722e3dcb1fbb8ebf8cd948b8ddca3b063606ab494a473808d0b11a31ef'}.items():
         source = (ROOT/'vendor/studio/studio'/name).read_bytes().split(b'\n',2)[2].replace(b'\r\n',b'\n')
         if hashlib.sha256(source).hexdigest() != pin:
             raise RuntimeError('Pinned shared guard source changed: ' + name)
@@ -209,6 +215,7 @@ def supervise(spec):
     commitment = spec['job_commit_gib'] * GiB if os.name == 'nt' else host
     progress = Window(spec['timeout_s'])
     job = Adapter(rss_limit=host,commit_limit=host,floor=spec['min_available_gib']*GiB,
+                  owned_paging_limit=paging_limit,
                   device_commit_allowance=max(0,commitment-host) if os.name=='nt' else 0,
                   seconds=spec['timeout_s'],receipt=certificate)
     started = time.monotonic()

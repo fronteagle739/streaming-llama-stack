@@ -144,3 +144,82 @@ __global__ void qfn_vector_down(const uint8_t * bank,const int32_t * ids,
     result=qfn_vector_sum(result);
     if(lane==0)out[uint64_t(route)*E+row]=result*reinterpret_cast<const float *>(expert+TAIL)[2];
 }
+
+// Explicit vector policy2 retains float activations throughout. The packed
+// original weight values, UE4M3 scales and role globals remain unchanged.
+// Policy1 above retains its independently selectable native Q8_1 arithmetic.
+static __device__ __forceinline__ float qfn_vector_float_weight(
+        const uint8_t *weight,int row,int column,int outputs,int inputs) {
+    const uint8_t pair=weight[uint64_t(row)*(inputs/2)+column/2];
+    const int code=(pair>>((column&1)*4))&15;
+    const float magnitude=code%8<4?float(code%8)*0.5f:code%8==7?6.0f:float((code%8)-2);
+    const float value=(code&8)?-magnitude:magnitude;
+    const uint64_t si=(uint64_t(column/64)*outputs+row)*4+(column%64)/16;
+    // The integer vector helper uses doubled E2M1 codes and half UE4M3.
+    // Here the E2M1 values are ordinary floats, so restore the full scale.
+    return value*(2.0f*qfn_vector_scale(weight[uint64_t(outputs)*inputs/2+si]));
+}
+// Policies3/4 reconstruct the independently converted Mac Q8_0/Q4_0
+// coefficients from the original FP4 source at runtime. All32 original
+// values participate in each block scale, including unselected columns.
+template<int POLICY> static __device__ __forceinline__ float qfn_reference_round_weight(float value) {
+    if constexpr(POLICY==2)return value;
+    float peak=value;int first=threadIdx.x&31;
+    for(int offset=16;offset;offset>>=1) {
+        const float other=__shfl_xor_sync(0xffffffffu,peak,offset);
+        const int index=__shfl_xor_sync(0xffffffffu,first,offset);
+        if(fabsf(other)>fabsf(peak)||(fabsf(other)==fabsf(peak)&&index<first)){peak=other;first=index;}
+    }
+    if constexpr(POLICY==3) {
+        const float d=__fdiv_rn(fabsf(peak),127.0f);
+        const float inverse=d?__fdiv_rn(1.0f,d):0.0f;
+        const float code=copysignf(floorf(__fadd_rn(fabsf(__fmul_rn(value,inverse)),0.5f)),value);
+        return __half2float(__float2half_rn(d))*code;
+    } else {
+        const float d=peak/-8.0f;
+        const float inverse=d?__fdiv_rn(1.0f,d):0.0f;
+        const float code=fminf(15.0f,floorf(__fadd_rn(__fmul_rn(value,inverse),8.5f)));
+        return __half2float(__float2half_rn(d))*(code-8.0f);
+    }
+}
+template<bool FUSED,int POLICY=2> __global__ void qfn_vector_float_gate_up(
+        const uint8_t *bank,const int32_t *ids,const float *x,
+        float *hidden,float *up_out,int routes) {
+    if(int(blockIdx.y)>=routes)return;
+    __shared__ float input[E];
+    const int route=blockIdx.y,lane=threadIdx.x&31,row=blockIdx.x*8+(threadIdx.x>>5);
+    for(int i=threadIdx.x;i<E;i+=256)input[i]=x[uint64_t(route/K)*E+i];
+    __syncthreads();
+    const uint8_t *expert=bank+uint64_t(ids[route])*BLOB;
+    const float *tail=reinterpret_cast<const float *>(expert+TAIL);
+    float g=0,u=0;
+    for(int j=lane;j<E;j+=32) {
+        float wg=qfn_vector_float_weight(expert,row,j,F,E),wu=qfn_vector_float_weight(expert+ROLE,row,j,F,E);
+        if constexpr(POLICY!=2){wg=qfn_reference_round_weight<POLICY>(wg*tail[0]);wu=qfn_reference_round_weight<POLICY>(wu*tail[1]);}
+        g=fmaf(wg,input[j],g);u=fmaf(wu,input[j],u);
+    }
+    g=qfn_vector_sum(g);u=qfn_vector_sum(u);
+    if(lane==0) {
+        if constexpr(POLICY==2){g*=tail[0];u*=tail[1];}const uint64_t i=uint64_t(route)*F+row;
+        if constexpr(FUSED)hidden[i]=__fmul_rn(g/(1.0f+__expf(-g)),u);
+        else {hidden[i]=g;up_out[i]=u;}
+    }
+}
+template<int POLICY=2> __global__ void qfn_vector_float_down(const uint8_t *bank,const int32_t *ids,
+        const float *hidden,float *out,int routes) {
+    if(int(blockIdx.y)>=routes)return;
+    __shared__ float input[F];
+    const int route=blockIdx.y,lane=threadIdx.x&31,row=blockIdx.x*8+(threadIdx.x>>5);
+    for(int i=threadIdx.x;i<F;i+=256)input[i]=hidden[uint64_t(route)*F+i];
+    __syncthreads();
+    const uint8_t *expert=bank+uint64_t(ids[route])*BLOB;
+    const float global=reinterpret_cast<const float *>(expert+TAIL)[2];
+    float result=0;
+    for(int j=lane;j<F;j+=32) {
+        float weight=qfn_vector_float_weight(expert+2*ROLE,row,j,E,F);
+        if constexpr(POLICY!=2)weight=qfn_reference_round_weight<POLICY>(weight*global);
+        result=fmaf(weight,input[j],result);
+    }
+    result=qfn_vector_sum(result);
+    if(lane==0)out[uint64_t(route)*E+row]=POLICY==2?result*global:result;
+}

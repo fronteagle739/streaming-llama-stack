@@ -39,6 +39,20 @@ class Launchers(unittest.TestCase):
                                        capture_output=True,text=True,timeout=30)
                     self.assertEqual(run.returncode,0,run.stderr)
                     result=json.loads(run.stdout);cfg=result['config']
+                    self.assertNotIn('example-placeholder',run.stdout)
+                    self.assertFalse(runtime.exists())
+                    if file.stem.startswith('qfn-'):
+                        self.assertTrue(cfg['model_settings']['model_key'].startswith('qfn-'))
+                        expected=file.stem.removeprefix('qfn-').replace('-','_')
+                        self.assertEqual(cfg['qfn_quality_speed'],expected)
+                        self.assertEqual(cfg['qfn_host_budget_gib'],6)
+                        self.assertEqual(cfg['qfn_engram_scan_rings'],1)
+                        self.assertIn('performance_manifest',cfg)
+                        continue
+                    if file.stem=='dsv41-modes':
+                        self.assertTrue(cfg['model_settings']['model_key'].startswith('dsv41-'))
+                        self.assertEqual(cfg['model_mode'],'max_quality')
+                        continue
                     profile=file.stem.removeprefix('dsv41-').removesuffix('-webui')
                     cone=profile in ('ultra-cone','ultra-yoco')
                     self.assertEqual(cfg['producer_profile'],'ultra' if cone else profile)

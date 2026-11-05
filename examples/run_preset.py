@@ -22,7 +22,13 @@ def prepare(args,local):
     if args.single:
         spec=importlib.util.spec_from_file_location('single_preset',ROOT/'scripts/dsv41_single.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-        result=module.overlay(args.context,local,profile=args.single)
+        selected=dict(local)
+        if getattr(args,'model_settings',None):
+            from slstack.model_settings import apply
+            selected['model_settings']=args.model_settings
+            selected['model_mode']=args.model_mode
+            selected=apply(selected,'dsv41')
+        result=module.overlay(args.context,selected,profile=args.single)
         result['webui']=bool(args.webui)
         return result,'start'
     recipe=ROOT/'examples/dual-machine'/args.preset/'preset.json'
@@ -54,6 +60,8 @@ def main(argv=None):
     parser.add_argument('--webui',action='store_true')
     parser.add_argument('--approximate-yoco',action='store_true',help='Explicitly opt into paired approximate keep140/v1 instead of exact cone/v2')
     parser.add_argument('--config',required=True,help='Your private config; never a file containing model weights')
+    parser.add_argument('--model-settings',help='Per-machine model router settings JSON')
+    parser.add_argument('--model-mode',choices=('max_quality','balanced','max_speed'),default='max_quality')
     parser.add_argument('--dry-run',action='store_true',help='Show the generated config; start nothing and write nothing')
     parser.add_argument('--setup',action='store_true',help='Prepare the Mac MLX or native DS4 backend')
     parser.add_argument('--wheelhouse',help='Optional offline backend dependency wheels')

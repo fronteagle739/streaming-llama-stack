@@ -20,6 +20,10 @@ def commit_budget_gib(cfg, *, windows=None):
 
 class OwnedProcess:
     def __init__(self, cfg, command, name, *, cwd=ROOT, stdin=None, timeout=None, gpu=False, scope=None, telemetry=None, unbounded=False):
+        from .paging_limits import owned_paging_limit_bytes
+        paging_limit = owned_paging_limit_bytes(cfg)
+        if paging_limit is not None and telemetry is False:
+            raise ValueError('An explicit owned-paging limit requires paging telemetry')
         self.gpu_uuid=cfg.get('gpu_uuid')
         # A waiting guardian allocates no model. Full host admission is repeated
         # by the independent guardian immediately before it starts an engine.
@@ -43,8 +47,9 @@ class OwnedProcess:
         spec = {'command': command, 'cwd': str(cwd), 'env': public_env, 'secret_env': sorted(secrets),
                 'runtime_root': cfg['runtime_root'], 'gpu_uuid':cfg.get('gpu_uuid'),
                 'host_budget_gib': cfg['host_budget_gib'], 'min_available_gib': cfg['min_available_gib'],
-                'paging_telemetry': bool(cfg.get('paging_telemetry') or gpu or scope in ('ds4-win', 'ds4-mac', 'rtx-producer', 'mlx-serve', 'image', 'video'))
+                'paging_telemetry': bool(paging_limit is not None or cfg.get('paging_telemetry') or gpu or scope in ('ds4-win', 'ds4-mac', 'rtx-producer', 'mlx-serve', 'image', 'video'))
                                     if telemetry is None else telemetry,
+                'owned_paging_limit_bytes': paging_limit,
                 'job_commit_gib': commit_budget_gib(cfg), 'timeout_s': None if unbounded else (timeout or cfg['request_timeout_s']),   # DS4COMBO2: a server has no lifetime cap
                 'runtime_min_free_gib': cfg.get('runtime_min_free_gib',0.5) if scope in ('ds4-win','ds4-mac','rtx-producer','mlx-serve') else 0,
                 'owner_pid': os.getpid(), 'owner_created': psutil.Process().create_time(),

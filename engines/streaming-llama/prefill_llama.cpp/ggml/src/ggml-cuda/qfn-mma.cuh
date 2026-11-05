@@ -1,4 +1,4 @@
-// QFNSTREAM: upstream ggml-org mma.cuh (a91eab67d), vendored for the chunked gated delta net kernel only.
+// QFN: upstream ggml-org mma.cuh (a91eab67d), vendored for the chunked gated delta net kernel only.
 // Namespace renamed to qfn_mma so it never collides with this tree's ggml_cuda_mma.
 #pragma once
 // This file contains primitives that expose the tensor core PTX instructions for CUDA code.

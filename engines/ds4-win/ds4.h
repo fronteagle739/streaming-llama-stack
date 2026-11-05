@@ -603,6 +603,25 @@ int ds4_session_copy_logits(ds4_session *s, float *out, int cap);
 int ds4_engine_output_features_dim(ds4_engine *e);
 int ds4_engine_output_features_layers(ds4_engine *e);
 int ds4_session_copy_output_features(ds4_session *s, float *out, int cap);
+/* Dedicated training readback. Captures BEFORE main layer L, HC-major residual
+ * then the preceding 24-value HC split. This is not a complete suffix KV snapshot.
+ * first=true invalidates prior request state; returns exact float count or 0. */
+int ds4_engine_training_residual_dim(ds4_engine *e, bool parity_logits);
+int ds4_session_capture_layer_residual(ds4_session *s, int token, bool first,
+    uint32_t layer, bool parity_logits, float *out, int cap, char *err, size_t errlen);
+/* One selected token: [layer][HC input (streams*hidden), attention writer,
+ * combined shared/routed FFN writer]. NULL out advances an unselected token.
+ * Capture uses a dedicated single-engine session and never writes the base. */
+int ds4_session_direction_stack(ds4_session *s,const uint8_t identity[32],
+        const float *pack,uint32_t count,uint64_t floats,char *err,size_t errlen);
+bool ds4_engine_direction_identity(ds4_engine *e,uint8_t out[32]);
+bool ds4_session_direction_supported(ds4_session *s);
+int ds4_engine_direction_features_dim(ds4_engine *e,bool parity_logits);
+int ds4_session_capture_directions(ds4_session *s,int token,bool first,bool parity_logits,
+    float *out,int cap,char *err,size_t errlen);
+/* Three boundary rows (36/38/39), then one normalized head/logit row. */
+int ds4_session_capture_suffix_parity(ds4_session *s,int token,bool first,
+    float *out,int cap,char *err,size_t errlen);
 int ds4_session_set_logits(ds4_session *s, const float *logits, int n);
 /* Pay the one-time first-submission GPU cost outside any measured window;
  * used by the TP worker right after session create (no-op on CPU/GLM). */

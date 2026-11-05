@@ -10,9 +10,17 @@
 #   -Stop                      ask the running stack to shut down gracefully (POST /v1/stack/shutdown)
 param(
     [string]$Model = '',
+    [string]$Python = '',
     [string]$Config = '',
     [int]$Port = 0,
     [int]$Context = 0,
+    [double]$HostBudgetGiB = 3,
+    [double]$NativeHostBudgetGiB = 6,
+    [ValidateRange(1,8)][int]$EngramScanRings = 1,
+    [int]$Tile = 2048,
+    [double]$MaxSpeedBias = 0.68,
+    [double]$MinAvailableGiB = 6,
+    [double]$JobCommitGiB = 40,
     [switch]$MaxSpeed,
     [ValidateSet('max_quality','balanced','max_speed')][string]$Mode = '',
     [string]$Settings = '',
@@ -22,7 +30,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Python = (Get-Command python -ErrorAction Stop).Source
+if (-not $Python) { $Python = (Get-Command python -ErrorAction Stop).Source }
 if (-not $Config) {
     $default = Join-Path $Root 'my.local.json'
     if (Test-Path -LiteralPath $default) { $Config = $default }
@@ -40,6 +48,9 @@ if ($Stop) {
 $argsList = @('-B', '-m', 'slstack')
 if ($Config) { $argsList += @('--config', (Resolve-Path -LiteralPath $Config).Path) }
 $argsList += 'qfn'
+$argsList += @('--host-budget-gib', "$HostBudgetGiB", '--qfn-host-budget-gib', "$NativeHostBudgetGiB",
+    '--qfn-engram-scan-rings', "$EngramScanRings", '--qfn-tile', "$Tile",
+    '--min-available-gib', "$MinAvailableGiB", '--job-commit-gib', "$JobCommitGiB", '--qfn-max-speed-bias', "$MaxSpeedBias")
 if ($Model) { $argsList += @('--model', $Model) }
 if ($Port) { $argsList += @('--port', "$Port") }
 if ($Context) { $argsList += @('--context', "$Context") }

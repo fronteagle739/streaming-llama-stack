@@ -155,7 +155,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     if top<base:raise ValueError('producer_host_max_gib is below producer_host_budget_gib')
     capped_by='producer_host_max_gib' if cap!='auto' else 'host_budget_gib'
     if available is not None:
-        # Owner 2026-10-25 ("every run makes you freeze like the computer's run out of RAM"): locked producer
+        # Locked producer
         # pages cannot be paged out, so admission keeps a DESKTOP RESERVE free for Windows, Claude Code and the
         # desktop: the producer's raised budget is at most available - producer_desktop_reserve_gib (per
         # machine, default 0.5 GiB). The separate runtime_min_free_gib stop defaults to 0.5 GiB.
@@ -338,6 +338,19 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
                            producer_prefill_fold_cap_tokens=61440, **compact_default(cfg, arguments)).items():
         selected.setdefault(key, value)
     plan = whole_prompt_engram(selected, prefill_plan(selected, count, available), count, available)
+    if cfg.get('producer_warmup_one_token'):
+        reserve=cfg.get('producer_warmup_host_reserve_mib')
+        if type(reserve) is not int or not 512<=reserve<=4096:
+            raise ValueError('Warm-up requires explicit producer_warmup_host_reserve_mib in 512..4096')
+        reserve_bytes=reserve<<20
+        # Keep the measured sweep capacity and separately charge the transient
+        # warm owner. The enclosing job/floor and controller reserve still bind.
+        limit=min(int(cfg.get('combo_worker_host_budget_gib',cfg['host_budget_gib'])*(1<<30)),
+                  available-int(cfg['min_available_gib']*(1<<30))) - (512<<20)
+        if plan['host_bytes']+reserve_bytes>limit:
+            raise MemoryError('Warm transient bill does not fit the recorded aggregate/worker budget and physical floor')
+        plan=dict(plan,cold_host_bytes=plan['host_bytes'],warmup_host_reserve_bytes=reserve_bytes,
+                  host_bytes=plan['host_bytes']+reserve_bytes)
     arguments['--prefill-chunk-tokens'] = str(plan['capacity'])
     arguments['--job-host-bytes'] = str(plan['host_bytes'])
     for key, delta in (('--carry-host-bytes', plan['carry_delta']),
@@ -377,6 +390,13 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
         if int(arguments['--graph-bytes'])<=0:raise MemoryError('Context cache leaves no admitted graph budget')
     if cfg.get('producer_fixed_direct_open', True) and arguments.get('--fixed-resident-plan') != '1':
         arguments.update({'--warmup-one-token': '0', '--fixed-direct-open': '1'})
+    if cfg.get('producer_warmup_one_token'):
+        if cfg.get('producer_fixed_direct_open', True):
+            raise ValueError('Short warm-up requires producer_fixed_direct_open=false')
+        arguments.update({'--warmup-one-token': '1', '--fixed-direct-open': '0'})
+        if 'producer_warmup_defer_prompt_data' not in cfg:
+            raise ValueError('Warm-up requires an explicit producer_warmup_defer_prompt_data policy')
+        arguments['--warmup-defer-prompt-data']=str(int(cfg['producer_warmup_defer_prompt_data']))
     keep = cfg.get('yoco_keep', 0)
     if type(keep) is not int or keep not in (0, 140, 2541):raise ValueError('yoco_keep must be 0, 140 or 2541')
     if keep:
@@ -407,6 +427,15 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     carry_arguments(cfg, arguments)
     if cfg.get('env_overrides',{}).get('LLAMA_DSV41_DENSE_FP8')=='1':
         arguments['--backend-temporary-reserve-bytes']=str(int(arguments['--backend-temporary-reserve-bytes'])+(576<<20))
+    from .writer_directions import device_reserve, prefill_device_reserve
+    writer_bytes=device_reserve(cfg.get('direction_bank_count',0))
+    if writer_bytes:
+        # Provider heaps have a physical minimum. Native combined preflight
+        # charges the prefill factors; compacted decode reserves its own bank
+        # before offering remaining VRAM to L2. Neither kernel workspace nor
+        # physical DirectStorage buffers are relabelled as writer storage.
+        plan['writer_resident_device_bytes']=writer_bytes
+        plan['writer_prefill_device_bytes']=prefill_device_reserve(cfg.get('direction_bank_count',0))
     if 'producer_compute_tile' in cfg:
         tile=cfg['producer_compute_tile']
         if type(tile) is not int or tile <= 0:
@@ -417,8 +446,29 @@ def prefill_arguments(cfg, count, available, *, export_state=False, techniques=N
     return arguments, plan
 
 
+def engram_scan_rings(cfg, plan):
+    """Qualified 100K/200K queue policy; retain the existing explicit engine knob.
+
+    19e845b5 changed the native default from four queues to one after a 200K
+    scan benchmark. Four queues recover the 100K real-text prompt; multi-sweep
+    whole-prompt scans keep the measured one-queue policy. A caller may select
+    any supported queue count directly, with conflicting explicit values refused.
+    """
+    value=cfg.get('producer_engram_scan_rings')
+    explicit=cfg.get('env_overrides',{}).get('LLAMADECODE_ENGRAM_SCAN_RINGS')
+    if value is None:return explicit
+    if value=='auto':return explicit if explicit is not None else ('4' if plan['single_sweep'] else '1')
+    if type(value) is not int or not 1<=value<=8:
+        raise ValueError('producer_engram_scan_rings must be auto or an integer1..8')
+    if explicit is not None and explicit!=str(value):
+        raise ValueError('Conflicting explicit producer_engram_scan_rings and LLAMADECODE_ENGRAM_SCAN_RINGS')
+    return str(value)
+
+
 class ComboProducer:
     def __init__(self,cfg,session,epoch,tokens,cancelled,*,base=None,runner=None,on_start=None):
+        from .performance_contract import validate
+        validate(cfg, 'dsv41')
         combo_abort.check('producer launch')
         keep=yoco_keep(cfg)
         if base is not None and 'local_state' in base[1]:
@@ -427,6 +477,8 @@ class ComboProducer:
             local=base[1]['local_state']
             if (local['yoco_keep'],local['cache_precision'],local['producer_sha256'])!=(keep,cfg.get('ctx_cache_precision','f32'),cfg['producer_sha256']):
                 raise ValueError('Local snapshot producer/YOCO/cache preset differs')
+            if local.get('direction_binding','') != cfg.get('direction_bank_sha256',''):
+                raise ValueError('Local snapshot writer direction bank differs')
         elif keep and base is not None:raise ValueError('YOCO requires a local snapshot with YOCO provenance')
         runtime_floor=runtime_min_free_gib(cfg)
         vendor()
@@ -449,6 +501,13 @@ class ComboProducer:
         if tier not in ('accurate','fast','ultra'):raise ValueError('Combo producer profile must be accurate, fast or ultra (original weights; no HYPER)')
         import psutil
         args,plan=prefill_arguments(cfg,len(tokens),psutil.virtual_memory().available)
+        from .writer_directions import bank_arguments
+        args.update(bank_arguments(cfg))
+        if cfg.get('writer_capture_plan'):
+            args.update({'--direction-capture-plan':cfg['writer_capture_plan'],
+                         '--direction-capture-output':cfg['writer_capture_output']})
+        if cfg.get('writer_evaluate_output'):
+            args['--direction-evaluate-output']=cfg['writer_evaluate_output']
         self.prefill_plan=plan;host_bytes=decode_host_budget(cfg,plan['host_bytes'])
         if plan.get('policy')=='fold':   # owner fold policy: S-token sweeps, remainder folded into the last
             args['--prefill-sweep-tokens']=str(plan['sweep_tokens']);args['--prefill-fold-cap-tokens']=str(plan['fold_cap'])
@@ -489,6 +548,8 @@ class ComboProducer:
                         write(ram.read(offset,min(65536,size-offset)))
         argv=[str(binary),*[str(v) for item in args.items() for v in item]]
         env=environment(cfg,'rtx-producer')
+        selected_rings=engram_scan_rings(cfg,plan)
+        if selected_rings is not None:env['LLAMADECODE_ENGRAM_SCAN_RINGS']=selected_rings
         env['LLAMADECODE_PREFILL_ROUTED']=routed_prefill_choice(cfg,len(tokens))
         if not env.get('LLAMADECODE_ABORT_FILE'):env['LLAMADECODE_ABORT_FILE']=str(self.directory/'guard.abort')
         if cfg.get('cache_affinity_spread_file') and not env.get('LLAMADECODE_DS4_SPREAD'):
@@ -518,12 +579,17 @@ class ComboProducer:
                 job.release_kill_on_close()
                 return protect_working_set(job,host_bytes,int(cfg['min_available_gib']*(1<<30)),
                     int(cfg['host_budget_gib']*(1<<30)),receipt=self.directory/'resident-admission.json')
+            from .performance_contract import record
+            record(self.directory/'performance-settings.json',cfg,'dsv41',argv=argv,environment=env,
+                   fixture_sha256=hashlib.sha256(token_path.read_bytes()).hexdigest(),plan=plan)
             self.process=PublishingProducer(session,argv,env,self.directory,host_bytes=host_bytes,
                 runtime_min_free_gib=runtime_floor,model_sha256=self.model_sha256,
                 physical_floor=int(cfg['min_available_gib']*(1<<30)),operation_seconds=min(1140,cfg['request_timeout_s']),stall_seconds=stall_seconds(cfg),
                 idle_seconds=cfg['lease_minutes']*60,native=native,cancelled=cancelled,native_mode=1,bootstrap=bootstrap,owner_epoch=epoch,
                 after_resume=admitted)
             if keep and self.process.ready.get('yoco_keep')!=keep:raise ValueError('Producer YOCO mode identity differs')
+            from .writer_directions import verify_ready
+            verify_ready(cfg,self.process.ready)
             self.checkpoint=self.process.ready['checkpoint']
             expected_position=(base[1]['position'] if base else 0)+len(tokens)
             if self.checkpoint['context']!=cfg['context'] or self.checkpoint['position']!=expected_position:
@@ -534,7 +600,7 @@ class ComboProducer:
                 resident_admission=getattr(self.process,'resume_admission',None),
                 full_snapshot_bootstrap=base is None,weights_copied=False,profile=tier,compressed_cache_bf16=precision=='bf16',
                 ctx_cache_precision=precision,ctx_cache_growable=growable,prefill_plan=plan,yoco_keep=keep,
-                routed_prefill=env['LLAMADECODE_PREFILL_ROUTED']))
+                routed_prefill=env['LLAMADECODE_PREFILL_ROUTED'],engram_scan_rings=selected_rings))
         except BaseException as exc:
             self.failure_cleanup=getattr(exc,'owned_cleanup',None)
             if self.process is not None:

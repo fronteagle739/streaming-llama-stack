@@ -428,7 +428,7 @@ extern "C" {
         // GGML_TYPE_IQ4_NL_8_8 = 38,
         GGML_TYPE_MXFP4   = 39, // MXFP4 (1 block)
         // 40, 41: reserved (upstream NVFP4 / Q1_0 ids), not supported in this tree
-        GGML_TYPE_Q2_0    = 42, // QFNSTREAM: upstream ggml-org Q2_0, block 64: f16 d + 2-bit codes, w = (q-1)*d
+        GGML_TYPE_Q2_0    = 42, // QFN: upstream ggml-org Q2_0, block 64: f16 d + 2-bit codes, w = (q-1)*d
         GGML_TYPE_COUNT   = 43,
     };
 
@@ -588,12 +588,12 @@ extern "C" {
         GGML_OP_DSV41_CANDIDATE_BLOCKS,
         GGML_OP_DSV41_SELECTED_MASK,
         GGML_OP_DSV41_MASKED_HALF,
-        GGML_OP_GATED_DELTA_NET,   // QFNSTREAM: upstream gated delta net (Qwen3.8 Flash Next linear attention)
-        GGML_OP_QFN_QSA_SELECT,    // QFNSTREAM: QSA top-pool selection expanded to cell indices
-        GGML_OP_QFN_QSA_ATTN,      // QFNSTREAM: gated GQA attention over the selected cells
-        GGML_OP_QFN_SLOT_MAP,      // QFNSTREAM: expert ids -> cache slots, doorbell on a miss
-        GGML_OP_QFN_HC_MIX,        // QFNSTREAM: gated mean of the hyper-connection streams
-        GGML_OP_QFN_HC_COMBINE,    // QFNSTREAM: block output scattered back into the streams
+        GGML_OP_GATED_DELTA_NET,   // QFN: upstream gated delta net (Qwen3.8 Flash Next linear attention)
+        GGML_OP_QFN_QSA_SELECT,    // QFN: QSA top-pool selection expanded to cell indices
+        GGML_OP_QFN_QSA_ATTN,      // QFN: gated GQA attention over the selected cells
+        GGML_OP_QFN_SLOT_MAP,      // QFN: expert ids -> cache slots, doorbell on a miss
+        GGML_OP_QFN_HC_MIX,        // QFN: gated mean of the hyper-connection streams
+        GGML_OP_QFN_HC_COMBINE,    // QFN: block output scattered back into the streams
 
         GGML_OP_COUNT,
     };
@@ -2545,7 +2545,7 @@ extern "C" {
         bool                  lower,
         bool                  uni);
 
-    // QFNSTREAM: upstream ggml-org gated delta net.
+    // QFN: upstream ggml-org gated delta net.
     //   q, k  : [S_k, H_k, n_tokens, n_seqs]   v: [S_v, H_v, n_tokens, n_seqs]   (S_k == S_v, H_v % H_k == 0)
     //   g     : [1, H_v, n_tokens, n_seqs] (scalar log-decay) or [S_v, H_v, n_tokens, n_seqs] (KDA)
     //   beta  : [1, H_v, n_tokens, n_seqs]   state: [S_v, S_v, H_v, n_seqs] initial state s0 (stored transposed)
@@ -2560,7 +2560,7 @@ extern "C" {
             struct ggml_tensor  * state,
             int64_t               K);
 
-    // QFNSTREAM: Qwen sparse attention selection.
+    // QFN: Qwen sparse attention selection.
     //   score: F32 [n_pool_k, n_tokens] pool scores (rectified sums, >= 0); pools at or beyond a token's visible count
     //          are ignored, so the score rows may be wider than the visible range.
     //   pos  : I32 [n_tokens] absolute cell position of each token (cell == position, one sequence).
@@ -2575,7 +2575,7 @@ extern "C" {
             int                   n_top,
             int                   ratio);
 
-    // QFNSTREAM: Qwen sparse attention over the cells ggml_qfn_qsa_select chose.
+    // QFN: Qwen sparse attention over the cells ggml_qfn_qsa_select chose.
     //   q    : F32 [D, H, n_tokens] (contiguous, normed and rotated), gate: F32 [D, H, n_tokens] or NULL
     //   k, v : F16 [D, H_kv, n_kv] caches (cell == position), H % H_kv == 0, H/H_kv <= 16, D == 256
     //   sel  : I32 [n_sel, n_tokens] cell lists (valid cells first, -1 after); pos: I32 [n_tokens]
@@ -2590,7 +2590,7 @@ extern "C" {
             struct ggml_tensor  * pos,
             float                 scale);
 
-    // QFNSTREAM decode v3: the doorbell block in mapped (host-visible) memory, written by the device on a miss
+    // QFN decode v3: the doorbell block in mapped (host-visible) memory, written by the device on a miss
     struct ggml_qfn_bell {
         volatile int32_t req;      // device: request value (seq * 64 + layer) once the selection below is published
         volatile int32_t ack;      // host: the request value it has served (the experts are in their slots)
@@ -2602,7 +2602,7 @@ extern "C" {
     //   sel  : I32 [K, n_tokens] routed experts; table: I32 [n_expert] slot of each expert of this layer or -1 (may live in
     //   mapped host memory); seq: I32 [1] token counter (device). bell: device address of a ggml_qfn_bell or 0 (then a miss
     //   yields slot 0; discard/replay a step with a miss). result: I32 [K, n_tokens] slots.
-    // QFNSTREAM fused hyper-connection ops (bit-identical to the unfused graph, same summation order)
+    // QFN fused hyper-connection ops (bit-identical to the unfused graph, same summation order)
     GGML_API struct ggml_tensor * ggml_qfn_hc_mix(
             struct ggml_context * ctx,
             struct ggml_tensor  * xn,       // F32 [n_embd, hc, n_tokens]

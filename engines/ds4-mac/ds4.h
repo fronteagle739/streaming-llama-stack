@@ -139,6 +139,7 @@ typedef struct {
     int context_size;
     uint32_t prefill_chunk;
     int mtp_draft_tokens;
+    int qwen4_mtp_depth; /* 0 auto, 2 or 3; sampled exact verification uses depth 2 */
     float mtp_margin;
     float dspark_confidence_threshold;
     const char *directional_steering_file;
@@ -334,6 +335,9 @@ uint64_t ds4_engine_hidden_f32_values(ds4_engine *e);
 int ds4_engine_embd_dim(ds4_engine *e);
 uint64_t ds4_engine_model_bytes(ds4_engine *e);
 bool ds4_engine_has_vision(ds4_engine *e);
+/* Encoder-only reference proof: no language model or listening socket. */
+int ds4_qwen4_vision_dump(const char *vision_path,const char *image_path,const char *out_path,
+                          uint32_t min_image_tokens,uint32_t max_image_tokens);
 int ds4_engine_vision_encode_file(ds4_engine *e,
                                   const char *path,
                                   ds4_vision_embedding *out,
@@ -654,6 +658,11 @@ uint64_t ds4_test_ds41_batch_count(void);
 int ds4_session_top_logprobs(ds4_session *s, ds4_token_score *out, int k);
 int ds4_session_token_logprob(ds4_session *s, int token, ds4_token_score *out);
 int ds4_session_copy_logits(ds4_session *s, float *out, int cap);
+/* Model-free, actual disk-row decoder qualification for QFN Q8/BF16 PLE. */
+int ds4_qfn_ngram_self_test(const char *new_fixture_path);
+int ds4_qfn_metadata_self_test(void);
+int ds4_qfn_validate_model(const char *path);
+int ds4_qfn_validate_vision(const char *path,const char *vision_path);
 int ds4_session_set_logits(ds4_session *s, const float *logits, int n);
 /* Pay the one-time first-submission GPU cost outside any measured window;
  * used by the TP worker right after session create (no-op on CPU/GLM). */
@@ -738,6 +747,17 @@ int ds4_engine_routed_quant_bits(ds4_engine *e);
 bool ds4_engine_has_output_head(ds4_engine *e);
 bool ds4_engine_has_mtp(ds4_engine *e);
 int ds4_engine_mtp_draft_tokens(ds4_engine *e);
+int ds4_engine_qfn_mtp_depth(ds4_engine *e);
+void ds4_session_qfn_mtp_stats(ds4_session *s,uint64_t out[4]);
+/* Bounded test instrumentation, opt-in at the resident server. */
+int ds4_qfn_point_sampling_check(const float *logits,uint32_t vocab,uint64_t samples,uint64_t seed,
+    float temperature,int top_k,float top_p,float min_p,FILE *report);
+int ds4_session_qfn_trace_begin(ds4_session *s,uint32_t rows);
+uint64_t ds4_session_qfn_trace_bytes(ds4_session *s);
+int ds4_session_qfn_trace_write(ds4_session *s,int (*write)(void *,const void *,size_t),void *ud);
+/* Canonical QFN payload offsets for exact F16-index wire widening. Returns region count, or -1. */
+int ds4_qfn_native_layout(ds4_engine *e, uint32_t rows, uint32_t mtp_rows,
+    uint64_t *canonical_bytes, uint64_t *index_begin, uint64_t *index_end, uint32_t capacity);
 bool ds4_engine_mtp_exact_sampling(ds4_engine *e);
 const ds4_tokens *ds4_session_tokens(ds4_session *s);
 /* True when this backend's prefill chunk boundaries are anchored at the

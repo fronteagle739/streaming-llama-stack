@@ -99,15 +99,18 @@ help:
 ds4: ds4_cli.o ds4_help.o ds4_prompt_prefix.o linenoise.o ds4_gpu_args.o $(CORE_OBJS)
 	$(CC) $(CFLAGS) -o $@ ds4_cli.o ds4_help.o ds4_prompt_prefix.o linenoise.o ds4_gpu_args.o $(CORE_OBJS) $(METAL_LDLIBS)
 
+qfn-dual-decode: qfn_dual.o $(CORE_OBJS)
+	$(CC) $(CFLAGS) -o $@ qfn_dual.o $(CORE_OBJS) $(METAL_LDLIBS)
+
 PAIRED_LLAMA := ../streaming-llama/prefill_llama.cpp
 PAIRED_DIR := .paired-samplers
 PAIRED_INCLUDES := -I$(PAIRED_LLAMA)/include -I$(PAIRED_LLAMA)/src -I$(PAIRED_LLAMA)/ggml/include -I$(PAIRED_LLAMA)/ggml/src
 PAIRED_UNITS := llama-sampler llama-vocab unicode unicode-data llama-impl llama-grammar
 PAIRED_OBJS := ds4_sampling_bridge.o $(addprefix $(PAIRED_DIR)/,$(addsuffix .o,$(PAIRED_UNITS)))
 PAIRED_GGML := $(PAIRED_DIR)/ggml/src/libggml-base.a
-ds4_server.o: ds4_paired_sampling.h ds4_sampling_bridge.h ds4_quality_phase.h ds4_quality_code.h ds4_native_session_vision.inc
+ds4_server.o: ds4_paired_sampling.h ds4_sampling_bridge.h ds4_quality_phase.h ds4_quality_code.h ds4_native_session_vision.inc ds4_qfn_native_session.inc
 ds4_server.o: override CFLAGS += -fno-finite-math-only
-ds4.o ds4_server.o: $(wildcard ds4_native*.inc ds4_native*.h dsv41*.h)
+ds4.o ds4_server.o: $(wildcard ds4_native*.inc ds4_native*.h dsv41*.h) qfn-native-layout.h ds4_qfn_owners.inc
 $(PAIRED_OBJS): $(wildcard $(PAIRED_LLAMA)/src/*.h $(PAIRED_LLAMA)/include/*.h $(PAIRED_LLAMA)/ggml/include/*.h)
 CMAKE ?= cmake
 ifeq ($(UNAME_S),Darwin)

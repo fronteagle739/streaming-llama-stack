@@ -11,7 +11,7 @@ from slstack.envvars import apply, validate_table
 
 
 class EnvironmentContractTests(unittest.TestCase):
-    def test_other22_explicit_controls_reach_the_native_child(self):
+    def test_explicit_graph_controls_reach_the_native_child(self):
         from slstack.config import load
         cfg=load(overrides={'gpu_uuid':'GPU-test'})
         chosen={'GGML_CUDA_DISABLE_GRAPHS':'0','LLAMA_DSV41_CUDA_GRAPHS':'1',

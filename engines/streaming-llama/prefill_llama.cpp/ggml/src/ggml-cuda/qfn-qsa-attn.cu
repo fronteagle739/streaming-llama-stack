@@ -1,4 +1,4 @@
-// QFNSTREAM: QSA sparse attention, ported from antirez/ds4 (MIT) ds4_qwen4_cuda.cuh attention_group and its
+// QFN: QSA sparse attention, ported from antirez/ds4 (MIT) ds4_qwen4_cuda.cuh attention_group and its
 // tensor-core helpers (ds4_cuda.cu tt_*). One 256-thread block per (KV head, token): the heads of a KV group share
 // the token's cell list, both products run on m16n8k16 tensor cores with the queries and probabilities split into
 // half-precision high/low parts (FP32-level accuracy), K and V are the F16 caches. Changes from ds4: explicit cache
@@ -232,7 +232,7 @@ void ggml_cuda_op_qfn_qsa_attn(ggml_backend_cuda_context & ctx, ggml_tensor * ds
     CUDA_CHECK(cudaGetLastError());
 }
 
-// ---- QFNSTREAM: GGML_OP_QFN_SLOT_MAP (see ggml_qfn_slot_map in ggml.h).
+// ---- QFN: GGML_OP_QFN_SLOT_MAP (see ggml_qfn_slot_map in ggml.h).
 
 // One block. Negative timeout records only the first miss for host replay. Otherwise publish, ring (req), then wait
 // for the host's acknowledgement. The table is re-read with volatile loads after the wait: the host rewrote it.
@@ -254,7 +254,7 @@ static __global__ void k_qfn_slot_map(const int32_t * sel, const volatile int32_
                 // Later nodes complete with safe placeholder IDs; this whole failed graph is rejected.
                 // Sequential slot-map nodes need no unsupported mapped-host atomic operation.
             } else if (bell->timeout_ms < 0) {
-                // QFNV3OPT: record the first miss only; no device wait, host restores and replays.
+                // decode replay: record the first miss only; no device wait, host restores and replays.
                 // WDDM mapped host allocations cannot receive native GPU atomics on this RTX.
                 // A device latch preserves atomic first-winner ownership and the mapped host record.
                 int32_t * latch = record_latch ? record_latch : (int32_t *) &bell->error;
@@ -308,7 +308,7 @@ void ggml_cuda_op_qfn_slot_map(ggml_backend_cuda_context & ctx, ggml_tensor * ds
     CUDA_CHECK(cudaGetLastError());
 }
 
-// ---- QFNSTREAM: fused hyper-connection mix / combine (same arithmetic and order as the unfused ggml graph)
+// ---- QFN: fused hyper-connection mix / combine (same arithmetic and order as the unfused ggml graph)
 static __global__ void k_qfn_hc_mix(const float * x, const float * g, float * o, int64_t E, int64_t HC, int64_t NT, float scale) {
     const int64_t r = (int64_t) blockIdx.x * blockDim.x + threadIdx.x;
     if (r >= E * NT) return;

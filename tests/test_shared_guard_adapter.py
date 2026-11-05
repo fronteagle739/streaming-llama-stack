@@ -10,10 +10,29 @@ import uuid
 from slstack.config import load
 from slstack.process import OwnedProcess
 from slstack.lease import gpu_lease, active_holds, recover_leases
-from slstack.shared_guard import CleanupUnconfirmed
+from slstack.shared_guard import CleanupUnconfirmed, _watch_live_ownership
 
 
 class SharedGuardAdapterTests(unittest.TestCase):
+    def test_monitor_retires_compiler_births_before_enforcing_live_bound(self):
+        from studio.job_guard import OwnedProcesses, ProcessIdentity, GuardedJob
+        from slstack.shutdown import ProgressOwnedProcesses
+        root = SimpleNamespace(pid=1, children=lambda: [])
+        owned = object.__new__(OwnedProcesses)
+        owned.identities = {pid: ProcessIdentity(pid, float(pid), 'compiler') for pid in range(1, 301)}
+        owned.retired_identities = []
+        job = SimpleNamespace(owned=owned)
+        def provider_monitor(instance):
+            self.assertIsInstance(instance.owned, ProgressOwnedProcesses)
+            self.assertEqual(instance.owned.refresh(), [root])
+            self.assertEqual(len(instance.owned.completed_identities), 299)
+            self.assertEqual(set(instance.owned.identities), {1})
+            return 'pinned-monitor-called'
+        with patch.object(ProcessIdentity, 'process', lambda identity: root if identity.pid == 1 else None), \
+             patch.object(GuardedJob, '_watch', provider_monitor):
+            self.assertEqual(_watch_live_ownership(job, {'log': 'retained.log'}), 'pinned-monitor-called')
+        self.assertEqual(job.owned.spec['log'], 'retained.log')
+
     def test_canonical_owned_paging_warning_and_failure_boundaries(self):
         from studio.job_paging import PagingWatch
         observed = {'bytes': 12*1024}

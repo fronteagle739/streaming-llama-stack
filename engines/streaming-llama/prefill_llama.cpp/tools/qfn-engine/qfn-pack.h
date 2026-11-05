@@ -1,5 +1,5 @@
 #pragma once
-// QFNSTREAM: reader for the Basalt .basalt pack of Qwen3.8 Flash Next (the container is described in Basalt's
+// QFN: reader for the Basalt .basalt pack of Qwen3.8 Flash Next (the container is described in Basalt's
 // include/basalt/core/model_format.hpp, MIT). Only the pieces this engine streams or keeps resident are exposed:
 //   * the `gguf` section: every non-expert source tensor at an absolute file offset (dense weights, the n-gram table)
 //   * the `experts` section: raw [gate | up | down] rows, plus NVFP4's 16-byte FP32 scale tail

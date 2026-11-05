@@ -630,7 +630,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmq(
     return d6 * sumf_d;
 }
 
-// QFNSTREAM: upstream ggml-org vec_dot_q2_0_q8_1 (iqs selects the 32-element half of the 64-element block)
+// QFN: upstream ggml-org vec_dot_q2_0_q8_1 (iqs selects the 32-element half of the 64-element block)
 static __device__ __forceinline__ float vec_dot_q2_0_q8_1(
     const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
     const block_q2_0 * bq2_0 = (const block_q2_0 *) vbq + kbx;

@@ -81,6 +81,7 @@ static bool ggml_cuda_streamed_graphs() {
 #include "ggml-cuda/pool2d.cuh"
 #include "ggml-cuda/quantize.cuh"
 #include "ggml-cuda/quantize_id.cuh"
+#include "ggml-cuda/dsv41-writer-directions.cuh"
 #include "ggml-cuda/dsv41-native-ffn.cuh"
 #include "ggml-cuda/qfn-nvfp4.cuh"
 #include "ggml-cuda/qfn-expert-reduce.cuh"
@@ -4056,6 +4057,7 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_op_dsv4_hc_pre(ctx, dst);
             break;
         case GGML_OP_CUSTOM:
+            if(dsv41_writer_bank::requested(dst)){ggml_cuda_op_dsv41_writer(ctx,dst);break;}
             if(ggml_qfn_expert_reduce_requested(dst)){ggml_cuda_op_qfn_expert_reduce(ctx,dst);break;}
             if(ggml_qfn_qsa_score_requested(dst)){ggml_cuda_op_qfn_qsa_score(ctx,dst);break;}
             if(ggml_qfn_nvfp4_requested(dst)){ggml_cuda_op_qfn_nvfp4(ctx,dst);break;}
@@ -5732,7 +5734,7 @@ struct qfn_eager_node_trace {
         CUDA_CHECK(cudaStreamIsCapturing(stream, &status));
         GGML_ASSERT(status == cudaStreamCaptureStatusNone && "QFN_V3_EAGER_OP_TRACE requires QFN_V3_CUDA_GRAPH=0");
         enabled = true;
-        std::fprintf(stderr, "[qfn] QFNV3OPT eager node %d %s name='%s' shape=%lld,%lld,%lld,%lld dst=%p src=%p,%p,%p\n",
+        std::fprintf(stderr, "[qfn] decode replay eager node %d %s name='%s' shape=%lld,%lld,%lld,%lld dst=%p src=%p,%p,%p\n",
                      i, ggml_op_desc(n), n->name, (long long) n->ne[0], (long long) n->ne[1],
                      (long long) n->ne[2], (long long) n->ne[3], n->data,
                      n->src[0] ? n->src[0]->data : nullptr, n->src[1] ? n->src[1]->data : nullptr,
@@ -5743,7 +5745,7 @@ struct qfn_eager_node_trace {
         if (!enabled) return;
         const cudaError_t error = cudaStreamSynchronize(stream);
         if (error != cudaSuccess) {
-            std::fprintf(stderr, "[qfn] QFNV3OPT eager node FAILED %d %s name='%s'\n", index, ggml_op_desc(node), node->name);
+            std::fprintf(stderr, "[qfn] decode replay eager node FAILED %d %s name='%s'\n", index, ggml_op_desc(node), node->name);
             std::fflush(stderr);
             CUDA_CHECK(error);
         }
@@ -6501,7 +6503,7 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
                 graph ? graph->trace_update_reason : "scoped_disable", graph ? graph->trace_update_node : -1);
         }
 #endif
-        GGML_ABORT("QFNV3OPT required static CUDA graph cannot capture; eager fallback refused");
+        GGML_ABORT("decode replay required static CUDA graph cannot capture; eager fallback refused");
     }
 
     if (use_cuda_graph && cuda_graph_update_required) {
@@ -6547,7 +6549,7 @@ enum ggml_status ggml_backend_cuda_graph_compute_static(ggml_backend_t backend, 
     const auto status = ggml_backend_cuda_graph_compute(backend, graph);
     static thread_local bool reported = false;
     if (!reported) {
-        std::fprintf(stderr, "[qfn] QFNV3OPT required static CUDA graph launched (no eager fallback)\n");
+        std::fprintf(stderr, "[qfn] decode replay required static CUDA graph launched (no eager fallback)\n");
         reported = true;
     }
     return status;
@@ -7798,7 +7800,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
                     case GGML_TYPE_Q5_0:
                     case GGML_TYPE_Q5_1:
                     case GGML_TYPE_Q8_0:
-                    case GGML_TYPE_IQ4_NL:  // QFNSTREAM: n-gram rows (any row width that is a whole number of blocks)
+                    case GGML_TYPE_IQ4_NL:  // QFN: n-gram rows (any row width that is a whole number of blocks)
                         return true;
                     case GGML_TYPE_Q4_K:  // added 2026-04-19 via k_get_rows_q4_K
                     case GGML_TYPE_Q5_K:
@@ -8014,7 +8016,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
             return op->src[0]->type == GGML_TYPE_F32 && op->src[1]->type == GGML_TYPE_F32;
         case GGML_OP_CUSTOM:
             if(ggml_qfn_expert_reduce_requested(op))return ggml_qfn_expert_reduce_valid(op);
-            return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&(ggml_qfn_qsa_score_valid(op)||ggml_qfn_nvfp4_valid(op)||ggml_dsv41_native_ffn_valid(op)||ggml_dsv41_grouped_half_valid(op));
+            return ggml_cuda_info().devices[dev_ctx->device].cc==1200&&(dsv41_writer_bank::valid(op)||ggml_qfn_qsa_score_valid(op)||ggml_qfn_nvfp4_valid(op)||ggml_dsv41_native_ffn_valid(op)||ggml_dsv41_grouped_half_valid(op));
         case GGML_OP_MAP_CUSTOM3:
             return ggml_dsv41_hc_collapse_valid(op)||ggml_dsv41_hc_expand_valid(op)||
                 (ggml_dsv41_hc_sinkhorn_valid(op)&&ggml_cuda_info().devices[dev_ctx->device].cc==1200);

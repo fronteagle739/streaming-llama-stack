@@ -1046,7 +1046,7 @@ void llama_dsv41_weight_provider::implementation::create_pipeline(){
         // Owner gate: prefill must stream through BOTH banks again after decode repurposed them
         // (bank 0 expert cache, bank 1 resident dense). Fail loudly rather than run single-banked.
         require(p->buffers.size()==p->options.buffers,"Prefill layout lost a streaming bank");
-        // Single-banked prefill only as the plan's explicit long-context VRAM fallback (owner rule);
+        // Single-banked prefill only as the plan's explicit long-context VRAM fallback (Runtime contract);
         // the planner logs LLAMADECODE_PREFILL_SINGLE_BANK with its reason and numbers when it chooses it.
         if(p->options.compute_direct)
             std::fprintf(stderr,"LLAMADECODE_PREFILL_LAYOUT banks=%zu streaming_banks=%u persistent_stages=0 expert_pool_bound=0\n",p->buffers.size(),p->options.buffers);
@@ -1399,7 +1399,8 @@ bool llama_dsv41_weight_provider::acquire_layer_experts(uint32_t layer,const std
     throw std::runtime_error("V4.1 physical expert cache requires Windows CUDA/DirectStorage");
 #else
     require(layer<40&&p->decode_layout&&p->leased&&p->next==1+2*layer&&p->experts_prebound,"Routed experts require their leased dense stage");
-    require(!p->layers[layer].ffn.native_fp4_layout,"Packed FP4 expert slots are read only by the external decoder's packed kernels");
+    // Packed resident appends use the slot-strided native FFN ABI. The exact
+    // same value/scale extents remain shared with the external decode cache.
     require(!ids.empty()&&ids.size()<=6*4096,"Routed expert set size invalid");
     const auto slot_of=p->assign_expert_slots(layer,ids.data(),ids.size(),ggml_backend_cuda_get_stream(p->options.backend));
     // The shared-expert stage (resident) is held with the dense stage through the layer.

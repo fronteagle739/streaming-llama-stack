@@ -7,6 +7,7 @@
   "producer_desktop_reserve_gib": 0.5,
   "runtime_min_free_gib": 0.5,
   "job_commit_gib": 48,
+  "owned_paging_limit_bytes": null,
   "request_timeout_s": 900,
   "lease_minutes": 19,
   "gpu_uuid": "",

@@ -12,6 +12,8 @@ def load(path=None, overrides=None):
     if path:
         cfg.update(json.loads(Path(path).read_text(encoding='utf-8-sig')))
     cfg.update({k: v for k, v in (overrides or {}).items() if v is not None})
+    from .paging_limits import owned_paging_limit_bytes
+    owned_paging_limit_bytes(cfg)
     from .multichunk import selection
     selection(cfg.get('producer_chunks_per_pass', 1))
     from .singlepass import registration

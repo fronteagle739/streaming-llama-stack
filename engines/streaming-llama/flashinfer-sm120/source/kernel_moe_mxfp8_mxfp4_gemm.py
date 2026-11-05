@@ -29,6 +29,24 @@ from ._moe_utils.moe_kernel_builder import LoadABConfig, MmaConfig, Sm12xGemmCon
 from ._moe_utils.sm12x_blockscaled_layout import SF_M_ALIGN, Sm120SfConfigMxfp8Mxfp4
 
 GRANK_A, GRANK_B = 128, 32
+# Bytes between consecutive expert slots when each slot holds its values followed
+# by its scales. None keeps upstream's contiguous planes. Set only by the export.
+SLOT_BYTES = None
+
+
+def weight_value_layout(N, K, E):
+    return cute.make_layout(
+        (N, K, E), stride=(K, 1, N * K if SLOT_BYTES is None else SLOT_BYTES * 2)
+    )
+
+
+def weight_scale_layout(layout, width_bits):
+    if SLOT_BYTES is None:
+        return layout
+    stride = layout.stride
+    return cute.make_layout(
+        layout.shape, stride=(stride[0], stride[1], SLOT_BYTES // (width_bits // 8))
+    )
 ATOM_MNK = (16, 8, 32)
 
 
@@ -488,16 +506,14 @@ class CuteDslSm120MoeMxfp8Mxfp4Grouped:
             cute.size(gB_e, mode=[1]),
             cute.size(gB_e, mode=[2]),
         )
-        gW = cute.make_tensor(
-            gB_e.iterator, cute.make_layout((N, K, E), stride=(K, 1, N * K))
-        )
+        gW = cute.make_tensor(gB_e.iterator, weight_value_layout(N, K, E))
         m_padded_sf = cute.size(gSFA_u8, mode=[1])
         sf_dtype = cfg.load_sf.sf_dtype
         if cutlass.const_expr(cfg.mma.swap_ab):
             t_a, t_b = gW, gA
             gSFA = cute.make_tensor(
                 cute.recast_ptr(gSFB_u8.iterator, dtype=sf_dtype),
-                self.sf.deduce_sfa_layout(N, K, E),
+                weight_scale_layout(self.sf.deduce_sfa_layout(N, K, E), sf_dtype.width),
             )
             gSFB = cute.make_tensor(
                 cute.recast_ptr(gSFA_u8.iterator, dtype=sf_dtype),
@@ -511,7 +527,7 @@ class CuteDslSm120MoeMxfp8Mxfp4Grouped:
             )
             gSFB = cute.make_tensor(
                 cute.recast_ptr(gSFB_u8.iterator, dtype=sf_dtype),
-                self.sf.deduce_sfb_layout(N, K, E),
+                weight_scale_layout(self.sf.deduce_sfb_layout(N, K, E), sf_dtype.width),
             )
         a_layout = cutlass.utils.LayoutEnum.from_tensor(t_a)
         b_layout = cutlass.utils.LayoutEnum.from_tensor(t_b)

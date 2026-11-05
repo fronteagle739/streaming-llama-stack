@@ -234,7 +234,7 @@ class GuardianTests(Base):
             child.wait()
 
     def test_progressing_child_outlives_its_window(self):
-        # Owner rule: timeout_s is a no-progress window. A child that keeps logging for 4 s with a
+        # Runtime contract: timeout_s is a no-progress window. A child that keeps logging for 4 s with a
         # 1 s window must finish normally (the old total cap would have killed it at 1 s).
         child = OwnedProcess(self.cfg, [sys.executable, '-B', '-u', '-c',
                                         'import time\nfor i in range(20):print("tick",i,flush=True);time.sleep(.2)'],

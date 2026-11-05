@@ -44,7 +44,8 @@ ggml_cgraph * clip_graph_qwen3vl::build() {
     }
 
     // calculate absolute position embedding and apply
-    ggml_tensor * learned_pos_embd = resize_position_embeddings();
+    ggml_tensor * learned_pos_embd = resize_position_embeddings(qfn_reference_geometry?
+        (GGML_SCALE_MODE_BILINEAR|GGML_SCALE_FLAG_ALIGN_CORNERS):DEFAULT_INTERPOLATION_MODE);
     learned_pos_embd = ggml_cont_4d(
         ctx0, learned_pos_embd,
         n_embd * 2, n_patches_x / 2, n_patches_y, batch_size);
@@ -180,9 +181,9 @@ ggml_cgraph * clip_graph_qwen3vl::build() {
         model.mm_0_w, model.mm_0_b,
         nullptr, nullptr,
         model.mm_1_w, model.mm_1_b,
-        ffn_op_type::FFN_GELU, -1);
+        qfn_reference_geometry?ffn_op_type::FFN_GELU_ERF:ffn_op_type::FFN_GELU, -1);
 
-    embeddings = ggml_concat(ctx0, embeddings, deepstack_features, 0); // concat along the feature dimension
+    if(deepstack_features)embeddings = ggml_concat(ctx0, embeddings, deepstack_features, 0); // optional DeepStack
 
     // build the graph
     ggml_build_forward_expand(gf, embeddings);

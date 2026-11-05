@@ -1,90 +1,60 @@
-# Single RTX machine: DSV4.1
+# Single-machine inference
 
-Each quality setting has an API-only launcher and a `-webui` launcher. Both run
-the same single engine: streaming-llama prefill followed by modified ds4 decode.
+Run from the checkout root with a local configuration containing model, engine,
+vision, GPU and storage paths. All launchers accept `-DryRun` to validate the
+resolved configuration without loading a model or changing a preset.
 
-Short follow-ups reuse resident experts through the sweep graph by default.
-The measured 32-token append took 2.7-2.9 s, with small numerical differences
-(KL 0.0000235-0.00250 at 2K-32K; recall/top-1 passed). Set
-`"LLAMADECODE_APPEND_RESIDENT_SWEEP": "0"` in `env_overrides` to use full sweeps.
-See the [measured tradeoff](../../docs/EXPERIMENT_E2C.md).
+## DeepSeek V4.1
 
-| Scripts | Prefill setting |
-| --- | --- |
-| `dsv41-accurate*.ps1` | Accurate arithmetic; YOCO off |
-| `dsv41-fast*.ps1` | Fast arithmetic; YOCO off |
-| `dsv41-ultra*.ps1` | ULTRA arithmetic; YOCO off |
-| `dsv41-ultra-cone*.ps1` | Recommended: exact ULTRA dependency cone, keep 2541 |
-| `dsv41-ultra-yoco*.ps1` | Exact cone by default; `-ApproximateYoco` selects approximate keep 140 |
-
-Copy `config.example.json` to `rtx.local.json` and replace the model placeholder
-with the original supported DSV4.1 1017 Q4 GGUF. Set paths for the built producer
-and native runtime if they differ from the stack defaults. Install/build the
-stack first; these examples do not download model weights or select arbitrary
-replacement quantisations.
-
-From the stack root:
+Copy `examples/single-machine/config.example.json` to a local file. It selects
+the packed FP4 streaming engine, exact cone prefill, eight read parts and an
+explicit RAM/sweep plan. The 262K context uses an F32 growable context cache;
+the 999,424-token context uses BF16. Both keep KV at least eight bits.
 
 ```powershell
-.\examples\single-machine\dsv41-ultra-cone-webui.ps1 -Config .\rtx.local.json -DryRun
-.\examples\single-machine\dsv41-ultra-cone-webui.ps1 -Config .\rtx.local.json
-.\examples\single-machine\dsv41-accurate.ps1 -Config .\rtx.local.json
+powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mode max_quality -Context 262k -DryRun
+powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mode balanced -Context 262k -DryRun
+powershell -File examples/single-machine/dsv41-modes.ps1 -Config LOCAL.json -Mode max_speed -Context 1m -DryRun
 ```
 
-`-Context 262k` is the default. `-Context 1m` selects 999,424 configured tokens
-with the growable BF16 context cache; this is capacity, not a measured one-million
-token prefill result. `-DryRun` starts nothing and writes nothing. Stop a running
-foreground launcher with Ctrl+C; its existing guardian owns the engine tree.
+Remove `-DryRun` to serve. The full-performance defaults use 10.25 GiB aggregate
+host budget, 10 GiB worker, 6.25 GiB base producer, 7.75 GiB producer maximum and
+a 4 GiB physical reserve. Automatic Engram queue policy uses four queues for a
+single sweep and one for multiple sweeps. Budgets that cannot fit available
+physical RAM refuse work; they do not use the page file as extra capacity.
+Explicit alternate profiles remain available with `--performance-experiment`.
 
-The exact cone is the default for `scripts/start-dsv41-single-*.ps1` and the
-legacy YOCO examples. Select `--single ultra-yoco` in `examples/run_preset.py`
-or add `-ApproximateYoco` to a legacy launcher to opt into approximate replay.
-The cone is bit-exact against the same full-prefill control at 8K and 49,555
-text tokens. Real-image numerical qualification remains separate.
+The accurate, fast, ultra, ultra-cone and approximate ultra-yoco launchers, with
+API-only and web UI variants, remain available. Approximate YOCO requires its
+explicit flag. Resident sweep append, CPU expert lanes, RAM cache, MTP and
+writer controls remain selectable through their documented flags.
 
-YOCO is approximate. Use an
-appropriate vision-enabled local config and producer for image prompts; do not
-advertise the text-only YOCO speed as image throughput. Prefill quality is separate
-from the live decode bias slider and phase sampler controls.
+See [performance and quality](../../README.md#performance-and-quality),
+[table reproduction](DSV41_BENCHMARK.md), [model conversion](../../docs/DSV41_GGUF.md)
+and [backend setup](../../docs/BACKEND_SETUP.md).
 
-Exact resident sweep follow-ups are enabled with `LLAMADECODE_APPEND_RESIDENT_SWEEP=1`.
-The per-token append path changes logits and remains opt-in (`LLAMADECODE_APPEND_DECODE_MAX=96`).
-LFU admission defaults to 1 with half life 16; explicit 0 keeps LRU.
-Certified FP4 index scoring is enabled by default on supported SM120 BF16-index
-paths. The 100K comparison is bit-identical and faster; unsupported inputs use
-the existing BF16 scorer. Set `LLAMA_DSV41_INDEX_FP4` to `"0"` in local
-`env_overrides` to disable it. See [E6 measurements](../../docs/EXPERIMENT_E6.md).
+## Qwen3.8 Flash Next
 
-## Qwen3.8 Flash Next (RTX 5090, native packed NVFP4)
+Copy `qfn.example.json` and provide the complete `.slpack`, stable CUDA engine,
+compatible vision companion and GPU identity. Named mode settings are in
+`qfn.settings.json`; all performance controls are explicit flags or settings.
 
-Copy [qfn.example.json](qfn.example.json) to `my.local.json`, set `model` and `gpu_uuid`, then run
-`qfn-max-quality.ps1`, `qfn-balanced.ps1` or `qfn-max-speed.ps1`. The engine's code defaults are the fastest qualified path:
-packed-vector FP4 decode on the bytes prefill streams, one model graph and one service graph per token,
-the prefill carry in the cache tail, eight-split expert reads and MTP off.
-See the [performance and quality table](../../README.md#performance-and-quality)
-for measured prompt lengths, biases and available metrics. The
-[exact 100K guide](../../docs/QFN_100K_REPRO.md) gives the fixture and commands;
-native qualification of the portable timing wrapper remains pending.
-Keep the pack on a fast NVMe volume. MTP and the RAM expert tier remain
-available and are off in the measured defaults.
+```powershell
+powershell -File examples/single-machine/qfn-max-quality.ps1 -Config LOCAL.json -DryRun
+powershell -File examples/single-machine/qfn-balanced.ps1 -Config LOCAL.json -DryRun
+powershell -File examples/single-machine/qfn-max-speed.ps1 -Config LOCAL.json -DryRun
+```
 
-Each model carries its own settings in [qfn.settings.json](qfn.settings.json) or
-[dsv41.settings.json](dsv41.settings.json). These record all three bias values,
-the valid numeric range, router-spread reference, cache seed/half-life and
-tile/read settings. The QFN named launchers accept `-Settings your.settings.json`;
-`dsv41-modes.ps1 -Config your.local.json -Mode balanced -Settings your.settings.json`
-selects the DSV4.1 decode mode independently of its exact-cone prefill. Both
-support `-DryRun`. Explicit local engine options and sampler fields remain available.
-The QFN example uses the qualified 3 GiB physical host budget and 6 GiB
-free-memory floor. Its 40 GiB Windows commit cap includes WDDM accounting;
-the physical-RAM guardian still applies and page-file capacity is never used.
-DSV4.1 retains its delivered 0 / 0.35 / 1.36125 points and QFN starts at
-0 / 0 / 0.68; the initial QFN Balanced value is intentionally identified as
-uncalibrated. Numeric QFN requests still accept the full [0,8] range.
+Max quality and Balanced use unbiased routing; Max speed uses bias 0.68.
+Numeric biases, including 0.35, retain the full supported range. When changing
+the Max speed bias, set the same value in the local settings file and explicit
+`-MaxSpeedBias` flag. Bias changes routing and the measured quality tradeoff;
+it does not remove sampler controls. MTP and host-RAM caching remain opt-in for
+single-machine experiments. Prefill/decode use `dsv-native`, the refined
+tensor-core indexer, tile 2048 and eight read parts.
 
-Settings marked `reference-settings` are measured reference choices, not an
-automatic calibration of the current machine. Recalibrate after changing
-hardware, storage, model weights, quantisation, context, cache or kernels; see
-[CALIBRATION.md](CALIBRATION.md). A new machine-local calibration sweep must report KL/top-1, warm throughput,
-cache hits and natural generation stops. The shipped 0.68 Max speed selection is
-a reference selection, not a new machine calibration.
+The native API retains streaming, thinking, tools, temperature, top-k/top-p/min-p,
+typical sampling, penalties, seed, stop strings, logit bias, token limits,
+cancellation, prefix reuse and guarded lazy image encoding. See
+[QFN setup](../../docs/QFN.md), [100K reproduction](../../docs/QFN_100K_REPRO.md),
+[calibration](CALIBRATION.md), and [paired Q4/Q8 recipes](../dual-machine/qfn/README.md).

@@ -1,4 +1,4 @@
-// QFNSTREAM: Qwen3.8 Flash Next streaming engine. The math follows upstream ggml-org llama.cpp
+// QFN: Qwen3.8 Flash Next streaming engine. The math follows upstream ggml-org llama.cpp
 // src/models/qwen4exp.cpp (a91eab67d) op for op; the differences are where the data lives:
 //   * dense weights resident in VRAM, routed experts streamed per layer through the stack's DirectStorage weight
 //     fetcher (two banks, one contiguous 675 MiB read per layer), the n-gram (PLE) rows read through the stack's
@@ -6,6 +6,11 @@
 //   * prefill is layer-major over the whole prompt in row tiles (each layer's experts are read once per prompt);
 //   * QSA attends with a gather-sparse kernel over the selected cells (upstream masks a dense attention).
 #include "qfn-engine.h"
+#include "qfn-state.h"
+#include <io.h>
+#include <fcntl.h>
+#include <share.h>
+#include <sys/stat.h>
 #include "llama.h"
 
 #include <filesystem>
@@ -118,6 +123,7 @@ static void set_input(ggml_tensor * t, const void * data, size_t offset, size_t 
 }
 
 struct qfn_engine::impl {
+    std::function<void(uint32_t,uint32_t,uint64_t)> prefill_progress;
     // Extend the existing synchronized diagnostic profiler at request boundaries.
     // Counts are CPU graph nodes, not an inferred CUDA kernel-launch count.
     bool phase_profile = false;
@@ -137,6 +143,37 @@ struct qfn_engine::impl {
         ggml_cuda_op_profile_dump_now();
     }
     qfn_options opt;
+    std::vector<qfn_image_span> images;
+    std::array<int32_t,4> image_position(int64_t position) const {
+        int64_t delta=0;
+        for(const auto &image:images) {
+            if(position<image.position)break;
+            if(position<int64_t(image.position)+image.count) {
+                const auto row=uint32_t(position-image.position);
+                const auto base=int32_t(int64_t(image.position)+delta);
+                return {base,base+int32_t(row/image.grid_width),base+int32_t(row%image.grid_width),0};
+            }
+            delta-=int64_t(image.count)-std::max(image.grid_height,image.grid_width);
+        }
+        const auto value=int32_t(position+delta);return {value,value,value,0};
+    }
+    int32_t image_delta() const {
+        int64_t delta=0;
+        for(const auto &image:images)delta-=int64_t(image.count)-std::max(image.grid_height,image.grid_width);
+        return int32_t(delta);
+    }
+    void image_embedding(int32_t token,int64_t position,float *dst) const {
+        for(const auto &image:images)if(position>=image.position&&position<int64_t(image.position)+image.count) {
+            std::memcpy(dst,image.values.data()+size_t(position-image.position)*hp->n_embd,size_t(hp->n_embd)*4);return;
+        }
+        ggml_get_type_traits(tok_embd_type)->to_float(tok_embd+size_t(token)*tok_embd_row,dst,hp->n_embd);
+    }
+    void image_positions(std::vector<int32_t> &out,int64_t count,int64_t first,int64_t stride=1) const {
+        for(int64_t i=0;i<count;i++) {
+            const auto value=image_position(first+i*stride);
+            for(int axis=0;axis<4;axis++)out[size_t(axis*count+i)]=value[axis];
+        }
+    }
     qfn_pack pack;
     const qfn_hparams * hp = nullptr;
     ggml_backend_t gpu = nullptr;
@@ -211,6 +248,11 @@ struct qfn_engine::impl {
         int64_t p0 = 0;
         std::vector<uint32_t> idx;
         llama_dsv41_engram_prompt_cache cache;
+        std::vector<std::unique_ptr<llama_dsv41_engram_prompt_cache>> shards;
+        std::vector<uint32_t> joined_ids;
+        std::vector<uint8_t> joined_rows;
+        double child_kernel_ms=0,child_user_ms=0;uint64_t child_cycles=0;
+        bool child_cpu_available=true,parallel=false,parallel_scan=false;
         std::atomic<bool> cancel{false}, sweep_started{false};
         std::exception_ptr failure;
         std::thread worker;
@@ -266,6 +308,15 @@ struct qfn_engine::impl {
     // MTP drafter: one QSA block (layer index n_layer in layers / kcache / idx caches), its 512 experts resident in
     // VRAM (relaid from Basalt's plane layout to gate|up|down blobs), the head restricted to the draft vocabulary
     bool mtp_ok = false;
+    bool handover_draft_pending = false;
+    ggml_context *paired_ctx = nullptr;
+    ggml_backend_buffer_t paired_buffer = nullptr;
+    std::array<ggml_tensor *,4> paired_mtp{};
+    uint32_t paired_rows = 0;
+    struct paired_anchor_state {
+        qfn_native_plan plan{};std::vector<uint8_t> owners;
+        std::vector<int32_t> tokens;std::vector<float> logits;std::vector<qfn_image_span> images;
+    } paired_anchor;
     int mtp_drafts = 3;
     ggml_context * mctx = nullptr;
     ggml_backend_buffer_t mbuf = nullptr, mexp_buf = nullptr;
@@ -345,8 +396,8 @@ struct qfn_engine::impl {
         if (ple_conv) replay_tensors.push_back(ple_conv);
         for (auto * t : replay_tensors) replay_state_bytes += ggml_nbytes(t);
         require(replay_state_bytes > 0 && cudaMalloc(&replay_state, replay_state_bytes) == cudaSuccess,
-                "cannot allocate QFNV3OPT pre-step recurrent state");
-        log("[qfn] QFNV3OPT replay state: %.1f MiB, %zu tensors\n", replay_state_bytes / 1048576.0, replay_tensors.size());
+                "cannot allocate decode replay pre-step recurrent state");
+        log("[qfn] decode replay replay state: %.1f MiB, %zu tensors\n", replay_state_bytes / 1048576.0, replay_tensors.size());
     }
 
     void copy_replay_state(bool restore) {
@@ -396,6 +447,9 @@ struct qfn_engine::impl {
     ~impl() {
         cancel_prefill();
         v3_shutdown(); // an in-flight timed-out service still owns RAM and staging metadata
+        release_reference_weights();
+        if(paired_buffer)ggml_backend_buffer_free(paired_buffer);
+        if(paired_ctx)ggml_free(paired_ctx);
         destroy_future_service();
         if (pfbuf) ggml_backend_buffer_free(pfbuf);
         if (pfctx) ggml_free(pfctx);
@@ -673,9 +727,9 @@ struct qfn_engine::impl {
                 "QFN_NATIVE_NVFP4_DECODE_RESIDUAL must be 0 or 1");
         const bool residual = residual_env && !std::strcmp(residual_env, "1");
         const char * vector_env = std::getenv("QFN_NATIVE_NVFP4_DECODE_VECTOR");
-        require(!vector_env || !std::strcmp(vector_env, "0") || !std::strcmp(vector_env, "1"),
-                "QFN_NATIVE_NVFP4_DECODE_VECTOR must be 0 or 1");
-        const bool vector_decode = vector_env && !std::strcmp(vector_env, "1");
+        require(!vector_env || !std::strcmp(vector_env, "0") || !std::strcmp(vector_env, "1") || !std::strcmp(vector_env, "2") || !std::strcmp(vector_env, "3") || !std::strcmp(vector_env, "4"),
+                "QFN_NATIVE_NVFP4_DECODE_VECTOR must be 0 through 4");
+        const bool vector_decode = vector_env && std::strcmp(vector_env, "0");
         for (const auto & e : pack.experts) nvfp4 = nvfp4 || e.is_nvfp4();
         require(!shared_gu || (nvfp4 && pack.native_nvfp4_packed),
                 "QFN_NATIVE_NVFP4_SHARE_GU_INPUT=1 requires native-packed NVFP4; refusing ignored input-sharing option");
@@ -685,8 +739,9 @@ struct qfn_engine::impl {
                 "QFN_NATIVE_NVFP4_DECODE_VECTOR1 requires native-packed NVFP4 and explicit decode mode6; refusing ignored arithmetic option");
         require(!vector_decode || !residual,
                 "QFN_NATIVE_NVFP4_DECODE_VECTOR1 conflicts with DECODE_RESIDUAL1; select one activation arithmetic");
-        if (vector_decode) log("[qfn] DSV packed FP4 fused vector decode: dynamic Q8_1 activations, QFN UE4M3 per16 scales/tails, no expert-weight Q8 inversion; persistent workspace; candidate\n");
+        if (vector_decode) log("[qfn] packed FP4 vector policy=%s: %s activations, original UE4M3 per16 weight scales/tails; persistent workspace\n",vector_env,std::strcmp(vector_env,"1")?"F32":"dynamic Q8_1");
         if (!nvfp4) {
+            require(!opt.reference_prefill_max_tokens,"Reference small-prefix mode requires native-packed NVFP4 experts");
             require(!opt.nvfp4_mode_explicit, "--nvfp4-mode requires NVFP4 main experts; refusing to ignore it");
             require(!opt.nvfp4_decode_mode_explicit, "--nvfp4-decode-mode requires NVFP4 main experts; refusing to ignore it");
             return;
@@ -722,6 +777,9 @@ struct qfn_engine::impl {
             log("[qfn] shared native FP4 gate/up input admitted: %zu bit-identical calibration pairs; independent down globals; long prefill mode6 only\n",
                 scales.size() / 3);
         }
+        require(opt.reference_prefill_max_tokens<=1024,"Reference prefill token bound is invalid");
+        require(!opt.reference_prefill_max_tokens||(pack.native_nvfp4_packed&&opt.nvfp4_mode==6&&vector_decode),
+                "Reference small-prefix mode requires packed mode6 and explicit vector1; no arithmetic option is ignored");
         char error[1024] = {};
         require(ggml_backend_cuda_qfn_nvfp4_available(error, sizeof(error)) != 0, error);
         if (pack.native_nvfp4_packed)
@@ -782,7 +840,11 @@ struct qfn_engine::impl {
     uint64_t nvfp4_prefill_required(int64_t rows) const {
         if (!nvfp4) return 0;
         require(rows > 0 && rows <= INT32_MAX, "QFN_NVFP4_WORKSPACE: invalid prefill row count");
-        const uint64_t bytes = nvfp4_workspace(int(rows),512,opt.nvfp4_mode);
+        uint64_t bytes = nvfp4_workspace(int(rows),512,opt.nvfp4_mode);
+        if(reference_prefill_active)for(int n=1;n<=std::min<int64_t>(4,rows);n++) {
+            const uint64_t part=nvfp4_workspace(n,512,6);require(part,"Reference vector workspace geometry refused");
+            bytes=std::max(bytes,part);
+        }
         require(bytes && bytes <= uint64_t(INT64_MAX), "QFN_NVFP4_WORKSPACE: prefill scratch overflow/unsupported geometry");
         return bytes;
     }
@@ -978,6 +1040,11 @@ struct qfn_engine::impl {
     void validate_prompt(const std::vector<int32_t> & tokens, int64_t past = 0) const {
         require(!tokens.empty() && uint64_t(past) + tokens.size() <= opt.n_ctx, "prompt longer than the engine context");
         for (int32_t t : tokens) require(t >= 0 && uint32_t(t) < hp->n_vocab, "token id out of range");
+        for(const auto &image:images) {
+            require(uint64_t(image.position)+image.count<=uint64_t(past)+tokens.size(),"image span exceeds its prompt");
+            const auto first=std::max<int64_t>(past,image.position),end=std::min<int64_t>(past+tokens.size(),uint64_t(image.position)+image.count);
+            for(int64_t i=first;i<end;i++)require(uint32_t(tokens[size_t(i-past)])==hp->ple_image,"image span does not cover image placeholder tokens");
+        }
     }
 
     void start_weight_stream(bool pause) {
@@ -1015,7 +1082,14 @@ struct qfn_engine::impl {
         job->sweep_started.store(!cold);
         job->started_ms = now_ms();
         auto load = [this, job, cold, pause] {
+            const HANDLE thread=GetCurrentThread();const int previous=GetThreadPriority(thread);
+            const int requested=opt.ple_thread_above_normal?THREAD_PRIORITY_ABOVE_NORMAL:THREAD_PRIORITY_NORMAL;
+            FILETIME created{},exited{},kernel0{},user0{},kernel1{},user1{};ULONG64 cycles0=0,cycles1=0;
+            const bool cpu0=GetThreadTimes(thread,&created,&exited,&kernel0,&user0)&&QueryThreadCycleTime(thread,&cycles0);
+            bool changed=false;
             try {
+                require(previous!=THREAD_PRIORITY_ERROR_RETURN,"PLE worker priority query failed");
+                if(previous!=requested){require(SetThreadPriority(thread,requested)!=0,"PLE worker priority selection failed");changed=true;}
                 const int64_t h0 = std::max<int64_t>(0, job->p0 - int64_t(hp->ple_ngram) + 1);
                 const std::vector<int32_t> tok(job->tokens.begin() + h0, job->tokens.end());
                 const int64_t skip = job->p0 - h0;
@@ -1023,23 +1097,96 @@ struct qfn_engine::impl {
                 const uint64_t row_bytes = ggml_row_size(pt.type, pt.ne[0]);
                 ple_hash(tok, job->idx);
                 job->idx.erase(job->idx.begin(), job->idx.begin() + skip * hp->ple_n_heads);
-                std::array<std::vector<uint32_t>, 2> ids{ job->idx, {} };
-                job->cache.prepare_rows_early(std::move(ids), {pt.offset, 0}, uint32_t(row_bytes),
-                                             {uint64_t(pt.ne[1]), 0}, opt.host_budget);
+                uint64_t planned=0;bool scan=false;
+                if(opt.ple_io_workers==1) {
+                    std::array<std::vector<uint32_t>,2> ids{job->idx,{}};
+                    job->cache.set_submit_low_water(opt.ple_submit_low_water);
+                    job->cache.set_completion_poll_us(opt.ple_poll_us);
+                    job->cache.prepare_rows_early(std::move(ids),{pt.offset,0},uint32_t(row_bytes),
+                        {uint64_t(pt.ne[1]),0},opt.host_budget);
+                    planned=job->cache.planned_requests();scan=job->cache.scan_geometry();
+                } else {
+                    job->parallel=true;
+                    const auto bounds=std::minmax_element(job->idx.begin(),job->idx.end());
+                    require(bounds.first!=job->idx.end(),"PLE parallel load requires nonempty rows");
+                    const uint64_t low=*bounds.first,width=(uint64_t(*bounds.second)-low+opt.ple_io_workers)/opt.ple_io_workers;
+                    std::vector<std::vector<uint32_t>> parts(opt.ple_io_workers);
+                    for(uint32_t id:job->idx)parts[(uint64_t(id)-low)/width].push_back(id);
+                    // Reserve the maximum flattened output charge before admitting
+                    // any shard. No loader or row count is silently dropped to fit.
+                    const uint64_t reserve=uint64_t(job->idx.size())*(row_bytes+4);
+                    require(reserve<opt.host_budget,"PLE parallel merge exceeds explicit host budget");
+                    const uint64_t each=(opt.host_budget-reserve)/opt.ple_io_workers;
+                    for(auto &part:parts)if(!part.empty()) {
+                        auto cache=std::make_unique<llama_dsv41_engram_prompt_cache>();
+                        cache->set_submit_low_water(opt.ple_submit_low_water);
+                        cache->set_completion_poll_us(opt.ple_poll_us);
+                        std::array<std::vector<uint32_t>,2> ids{std::move(part),{}};
+                        cache->prepare_rows_early(std::move(ids),{pt.offset,0},uint32_t(row_bytes),{uint64_t(pt.ne[1]),0},each);
+                        planned+=cache->planned_requests();scan=scan||cache->scan_geometry();
+                        job->shards.push_back(std::move(cache));
+                    }
+                    job->parallel_scan=scan;
+                }
                 // Preserve the DSV4.1 auto arm: scans always start early;
                 // random loads that cannot fit the cold gap start at prefill.
                 if (cold && llama_dsv41_engram_early_auto()) {
-                    const auto d = llama_dsv41_engram_early::decide(job->cache.planned_requests(),
+                    const auto d = llama_dsv41_engram_early::decide(planned,
                             llama_dsv41_engram_early_iops(), llama_dsv41_engram_early::cold_gap_s);
-                    if (!job->cache.scan_geometry() && !d.early) {
+                    if (!scan && !d.early) {
                         log("[qfn] PLE early auto: random load deferred to sweep start (predicted %.3f s)\n", d.predicted_s);
                         while (!job->sweep_started.load() && !job->cancel.load())
                             std::this_thread::sleep_for(std::chrono::milliseconds(1));
                     }
                 }
-                file_reader verified(pack.wpath, false);
-                job->cache.load_early(pack.wpath.c_str(), verified.h, verified.size, [job] { return job->cancel.load(); });
+                if(!job->parallel) {
+                    file_reader verified(pack.wpath,false);
+                    job->cache.load_early(pack.wpath.c_str(),verified.h,verified.size,[job]{return job->cancel.load();});
+                } else {
+                    struct measure {double kernel=0,user=0;uint64_t cycles=0;bool available=false;};
+                    std::vector<measure> cpu(job->shards.size());std::vector<std::exception_ptr> failures(job->shards.size());
+                    auto read_part=[&](size_t i){
+                        HANDLE self=GetCurrentThread();const int old=GetThreadPriority(self);
+                        FILETIME a{},b{},k0{},u0{},k1{},u1{};ULONG64 c0=0,c1=0;
+                        const bool first=GetThreadTimes(self,&a,&b,&k0,&u0)&&QueryThreadCycleTime(self,&c0);bool changed=false;
+                        try {
+                            require(old!=THREAD_PRIORITY_ERROR_RETURN,"PLE shard priority query failed");
+                            if(old!=requested){require(SetThreadPriority(self,requested)!=0,"PLE shard priority selection failed");changed=true;}
+                            file_reader verified(pack.wpath,false);
+                            job->shards[i]->load_early(pack.wpath.c_str(),verified.h,verified.size,[job]{return job->cancel.load();});
+                        }catch(...){failures[i]=std::current_exception();job->cancel.store(true);}
+                        if(changed&&!SetThreadPriority(self,old))failures[i]=std::make_exception_ptr(std::runtime_error("PLE shard priority restoration failed"));
+                        cpu[i].available=first&&GetThreadTimes(self,&a,&b,&k1,&u1)&&QueryThreadCycleTime(self,&c1);
+                        auto ticks=[](const FILETIME&t){return (uint64_t(t.dwHighDateTime)<<32)|t.dwLowDateTime;};
+                        if(cpu[i].available){cpu[i].kernel=double(ticks(k1)-ticks(k0))/10000.0;cpu[i].user=double(ticks(u1)-ticks(u0))/10000.0;cpu[i].cycles=c1-c0;}
+                    };
+                    std::vector<std::thread> readers;readers.reserve(job->shards.size()-1);
+                    try{for(size_t i=1;i<job->shards.size();i++)readers.emplace_back(read_part,i);read_part(0);}
+                    catch(...){job->cancel.store(true);for(auto &reader:readers)reader.join();throw;}
+                    for(auto &reader:readers)reader.join();
+                    for(size_t i=0;i<failures.size();i++)if(failures[i])std::rethrow_exception(failures[i]);
+                    for(size_t i=1;i<cpu.size();i++){job->child_cpu_available=job->child_cpu_available&&cpu[i].available;job->child_kernel_ms+=cpu[i].kernel;job->child_user_ms+=cpu[i].user;job->child_cycles+=cpu[i].cycles;}
+                    size_t count=0;for(const auto &part:job->shards)count+=part->table_ids(0).size();
+                    job->joined_ids.reserve(count);job->joined_rows.resize(count*row_bytes);size_t at=0;
+                    for(const auto &part:job->shards) {
+                        const auto &ids=part->table_ids(0);job->joined_ids.insert(job->joined_ids.end(),ids.begin(),ids.end());
+                        std::memcpy(job->joined_rows.data()+at*row_bytes,part->table_rows(0),ids.size()*row_bytes);at+=ids.size();
+                    }
+                    require(std::is_sorted(job->joined_ids.begin(),job->joined_ids.end())&&
+                        std::adjacent_find(job->joined_ids.begin(),job->joined_ids.end())==job->joined_ids.end(),"PLE shard ranges overlap or are unordered");
+                    log("[qfn] PLE parallel owners: requested=%u active=%zu unique_rows=%zu merged_bytes=%zu admitted_host_bytes=%llu\n",
+                        opt.ple_io_workers,job->shards.size(),count,job->joined_rows.size(),(unsigned long long)opt.host_budget);
+                }
             } catch (...) { job->failure = std::current_exception(); }
+            if(changed&&!SetThreadPriority(thread,previous))job->failure=std::make_exception_ptr(std::runtime_error("PLE worker priority restoration failed"));
+            const bool cpu1=GetThreadTimes(thread,&created,&exited,&kernel1,&user1)&&QueryThreadCycleTime(thread,&cycles1);
+            auto ticks=[](const FILETIME &t){return (uint64_t(t.dwHighDateTime)<<32)|t.dwLowDateTime;};
+            const bool measured=cpu0&&cpu1&&job->child_cpu_available;
+            log("[qfn] PLE worker: priority=%s cpu_times_available=%d kernel_ms=%.3f user_ms=%.3f cycles=%llu\n",
+                opt.ple_thread_above_normal?"above-normal":"normal",int(measured),
+                measured?double(ticks(kernel1)-ticks(kernel0))/10000.0+job->child_kernel_ms:-1.0,
+                measured?double(ticks(user1)-ticks(user0))/10000.0+job->child_user_ms:-1.0,
+                (unsigned long long)(measured?cycles1-cycles0+job->child_cycles:0));
             job->wall_ms = now_ms() - job->started_ms;
             if (pause) wf_hold_from(wf, INT_MAX);
         };
@@ -1062,13 +1209,19 @@ struct qfn_engine::impl {
         const qfn_tensor & pt = pack.get("per_layer_token_embd.weight");
         const uint64_t row_bytes = ggml_row_size(pt.type, pt.ne[0]);
         const double upload_started = now_ms();
-        const auto & uids = cache.table_ids(0);
-        const uint8_t * rows = cache.table_rows(0);
+        const auto & uids = job.parallel?job.joined_ids:cache.table_ids(0);
+        const uint8_t * rows = job.parallel?job.joined_rows.data():cache.table_rows(0);
         slot.resize(idx.size());
-        for (size_t i = 0; i < idx.size(); ++i) {
-            const auto it = std::lower_bound(uids.begin(), uids.end(), idx[i]);
-            slot[i] = (int32_t) (it - uids.begin());
-        }
+        const uint32_t threads=uint32_t(std::min<size_t>(opt.ple_slot_threads,idx.size()));
+        auto slots=[&](uint32_t part){
+            const size_t begin=idx.size()*part/threads,end=idx.size()*(part+1)/threads;
+            for(size_t i=begin;i<end;i++)slot[i]=int32_t(std::lower_bound(uids.begin(),uids.end(),idx[i])-uids.begin());
+        };
+        std::vector<std::thread> workers;workers.reserve(threads?threads-1:0);
+        try{for(uint32_t part=1;part<threads;part++)workers.emplace_back(slots,part);if(threads)slots(0);}
+        catch(...){for(auto &worker:workers)worker.join();throw;}
+        for(auto &worker:workers)worker.join();
+        const double slots_ms=now_ms()-upload_started;
         if (pbuf) { ggml_backend_buffer_free(pbuf); pbuf = nullptr; }
         if (pctx) { ggml_free(pctx); pctx = nullptr; }
         ggml_init_params ip = { 2 * ggml_tensor_overhead(), nullptr, true };
@@ -1092,8 +1245,11 @@ struct qfn_engine::impl {
             log("[qfn] uploaded PLE row dump: %zu bytes to %s\n", bytes, opt.ple_row_dump.c_str());
         }
         log("[qfn] PLE rows: %zu lookups, %zu unique rows (%.1f MiB), %.0f ms (%s geometry)\n",
-            idx.size(), uids.size(), uids.size() * row_bytes / 1048576.0, job.wall_ms, cache.scan_geometry() ? "scan" : "random");
+            idx.size(), uids.size(), uids.size() * row_bytes / 1048576.0, job.wall_ms,
+            job.parallel?(job.parallel_scan?"parallel scan":"parallel random"):(cache.scan_geometry()?"scan":"random"));
         upload_ms = now_ms() - upload_started;
+        log("[qfn] PLE slot map: threads=%u rows=%zu milliseconds=%.3f remaining_upload_ms=%.3f\n",
+            threads,idx.size(),slots_ms,upload_ms-slots_ms);
         log("[qfn] PLE overlap: load_wall_ms=%.3f exposed_read_wait_ms=%.3f upload_and_slots_ms=%.3f\n",
             job.wall_ms, read_wait_ms, upload_ms);
         ple_pending.reset();
@@ -1107,12 +1263,107 @@ struct qfn_engine::impl {
 
     // ---- exact multi-token decode: per-token splits of the ops whose kernels depend on the column count
     bool split_tokens = false;
+    bool reference_prefill_active = false;
+    std::vector<ggml_backend_buffer_t> reference_weight_buffers;
+    std::vector<uint8_t> reference_quantized;
+    std::vector<float> reference_float_row;
+    std::vector<ggml_fp16_t> reference_half;
+    void release_reference_weights() {
+        if(!reference_weight_buffers.empty())ggml_backend_synchronize(gpu);
+        for(auto *buffer:reference_weight_buffers)ggml_backend_buffer_free(buffer);
+        reference_weight_buffers.clear();
+    }
+    void retain_reference_host_buffers() {
+        const size_t bytes=reference_quantized.capacity()+reference_float_row.capacity()*sizeof(float)+
+            reference_half.capacity()*sizeof(ggml_fp16_t);
+        // Keep this bounded host arena for the engine lifetime. Freeing a
+        // pinned heap arena can turn its holes into inaccessible private pages
+        // which cannot be locked by the following residency scan. Reuse keeps
+        // the actual host coefficients readable and eligible for VirtualLock;
+        // the independent zero-owned-paging guard is unchanged.
+        log("[qfn] reference host workspace retained: %zu bytes quant=%p/%zu row=%p/%zu half=%p/%zu; graph GPU coefficients released; guard unchanged\n",bytes,
+            reference_quantized.data(),reference_quantized.capacity(),reference_float_row.data(),reference_float_row.capacity()*sizeof(float),
+            reference_half.data(),reference_half.capacity()*sizeof(ggml_fp16_t));
+    }
+    uint32_t reference_prefill_rows=0;
+    size_t graph_node_capacity() const {
+        if(!reference_prefill_active)return 8192;
+        size_t nodes=8192;while(nodes<size_t(reference_prefill_rows)*128)nodes*=2;return nodes;
+    }
+    ggml_tensor * reference_columns(ggml_context *ctx,ggml_tensor *weight,ggml_tensor *x) {
+        ggml_tensor *out=nullptr;
+        // Native MMVF retains F32 inputs/accumulation with either coefficient
+        // storage type. NVIDIA admits one F16 column or three F32 columns.
+        const int64_t columns=weight->type==GGML_TYPE_F16?1:3;
+        for(int64_t first=0;first<x->ne[1];first+=columns) {
+            const int64_t count=std::min<int64_t>(columns,x->ne[1]-first);
+            // Keep every broadcast dimension and the actual token/batch strides.
+            auto *part=ggml_view_4d(ctx,x,x->ne[0],count,x->ne[2],x->ne[3],x->nb[1],x->nb[2],x->nb[3],size_t(first)*x->nb[1]);
+            auto *product=ggml_mul_mat(ctx,weight,part);ggml_mul_mat_set_prec(product,GGML_PREC_F32);
+            out=out?ggml_concat(ctx,out,product,1):product;
+        }
+        require(out,"Reference matrix has no input columns");return out;
+    }
+
+    ggml_tensor * reference_matmul(ggml_context *ctx,ggml_tensor *w,ggml_tensor *x) {
+        if(!reference_prefill_active)return ggml_mul_mat(ctx,w,x);
+        if(w->type==GGML_TYPE_F32||w->type==GGML_TYPE_F16) {
+            return reference_columns(ctx,w,x);
+        }
+        require(w->ne[2]==1&&w->ne[3]==1&&(w->type==GGML_TYPE_BF16||w->type==GGML_TYPE_F16||ggml_is_quantized(w->type)),
+            "Reference prefill matrix has unsupported native geometry/type");
+        // Bound host conversion rows to32MiB, retaining original values. The
+        // existing graph reserve admits these temporary GPU matrices; original
+        // model weights and the complete head on disk remain unchanged.
+        const int64_t block=std::max<int64_t>(1,std::min<int64_t>(8192,(32ll<<20)/(w->ne[0]*4)));
+        ggml_tensor *out=nullptr;
+        for(int64_t first=0;first<w->ne[1];first+=block) {
+            const int64_t count=std::min(block,w->ne[1]-first);
+            auto *view=ggml_view_2d(ctx,w,w->ne[0],count,w->nb[1],size_t(first)*w->nb[1]);
+            // The accepted CUDA backend does not implement Q6_K GET_ROWS.
+            // Materialize the original values with its existing CPU decoder,
+            // Use bounded reusable host buffers and upload the exact Mac-F16 values
+            // as F16 coefficients, preserving F32 activations and accumulation.
+            // GPU buffers live through this graph and are freed before the next.
+            const auto *traits=ggml_get_type_traits(w->type);
+            require(w->data&&traits&&traits->to_float,"Reference weight has no readable native row decoder");
+            const size_t source_row=ggml_row_size(w->type,w->ne[0]);
+            reference_quantized.resize(size_t(count)*source_row);
+            reference_float_row.resize(size_t(w->ne[0]));
+            reference_half.resize(size_t(count*w->ne[0]));
+            if(w->nb[1]==source_row) {
+                require(cudaMemcpy(reference_quantized.data(),(const char*)w->data+size_t(first)*w->nb[1],
+                    size_t(count)*source_row,cudaMemcpyDeviceToHost)==cudaSuccess,"Reference weight readback failed");
+            } else for(int64_t row=0;row<count;row++) {
+                require(cudaMemcpy(reference_quantized.data()+size_t(row)*source_row,
+                    (const char*)w->data+size_t(first+row)*w->nb[1],source_row,cudaMemcpyDeviceToHost)==cudaSuccess,
+                    "Reference strided weight readback failed");
+            }
+            for(int64_t row=0;row<count;row++) {
+                float *values=reference_float_row.data();
+                traits->to_float(reference_quantized.data()+size_t(row)*source_row,values,w->ne[0]);
+                ggml_fp32_to_fp16_row(values,reference_half.data()+size_t(row*w->ne[0]),w->ne[0]);
+            }
+            auto *dense=ggml_new_tensor_2d(ctx,GGML_TYPE_F16,w->ne[0],count);
+            const auto type=ggml_backend_get_default_buffer_type(gpu);
+            auto *buffer=ggml_backend_buft_alloc_buffer(type,ggml_backend_buft_get_alloc_size(type,dense));
+            require(buffer,"Reference weight upload exceeded admitted graph VRAM");
+            reference_weight_buffers.push_back(buffer);
+            require(ggml_backend_tensor_alloc(buffer,dense,ggml_backend_buffer_get_base(buffer))==GGML_STATUS_SUCCESS,
+                "Reference weight tensor allocation failed");
+            ggml_backend_buffer_set_usage(buffer,GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+            ggml_backend_tensor_set(dense,reference_half.data(),0,reference_half.size()*sizeof(ggml_fp16_t));
+            auto *part=reference_columns(ctx,dense,x);
+            out=out?ggml_concat(ctx,out,part,0):part;
+        }
+        require(out,"Reference prefill matrix has no rows");return out;
+    }
     ggml_tensor * MM(ggml_context * ctx, ggml_tensor * w, ggml_tensor * x) {
-        if (!split_tokens || ggml_n_dims(x) != 2 || x->ne[1] <= 1) return ggml_mul_mat(ctx, w, x);
+        if (!split_tokens || ggml_n_dims(x) != 2 || x->ne[1] <= 1) return reference_matmul(ctx, w, x);
         ggml_tensor * out = nullptr;
         for (int64_t t = 0; t < x->ne[1]; ++t) {
             ggml_tensor * xt = ggml_cont(ctx, ggml_view_2d(ctx, x, x->ne[0], 1, x->nb[1], (size_t) t * x->nb[1]));
-            ggml_tensor * yt = ggml_mul_mat(ctx, w, xt);
+            ggml_tensor * yt = reference_matmul(ctx, w, xt);
             out = out ? ggml_concat(ctx, out, yt, 1) : yt;
         }
         return out;
@@ -1577,7 +1828,16 @@ struct qfn_engine::impl {
                 input_scale = ggml_view_2d(ctx, nvfp4_input_scale, 3, hp->n_expert,
                     nvfp4_input_scale->nb[1], size_t(il) * nvfp4_input_scale->nb[2]);
             }
-            ex = ggml_qfn_nvfp4_experts(ctx, x, ids, gate_t, work, mode, input_scale,
+            if(reference_prefill_active&&!decode_slots) {
+                require(mode==6&&pack.native_nvfp4_packed,"Reference prefill requires the actual packed vector arithmetic");
+                for(int64_t first=0;first<nt;first+=4) {
+                    const int64_t count=std::min<int64_t>(4,nt-first);
+                    auto *part_x=ggml_view_2d(ctx,x,E,count,x->nb[1],size_t(first)*x->nb[1]);
+                    auto *part_ids=ggml_view_2d(ctx,ids,K,count,ids->nb[1],size_t(first)*ids->nb[1]);
+                    auto *part=ggml_qfn_nvfp4_experts(ctx,part_x,part_ids,gate_t,work,mode,input_scale,nullptr,true);
+                    ex=ex?ggml_concat(ctx,ex,part,2):part;
+                }
+            } else ex = ggml_qfn_nvfp4_experts(ctx, x, ids, gate_t, work, mode, input_scale,
                 (mode==5 || (mode==6 && decode_slots)) ? logical_ids : nullptr,pack.native_nvfp4_packed);
         } else {
             ggml_tensor * cur = ggml_reshape_3d(ctx, x, E, 1, nt);
@@ -1611,7 +1871,9 @@ struct qfn_engine::impl {
 
     // ------------------------------------------------------------------------------------------ execution
     ggml_context * new_graph_ctx() {
-        ggml_init_params ip = { 4096 * ggml_tensor_overhead() + ggml_graph_overhead_custom(8192, false), nullptr, true };
+        release_reference_weights();
+        const size_t nodes=graph_node_capacity();
+        ggml_init_params ip = { (reference_prefill_active?nodes*2:4096) * ggml_tensor_overhead() + ggml_graph_overhead_custom(nodes, false), nullptr, true };
         return ggml_init(ip);
     }
 
@@ -1660,7 +1922,7 @@ struct qfn_engine::impl {
                         const std::vector<int32_t> & ple_slot, int64_t p0) {
         const double tb = now_ms();
         ggml_context * ctx = new_graph_ctx();
-        gctx g{ ctx, ggml_new_graph_custom(ctx, 8192, false) };
+        gctx g{ ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false) };
         const int64_t E = hp->n_embd, HC = hp->hc;
         const bool caches_only = il + 1 == hp->n_layer && t0 + nt <= pf_keep_from && !hp->is_recurrent(il) && !moe_pass;
         ggml_tensor * pos  = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, nt);
@@ -1729,13 +1991,14 @@ struct qfn_engine::impl {
         std::vector<int32_t> pv(nt), p4(4 * nt, 0);
         for (int64_t i = 0; i < nt; ++i) { pv[i] = (int32_t) (t0 + i); p4[i] = p4[nt + i] = p4[2 * nt + i] = (int32_t) (t0 + i); }
         set_input(pos, pv.data(), 0, pv.size() * 4);
-        set_input(pos4, p4.data(), 0, p4.size() * 4);
+        if(!images.empty())image_positions(p4,nt,t0);
+                set_input(pos4, p4.data(), 0, p4.size() * 4);
         if (emb) {
             const double embedding_start = phase_profile ? now_ms() : 0;
             std::vector<float> e((size_t) (E * nt));
             const auto * traits = ggml_get_type_traits(tok_embd_type);
             for (int64_t i = 0; i < nt; ++i) {
-                traits->to_float(tok_embd + (size_t) tok[t0 + i] * tok_embd_row, e.data() + i * E, E);
+                image_embedding(tok[t0+i],t0+i,e.data()+i*E);
             }
             set_input(emb, e.data(), 0, e.size() * 4);
             if (phase_profile) phase_embedding_ms += now_ms() - embedding_start;
@@ -1747,7 +2010,8 @@ struct qfn_engine::impl {
             const int64_t R = hp->kpool, b_lo = t0 / R, nn = pool_pos4->ne[0] / 4;
             std::vector<int32_t> pp(4 * nn, 0);
             for (int64_t i = 0; i < nn; ++i) pp[i] = pp[nn + i] = pp[2 * nn + i] = (int32_t) ((b_lo + i) * R);
-            set_input(pool_pos4, pp.data(), 0, pp.size() * 4);
+            if(!images.empty())image_positions(pp,nn,b_lo*R,R);
+                set_input(pool_pos4, pp.data(), 0, pp.size() * 4);
         }
         const double tg = now_ms();
         pf_stage_ms += tg - ts;
@@ -1807,7 +2071,7 @@ struct qfn_engine::impl {
 
     size_t moe_graph_bytes(int64_t count) {
         ggml_context * ctx = new_graph_ctx();
-        gctx g{ctx, ggml_new_graph_custom(ctx, 8192, false)};
+        gctx g{ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false)};
         build_moe_pass(g, 0, 0, pf_first, count, false);
         ggml_gallocr_t probe = ggml_gallocr_new(ggml_backend_get_default_buffer_type(gpu));
         size_t bytes = 0;
@@ -1821,7 +2085,7 @@ struct qfn_engine::impl {
     void run_moe_pass(uint32_t il, int bank, int64_t first, int64_t count) {
         const double tb = now_ms();
         ggml_context * ctx = new_graph_ctx();
-        gctx g{ctx, ggml_new_graph_custom(ctx, 8192, false)};
+        gctx g{ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false)};
         build_moe_pass(g, il, bank, first, count, true);
         compute(g.gf);
         const double tg = now_ms();
@@ -1835,14 +2099,14 @@ struct qfn_engine::impl {
     // output head over the final hidden streams of the given positions
     void run_head(const std::vector<int64_t> & rows, std::vector<float> & logits) {
         ggml_context * ctx = new_graph_ctx();
-        gctx g{ ctx, ggml_new_graph_custom(ctx, 8192, false) };
+        gctx g{ ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false) };
         const int64_t E = hp->n_embd, HC = hp->hc, m = (int64_t) rows.size();
         ggml_tensor * idx = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, m);
         ggml_set_input(idx);
         ggml_tensor * h = ggml_get_rows(ctx, carry, idx);                                  // [E*HC, m]
         h = ggml_reshape_3d(ctx, h, E, HC, m);
         ggml_tensor * cur = hc_mix(g, h, out_hc_norm, out_hc_down, out_hc_up, nullptr, nullptr);
-        ggml_tensor * out = ggml_mul_mat(ctx, output, cur);                                // [n_vocab, m]
+        ggml_tensor * out = reference_matmul(ctx, output, cur);                                // [n_vocab, m]
         ggml_set_output(out);
         ggml_build_forward_expand(g.gf, out);
         compute(g.gf);
@@ -1864,6 +2128,8 @@ struct qfn_engine::impl {
         require(cudaMemGetInfo(&free_b, &total_b) == cudaSuccess, "cannot query VRAM");
         const char * gr = std::getenv("QFN_GRAPH_RESERVE_MIB");
         const uint64_t graph_reserve = (gr && *gr ? (uint64_t) std::atoll(gr) : 3072ull) << 20;
+        require(!opt.reference_prefill_max_tokens||graph_reserve>=uint64_t(hp->n_vocab)*hp->n_embd*2+(256ull<<20),
+                "Reference prefill requires its exact F16 coefficient head plus256MiB in the explicit graph reserve");
         uint64_t avail = free_b > graph_reserve + opt.vram_margin + (64u << 10) ? free_b - graph_reserve - opt.vram_margin - (64u << 10) : 0;
         const char * rc = std::getenv("QFN_PREFILL_RELEASE_CACHE");
         // Without MTP the carry lives in the slab's tail: the same memory serves prefill and then decode, so nothing
@@ -2620,7 +2886,7 @@ struct qfn_engine::impl {
         for (uint32_t il = 0; il <= hp->n_layer; ++il) {
             const double tb = now_ms();
             ggml_context * ctx = new_graph_ctx();
-            gctx g{ ctx, ggml_new_graph_custom(ctx, 8192, false) };
+            gctx g{ ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false) };
             ggml_tensor * dres = ggml_view_2d(ctx, dec_res, E * HC, nt, dec_res->nb[1], 0);
             ggml_tensor * dx   = ggml_view_2d(ctx, dec_x, E, nt, dec_x->nb[1], 0);
             ggml_tensor * dinj = ggml_view_2d(ctx, dec_inj, HC, nt, dec_inj->nb[1], 0);
@@ -2697,14 +2963,14 @@ struct qfn_engine::impl {
                     p4[(size_t) i] = p4[(size_t) (nt + i)] = p4[(size_t) (2 * nt + i)] = (int32_t) (p + i);
                 }
                 set_input(pos, pv.data(), 0, pv.size() * 4);
+                if(!images.empty())image_positions(p4,nt,p);
                 set_input(pos4, p4.data(), 0, p4.size() * 4);
             }
             if (emb) {
                 const double embedding_start = phase_profile ? now_ms() : 0;
                 std::vector<float> e((size_t) (E * nt));
                 for (int64_t i = 0; i < nt; ++i) {
-                    ggml_get_type_traits(tok_embd_type)->to_float(tok_embd + (size_t) toks[i] * tok_embd_row,
-                                                                  e.data() + i * E, E);
+                    image_embedding(toks[i],p+i,e.data()+i*E);
                 }
                 set_input(emb, e.data(), 0, e.size() * 4);
                 if (phase_profile) phase_embedding_ms += now_ms() - embedding_start;
@@ -2713,6 +2979,7 @@ struct qfn_engine::impl {
                 const int64_t R = hp->kpool, b_lo = p / R, nn = pool_pos4->ne[0] / 4;
                 std::vector<int32_t> pp((size_t) (4 * nn), 0);
                 for (int64_t i = 0; i < nn; ++i) pp[(size_t) i] = pp[(size_t) (nn + i)] = pp[(size_t) (2 * nn + i)] = (int32_t) ((b_lo + i) * R);
+                if(!images.empty())image_positions(pp,nn,b_lo*R,R);
                 set_input(pool_pos4, pp.data(), 0, pp.size() * 4);
             }
             const double tg = now_ms();
@@ -2939,11 +3206,11 @@ struct qfn_engine::impl {
     // negative first row is replaced by h0 (h_last, or zeros at position 0). Writes its residuals to mtp_hout (when
     // m <= its rows) and returns the draft-vocab logits of the last row.
     void mtp_run(const int32_t * toks, int m, int64_t p, std::vector<float> & dlogits, int64_t carry_row0 = INT64_MIN,
-                 bool first_from_h0 = false, const float * h0 = nullptr) {
+                 bool first_from_h0 = false, const float * h0 = nullptr, int image_token_shift = 0) {
         const int64_t E = hp->n_embd, HC = hp->hc, nt = m;
         const uint32_t M = hp->n_layer;
         ggml_context * ctx = new_graph_ctx();
-        gctx g{ ctx, ggml_new_graph_custom(ctx, 8192, false) };
+        gctx g{ ctx, ggml_new_graph_custom(ctx, graph_node_capacity(), false) };
         ggml_tensor * emb = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, E, nt);
         ggml_tensor * pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, nt);
         ggml_tensor * pos4 = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 4 * nt);
@@ -3006,13 +3273,14 @@ struct qfn_engine::impl {
         std::vector<float> e((size_t) (E * nt));
         std::vector<int32_t> pv((size_t) nt), p4((size_t) (4 * nt), 0);
         for (int64_t i = 0; i < nt; ++i) {
-            ggml_get_type_traits(tok_embd_type)->to_float(tok_embd + (size_t) toks[i] * tok_embd_row, e.data() + i * E, E);
+            image_embedding(toks[i],p+i+image_token_shift,e.data()+i*E);
             pv[(size_t) i] = (int32_t) (p + i);
             p4[(size_t) i] = p4[(size_t) (nt + i)] = p4[(size_t) (2 * nt + i)] = (int32_t) (p + i);
         }
         set_input(emb, e.data(), 0, e.size() * 4);
         set_input(pos, pv.data(), 0, pv.size() * 4);
-        set_input(pos4, p4.data(), 0, p4.size() * 4);
+        if(!images.empty())image_positions(p4,nt,p);
+                set_input(pos4, p4.data(), 0, p4.size() * 4);
         if (hfirst) {
             std::vector<float> z;
             if (!h0) z.assign((size_t) (E * HC), 0.0f);
@@ -3022,7 +3290,8 @@ struct qfn_engine::impl {
             const int64_t nn = pool_pos4->ne[0] / 4;
             std::vector<int32_t> pp((size_t) (4 * nn), 0);
             for (int64_t i = 0; i < nn; ++i) pp[(size_t) i] = pp[(size_t) (nn + i)] = pp[(size_t) (2 * nn + i)] = (int32_t) ((b_lo + i) * R);
-            set_input(pool_pos4, pp.data(), 0, pp.size() * 4);
+            if(!images.empty())image_positions(pp,nn,b_lo*R,R);
+                set_input(pool_pos4, pp.data(), 0, pp.size() * 4);
         }
         require(ggml_backend_graph_compute(gpu, g.gf) == GGML_STATUS_SUCCESS, "MTP graph compute failed");
         dlogits.resize(draft_ids.size());
@@ -3042,6 +3311,111 @@ struct qfn_engine::impl {
     std::vector<int32_t> mtp_pend;
     int64_t mtp_pend_p0 = 0;
 
+    qfn_native_shape paired_shape() const {
+        const auto &h=*hp;
+        return {h.n_layer,h.full_attn_interval,h.n_embd,h.hc,h.head_dim,h.n_head_kv,h.n_vocab,
+            h.ssm_state,h.ssm_dt_rank,h.ssm_state*(2*h.ssm_group+h.ssm_dt_rank),h.ssm_conv-1,
+            h.idx_dim,h.kpool,(h.ple_conv-1)*h.ple_ngram,opt.n_ctx,uint32_t(!pack.mtp_tensors.empty())};
+    }
+    void paired_allocate() {
+        if(paired_buffer||!mtp_ok)return;
+        const auto &h=*hp;
+        paired_ctx=ggml_init({8*ggml_tensor_overhead(),nullptr,true});
+        require(paired_ctx,"paired MTP metadata allocation failed");
+        paired_mtp={ggml_new_tensor_3d(paired_ctx,GGML_TYPE_F16,h.head_dim,h.n_head_kv,opt.n_ctx),
+            ggml_new_tensor_3d(paired_ctx,GGML_TYPE_F16,h.head_dim,h.n_head_kv,opt.n_ctx),
+            ggml_new_tensor_2d(paired_ctx,GGML_TYPE_F16,h.idx_dim,opt.n_ctx),
+            ggml_new_tensor_2d(paired_ctx,GGML_TYPE_F16,h.idx_dim,std::max<uint32_t>(1,opt.n_ctx/h.kpool))};
+        paired_buffer=ggml_backend_alloc_ctx_tensors(paired_ctx,gpu);
+        require(paired_buffer,"insufficient VRAM for paired MTP owners");
+        ggml_backend_buffer_clear(paired_buffer,0);
+    }
+    void paired_prepare(const std::vector<float> &logits) {
+        if(!mtp_ok)return;
+        require(carry&&logits.size()==hp->n_vocab,"paired MTP needs target residuals/logits");
+        paired_allocate();ggml_backend_synchronize(gpu);
+        const uint32_t l=hp->n_layer;
+        const std::array<ggml_tensor *,4> old={kcache[l],vcache[l],idx_raw[l],idx_pool[l]};
+        kcache[l]=paired_mtp[0];vcache[l]=paired_mtp[1];idx_raw[l]=paired_mtp[2];idx_pool[l]=paired_mtp[3];
+        auto restore=[&](){ggml_backend_synchronize(gpu);kcache[l]=old[0];vcache[l]=old[1];idx_raw[l]=old[2];idx_pool[l]=old[3];};
+        try {
+            const int64_t n=int64_t(seq.size()),start=paired_rows?paired_rows-1:0;
+            require(start<n,"paired MTP frontier exceeds target");
+            const int32_t parent=int32_t(std::max_element(logits.begin(),logits.end())-logits.begin());
+            std::vector<float> dl;
+            for(int64_t pos=start;pos<n;pos+=opt.tile) {
+                const int count=int(std::min<int64_t>(opt.tile,n-pos));std::vector<int32_t> next(count);
+                for(int j=0;j<count;j++)next[j]=pos+j+1<n?seq[size_t(pos+j+1)]:parent;
+                mtp_run(next.data(),count,pos,dl,pos,false,nullptr,1);
+            }
+            restore();paired_rows=uint32_t(n);
+            log("[qfn] paired MTP canonical rows %lld..%lld; target prompt not replayed\n",(long long)start,(long long)n);
+        }catch(...){restore();paired_rows=0;throw;}
+    }
+
+    // Canonical owner I/O. Metal histories are time-major; ggml histories are
+    // channel-major. Index/carry conversion is explicit and bounded, never a
+    // reinterpretation of Mac F32 storage as CUDA F16/BF16 bytes.
+    void paired_owner(const qfn_native_slice &r,void *data,bool write) {
+        const uint64_t off=r.offset;const size_t n=size_t(r.bytes);ggml_tensor *t=nullptr;
+        require(n&&n<=(size_t(16)<<20),"paired owner chunk exceeds bound");
+        switch(r.owner) {
+            case QFN_GDN:t=gdn_state.at(r.layer);break;
+            case QFN_CONV:t=conv_state.at(r.layer);break;
+            case QFN_KEY:t=r.layer==hp->n_layer?paired_mtp[0]:kcache.at(r.layer);break;
+            case QFN_VALUE:t=r.layer==hp->n_layer?paired_mtp[1]:vcache.at(r.layer);break;
+            case QFN_INDEX:t=r.layer==hp->n_layer?paired_mtp[2]:idx_raw.at(r.layer);break;
+            case QFN_POOL:t=r.layer==hp->n_layer?paired_mtp[3]:idx_pool.at(r.layer);break;
+            case QFN_PLE:t=ple_conv;break;
+            case QFN_CARRY:t=carry;break;
+            case QFN_PREV: {
+                require(off==0&&n==32,"paired PLE token-history extent differs");
+                int32_t expected[8];for(size_t i=0;i<8;i++)expected[i]=i<seq.size()?seq[seq.size()-1-i]:int32_t(hp->ple_eos);
+                if(write)require(!std::memcmp(expected,data,32),"paired PLE history differs from target tokens");
+                else std::memcpy(data,expected,32);return;
+            }
+            case QFN_ROPE: {
+                require(off==0&&n==4,"paired rotary extent differs");const int32_t delta=image_delta();
+                if(write)require(!std::memcmp(&delta,data,4),"paired rotary identity differs");else std::memcpy(data,&delta,4);return;
+            }
+            case QFN_POS: {
+                require(off%16==0&&n%16==0,"paired position alignment differs");
+                for(size_t i=0;i<n;i+=16) {const auto row=image_position(int64_t((off+i)/16));
+                    if(write)require(!std::memcmp(row.data(),(char*)data+i,16),"paired image/position identity differs");
+                    else std::memcpy((char*)data+i,row.data(),16);}
+                return;
+            }
+            default:throw std::runtime_error("unknown paired owner");
+        }
+        require(t&&ggml_is_contiguous(t),"paired owner missing or strided");
+        if(r.owner==QFN_CONV||r.owner==QFN_PLE) {
+            const uint32_t time=r.owner==QFN_CONV?hp->ssm_conv-1:(hp->ple_conv-1)*hp->ple_ngram;
+            require(off==0&&n==ggml_nbytes(t)&&n%4==0,"paired history must be complete");
+            std::vector<float> native(n/4);const size_t channels=n/4/time;auto *canonical=static_cast<float *>(data);
+            if(!write)ggml_backend_tensor_get(t,native.data(),0,n);
+            for(size_t c=0;c<channels;c++)for(uint32_t j=0;j<time;j++)
+                if(write)native[c*time+j]=canonical[size_t(j)*channels+c];else canonical[size_t(j)*channels+c]=native[c*time+j];
+            if(write)ggml_backend_tensor_set(t,native.data(),0,n);return;
+        }
+        const bool half=r.owner==QFN_INDEX,bf=r.owner==QFN_CARRY&&carry_bf16;
+        if(half||bf) {
+            require(off%4==0&&n%4==0&&off/2<=ggml_nbytes(t)&&n/2<=ggml_nbytes(t)-off/2,"paired converted owner extent differs");
+            std::vector<uint16_t> h(n/4);auto *f=static_cast<float *>(data);
+            if(write) {
+                for(size_t i=0;i<h.size();i++)h[i]=half?ggml_fp32_to_fp16(f[i]):ggml_fp32_to_bf16(f[i]).bits;
+                for(uint16_t v:h)require(half?(v&0x7c00)!=0x7c00:(v&0x7f80)!=0x7f80,
+                    "paired owner conversion overflowed native storage");
+                ggml_backend_tensor_set(t,h.data(),size_t(off/2),n/2);
+            } else {
+                ggml_backend_tensor_get(t,h.data(),size_t(off/2),n/2);
+                for(size_t i=0;i<h.size();i++)f[i]=half?ggml_fp16_to_fp32(h[i]):ggml_bf16_to_fp32(ggml_bf16_t{h[i]});
+            }
+        } else {
+            require(off<=ggml_nbytes(t)&&n<=ggml_nbytes(t)-off,"paired owner extent exceeds allocation");
+            if(write)ggml_backend_tensor_set(t,data,size_t(off),n);else ggml_backend_tensor_get(t,data,size_t(off),n);
+        }
+    }
+
     void mtp_flush() {
         if (mtp_pend.empty()) return;
         std::vector<float> dl;
@@ -3051,8 +3425,26 @@ struct qfn_engine::impl {
 
     // owe rows for tokens of the last decode step at positions p..p+n-1; token i pairs with dec_hout row base+i-1
     // (h_last when that is -1). Afterwards h_last = dec_hout row base+n-1.
+    void remember_target_carry(int n, int64_t position, int base) {
+        if (!mtp_ok || n == 0) return;
+        require(carry && position >= 0 && position + n <= opt.n_ctx, "MTP export target history is unavailable");
+        const size_t width = size_t(hp->n_embd) * hp->hc;
+        if (!carry_bf16) {
+            require(cudaMemcpyAsync((char *)carry->data + size_t(position) * carry->nb[1],
+                    (char *)dec_hout->data + size_t(base) * dec_hout->nb[1], width * size_t(n) * sizeof(float),
+                    cudaMemcpyDeviceToDevice, stream()) == cudaSuccess, "MTP export residual history copy failed");
+        } else {
+            std::vector<float> full(width * n);
+            std::vector<ggml_bf16_t> half(width * n);
+            ggml_backend_tensor_get(dec_hout,full.data(),size_t(base)*dec_hout->nb[1],full.size()*sizeof(float));
+            ggml_fp32_to_bf16_row(full.data(),half.data(),int64_t(full.size()));
+            ggml_backend_tensor_set(carry,half.data(),size_t(position)*carry->nb[1],half.size()*sizeof(ggml_bf16_t));
+        }
+    }
+
     void mtp_owe_decoded(const int32_t * toks, int n, int64_t p, int base) {
         if (!mtp_ok) return;
+        remember_target_carry(n,p,base);
         const size_t row = (size_t) hp->n_embd * hp->hc * sizeof(float);
         for (int i = 0; i < n; ++i) {
             if ((int64_t) mtp_pend.size() >= DEC_NMAX) mtp_flush();
@@ -3123,6 +3515,9 @@ struct qfn_engine::impl {
         return {first, keep - first, first, false};
     }
     void owe_speculative_prefix(const std::vector<int32_t> & toks, int keep, int64_t p, bool drafted) {
+        // The first target row is already drafted but still belongs to the
+        // live transcript's export history, including callback interruption.
+        if (drafted) remember_target_carry(1,p,0);
         const auto plan = owed_prefix_plan(drafted, keep);
         if (plan.first_only) ggml_backend_tensor_get(dec_hout, h_last.data(), 0,
                                                    size_t(hp->n_embd) * hp->hc * sizeof(float));
@@ -3757,10 +4152,10 @@ struct qfn_engine::impl {
         } else if (v3_replay) {
             bell_h->timeout_ms = -1;
             require(cudaMalloc((void **) &replay_miss_latch, sizeof(int32_t)) == cudaSuccess,
-                    "cannot allocate QFNV3OPT device atomic miss latch");
+                    "cannot allocate decode replay device atomic miss latch");
             alloc_replay_state();
-            log("[qfn] QFNV3OPT device atomic latch; mapped miss record (no mapped-host atomics)\n");
-            log("[qfn] QFNV3OPT decode v3: record-only misses, DirectStorage, restore + replay\n");
+            log("[qfn] decode replay device atomic latch; mapped miss record (no mapped-host atomics)\n");
+            log("[qfn] decode replay decode v3: record-only misses, DirectStorage, restore + replay\n");
         } else {
             require(cudaStreamCreateWithFlags(&side, cudaStreamNonBlocking) == cudaSuccess, "cannot create the miss stream");
             require(cudaEventCreateWithFlags(&bell_completion, cudaEventDisableTiming) == cudaSuccess,
@@ -3950,7 +4345,7 @@ struct qfn_engine::impl {
             // original embeddings/positions/indices: OUTPUT pins these small allocations for the graph lifetime.
             ggml_set_output(t);
         }
-        log("[qfn] QFNV3OPT pinned step inputs: embeddings, positions, indices and sequence survive replay\n");
+        log("[qfn] decode replay pinned step inputs: embeddings, positions, indices and sequence survive replay\n");
         ggml_tensor * res = ggml_repeat_4d(ctx, ggml_reshape_3d(ctx, G->emb, E, 1, nt), E, HC, nt, 1);
         for (uint32_t il = 0; il < hp->n_layer; ++il) {
             if (hp->is_ple(il)) {
@@ -4018,14 +4413,14 @@ struct qfn_engine::impl {
         if (resident_dirty) {
             ggml_backend_tensor_set(resident, resident_host.data(), 0, resident_host.size() * sizeof(float));
             if (v3_replay) replay_routing_resident = resident_host;
-            if (v3_replay) log("[qfn] QFNV3OPT residency routing frozen across replay; v2 layer publication preserved\n");
+            if (v3_replay) log("[qfn] decode replay residency routing frozen across replay; v2 layer publication preserved\n");
             resident_dirty = false;
         }
         std::vector<float> e((size_t) (E * nt));
         std::vector<int32_t> pv((size_t) nt), p4((size_t) (4 * nt), 0);
         std::vector<int64_t> kv((size_t) nt);
         for (int64_t i = 0; i < nt; ++i) {
-            ggml_get_type_traits(tok_embd_type)->to_float(tok_embd + (size_t) toks[i] * tok_embd_row, e.data() + i * E, E);
+            image_embedding(toks[i],p+i,e.data()+i*E);
             pv[(size_t) i] = (int32_t) (p + i);
             p4[(size_t) i] = p4[(size_t) (nt + i)] = p4[(size_t) (2 * nt + i)] = (int32_t) (p + i);
             kv[(size_t) i] = p + i;
@@ -4039,11 +4434,13 @@ struct qfn_engine::impl {
             for (int64_t i = 0; i < R; ++i) mem[(size_t) (j * R + i)] = (int32_t) std::min<int64_t>(b * R + i, kcache.empty() ? 0 : (int64_t) opt.n_ctx - 1);
             pid[(size_t) j] = b;
             pp[(size_t) j] = pp[(size_t) (G.nbp + j)] = pp[(size_t) (2 * G.nbp + j)] = (int32_t) (b * R);
+            if(!images.empty()){const auto v=image_position(b*R);for(int axis=0;axis<4;axis++)pp[size_t(axis*G.nbp+j)]=v[axis];}
         }
         require(v3_seq < (INT32_MAX - 63) / 64, "QFN_V3_SEQUENCE_EXHAUSTED: refusing request identity overflow; model reload required");
         const int32_t seqv = ++v3_seq;
         ggml_backend_tensor_set(G.emb, e.data(), 0, e.size() * 4);
         ggml_backend_tensor_set(G.pos, pv.data(), 0, pv.size() * 4);
+        if(!images.empty())image_positions(p4,nt,p);
         ggml_backend_tensor_set(G.pos4, p4.data(), 0, p4.size() * 4);
         ggml_backend_tensor_set(G.kv_idx, kv.data(), 0, kv.size() * 8);
         ggml_backend_tensor_set(G.mem_idx, mem.data(), 0, mem.size() * 4);
@@ -4067,7 +4464,7 @@ struct qfn_engine::impl {
         st.stage_ms += now_ms() - ts;
         static const bool v3_cuda_graph = [] { const char * e = std::getenv("QFN_V3_CUDA_GRAPH"); return e && *e == '1'; }();
         for (uint32_t attempt = 0; ; ++attempt) {
-            require(attempt < hp->n_layer + 1, "QFNV3OPT replay exhausted n_layer + 1 attempts");
+            require(attempt < hp->n_layer + 1, "decode replay replay exhausted n_layer + 1 attempts");
             bell_h->error = 0;
             if (v3_replay) require(cudaMemsetAsync(replay_miss_latch, 0, sizeof(int32_t), stream()) == cudaSuccess,
                                    "cannot reset replay miss latch");
@@ -4138,11 +4535,11 @@ struct qfn_engine::impl {
             bell_ms.store(bell_ms.load() + now_ms() - tm);
             ++st.replays;
             if (st.replays <= 20 || attempt + 1 == hp->n_layer + 1) {
-                log("[qfn] QFNV3OPT replay: attempt %u/%u, layer %u, misses %zu, total attempts %llu, replays %llu\n",
+                log("[qfn] decode replay replay: attempt %u/%u, layer %u, misses %zu, total attempts %llu, replays %llu\n",
                     attempt + 1, hp->n_layer + 1, il, misses.size(),
                     (unsigned long long) st.attempts, (unsigned long long) st.replays);
                 for (size_t key : touched) if (slot_of[key] < 0)
-                    log("[qfn] QFNV3OPT eviction: layer %zu expert %zu\n", key / hp->n_expert, key % hp->n_expert);
+                    log("[qfn] decode replay eviction: layer %zu expert %zu\n", key / hp->n_expert, key % hp->n_expert);
             }
         }
         const double tr = now_ms();
@@ -4274,10 +4671,23 @@ struct qfn_engine::impl {
             sampling_started = false;
             log("[qfn] mode1 failed context: fresh prefill rebuilds full recurrent/KV/MTP/cache state at unchanged capacity %u; poison clears only after success\n", n_slots);
         }
-        if (fresh) seq.clear();
+        if (fresh) {seq.clear();paired_rows=0;paired_anchor=paired_anchor_state{};}
         const int64_t p0 = (int64_t) seq.size();
         const int64_t n = p0 + (int64_t) add.size();
         require(!add.empty() && n <= (int64_t) opt.n_ctx, "prompt longer than the engine context");
+        struct reference_scope {impl *owner;bool prior;uint32_t rows;~reference_scope(){owner->release_reference_weights();if(owner->reference_prefill_active)owner->retain_reference_host_buffers();owner->reference_prefill_active=prior;owner->reference_prefill_rows=rows;}} reference_reset{this,reference_prefill_active,reference_prefill_rows};
+        reference_prefill_active=opt.reference_prefill_max_tokens&&add.size()<=opt.reference_prefill_max_tokens;
+        reference_prefill_rows=reference_prefill_active?uint32_t(add.size()):0;
+        if(reference_prefill_active) {
+            uint64_t physical_free=0;require(nvml_free_bytes(physical_free),"Reference prefill physical VRAM query failed");
+            const uint64_t required=uint64_t(hp->n_vocab)*hp->n_embd*2+(256ull<<20);
+            require(physical_free>=required,"Reference prefill physical VRAM budget cannot admit its temporary head without spilling");
+            log("[qfn] reference physical VRAM admitted: free=%llu required=%llu coefficients_f16=1 activations_f32=1\n",
+                (unsigned long long)physical_free,(unsigned long long)required);
+        }
+        if(opt.reference_prefill_max_tokens)log("[qfn] reference prefill active=%d new_tokens=%zu max_tokens=%u dense_rows_budget=33554432 dense_arithmetic=f16-coefficients-f32-activations-accumulation dense_vector_columns=1_or_3 packed_vector_rows=4 weights_unchanged=1\n",
+            int(reference_prefill_active),add.size(),opt.reference_prefill_max_tokens);
+
         validate_prompt(add, p0);
         const double t_start = now_ms();
         const bool has_ple = !hp->ple_layers.empty();
@@ -4399,6 +4809,7 @@ struct qfn_engine::impl {
             wf_cuda_record_compute_done(wf, (int) il);
             wf_release_layer(wf, (int) il);
             require(!wf_has_failed(wf), "expert layer release failed");
+            if(prefill_progress)prefill_progress(il+1,hp->n_layer,uint64_t(n-p0));
         }
         wf_stop(wf);
         wf_quiesce(wf);
@@ -4435,7 +4846,8 @@ struct qfn_engine::impl {
         log("[qfn] prefill %lld tokens: PLE %.0f ms, layers %.0f ms (expert wait %.0f ms, compute %.0f ms), head %.0f ms; "
             "%.1f tok/s over the layers\n", (long long) (n - p0), ple_exposed, t_layers - t_start - ple_exposed, t_wait, t_comp,
             now_ms() - t_layers, (n - p0) / ((t_layers - t_start) / 1000.0));
-        if (mtp_ok) {
+        handover_draft_pending = mtp_ok && opt.handover_prefill;
+        if (mtp_ok && !handover_draft_pending) {
             const double tm = now_ms();
             mtp_prefill(p0);
             log("[qfn] MTP draft-layer prefill: %.0f ms\n", now_ms() - tm);
@@ -4452,6 +4864,38 @@ struct qfn_engine::impl {
 // ================================================================================================ public
 qfn_engine::qfn_engine() : p(new impl) {}
 qfn_engine::~qfn_engine() = default;
+
+bool qfn_engine::set_vision(std::vector<qfn_image_span> images,uint32_t stable_prefix) {
+    require(p->hp!=nullptr,"vision spans require a loaded QFN engine");
+    uint64_t end=0;
+    for(const auto &image:images) {
+        require(image.count&&image.grid_height&&image.grid_width&&
+            uint64_t(image.grid_height)*image.grid_width==image.count&&image.position>=end&&
+            uint64_t(image.position)+image.count<=p->opt.n_ctx&&
+            image.values.size()==size_t(image.count)*p->hp->n_embd,"invalid QFN projected image geometry");
+        require(std::all_of(image.values.begin(),image.values.end(),[](float v){return std::isfinite(v);}),"nonfinite QFN image projection");
+        end=uint64_t(image.position)+image.count;
+    }
+    bool changed=images.size()!=p->images.size();
+    for(size_t i=0;!changed&&i<images.size();i++) {
+        const auto &a=images[i],&b=p->images[i];
+        changed=a.position!=b.position||a.count!=b.count||a.grid_height!=b.grid_height||
+            a.grid_width!=b.grid_width||a.fingerprint!=b.fingerprint||a.values!=b.values;
+    }
+    if(stable_prefix) {
+        size_t old=0,now=0;
+        while(old<p->images.size()&&p->images[old].position<stable_prefix)old++;
+        while(now<images.size()&&images[now].position<stable_prefix)now++;
+        require(old==now,"paired vision append changes an existing prefix image");
+        for(size_t i=0;i<old;i++) {
+            const auto &a=images[i],&b=p->images[i];
+            require(a.position==b.position&&a.count==b.count&&a.grid_height==b.grid_height&&
+                a.grid_width==b.grid_width&&a.fingerprint==b.fingerprint&&a.values==b.values,
+                "paired vision append changes a retained projection");
+        }
+    }
+    p->images=std::move(images);return changed;
+}
 
 const qfn_hparams & qfn_engine::hparams() const { return *p->hp; }
 
@@ -4573,6 +5017,9 @@ bool qfn_engine::decode(int32_t first, int n_max, const qfn_sampling & s,
             p->calibrate_sum.assign(p->hp->n_layer, 0.0);
             p->calibrate_n.assign(p->hp->n_layer, 0);
         }
+        if (p->handover_draft_pending) {
+            p->mtp_prefill(0);p->handover_draft_pending=false;
+        }
         const bool ok = p->decode(first, n_max, s, on_token, st);
         if (p->affinity_calibrating) { p->affinity_calibrating = false; p->calibrate_write(); }
         wf_extent_fetch_stats(ds_after, &requests_after, &batches_after);
@@ -4611,6 +5058,9 @@ bool qfn_engine::feed(const std::vector<int32_t> & tokens, std::vector<float> & 
     const uint64_t ram_start = p->ram_hits;
     try {
         p->profile_begin();
+        if (p->handover_draft_pending) {
+            p->mtp_prefill(0);p->handover_draft_pending=false;
+        }
         const bool ok = p->feed(tokens, last_logits, st, bias);
         p->profile_end("feed");
         st.ram_tier_hits += p->ram_hits - ram_start;
@@ -4644,6 +5094,225 @@ bool qfn_engine::append(const std::vector<int32_t> & tokens, const qfn_logits_re
 
 bool qfn_engine::reset_required() const { return p->doorbell_poisoned; }
 int64_t qfn_engine::n_past() const { p->require_live_context(); return (int64_t) p->seq.size(); }
+uint32_t qfn_engine::paired_mtp_rows() const {p->require_live_context();return p->paired_rows;}
+
+bool qfn_engine::export_state(const std::string &path, const std::vector<float> &logits,
+                              uint64_t max_bytes, uint64_t &bytes, std::string &err, bool narrow_index,
+                              const std::function<void(const void *,size_t)> &sink,
+                              const std::function<void(uint64_t,uint64_t,uint32_t)> &ready,
+                              double *gpu_read_seconds) {
+    bytes = 0;
+    if(gpu_read_seconds)*gpu_read_seconds=0;
+    FILE *fp = nullptr;
+    try {
+        p->require_live_context();
+        require(!p->seq.empty() && p->seq.size() <= UINT32_MAX, "QFN snapshot needs a live sequence");
+        const auto &h = *p->hp;
+        require(h.ple_ngram <= 8 && h.kpool == 4, "QFN geometry differs from Mac codec");
+        qfn_state::shape s{p->opt.n_ctx, p->opt.tile, uint32_t(p->seq.size()), h.n_layer,
+            h.n_embd, h.hc, h.head_dim, h.n_head_kv, h.n_vocab, h.full_attn_interval,
+            h.ssm_state, h.ssm_dt_rank, h.ssm_state * (2 * h.ssm_group + h.ssm_dt_rank),
+            h.ssm_conv - 1, h.idx_dim, h.kpool, (h.ple_conv - 1) * h.ple_ngram, h.ple_eos,
+            !p->pack.mtp_tensors.empty(), p->mtp_ok ? uint32_t(p->seq.size()) : 0};
+        const uint64_t expected = qfn_state::payload_bytes(s, narrow_index);
+        require(expected <= max_bytes && logits.size() == h.n_vocab, "QFN snapshot budget/logit extent differs");
+        // Finish owed draft rows using retained target residuals, never skip them.
+        if (p->mtp_ok && !p->handover_draft_pending) p->mtp_flush();
+        ggml_backend_synchronize(p->gpu);
+        p->paired_prepare(logits);
+        auto read = [&](const std::string &owner, uint32_t il, uint64_t off, void *dst, size_t n) {
+            ggml_tensor *t = nullptr;
+            if (owner == "gdn") t = p->gdn_state.at(il);
+            else if (owner == "conv") t = p->conv_state.at(il);
+            else if (owner == "key") t = il == h.n_layer ? p->paired_mtp[0] : p->kcache.at(il);
+            else if (owner == "value") t = il == h.n_layer ? p->paired_mtp[1] : p->vcache.at(il);
+            else if (owner == "index") t = il == h.n_layer ? p->paired_mtp[2] : p->idx_raw.at(il);
+            else if (owner == "pool") t = il == h.n_layer ? p->paired_mtp[3] : p->idx_pool.at(il);
+            else if (owner == "ple") t = p->ple_conv;
+            require(t && ggml_is_contiguous(t) && off <= ggml_nbytes(t) && n <= ggml_nbytes(t) - off,
+                    "QFN snapshot owner missing, strided or too short");
+            const double started=now_ms();
+            ggml_backend_tensor_get(t, dst, size_t(off), n);
+            if(gpu_read_seconds)*gpu_read_seconds+=(now_ms()-started)/1000.0;
+        };
+        if (sink) {
+            if (ready) ready(expected,qfn_state::payload_bytes(s),qfn_state::draft_rows(s));
+            qfn_state::write_to(sink,s,p->seq,logits,max_bytes,read,
+                [](uint16_t x) { return ggml_fp16_to_fp32(x); },narrow_index,p->image_delta(),
+                p->images.empty()?qfn_state::position_reader{}:qfn_state::position_reader{[&](uint32_t i){return p->image_position(i);}});
+            bytes=expected;return true;
+        }
+        require(!narrow_index,"Narrow index is a stream encoding; file snapshots remain canonical");
+        int fd = -1;
+        const auto wide = std::filesystem::u8path(path).wstring();
+        require(_wsopen_s(&fd, wide.c_str(), _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
+                         _SH_DENYRW, _S_IREAD | _S_IWRITE) == 0, "QFN snapshot output must be a new writable file");
+        fp = _fdopen(fd, "wb");
+        if (!fp) { _close(fd); throw std::runtime_error("QFN snapshot fdopen failed"); }
+        qfn_state::write(fp, s, p->seq, logits, max_bytes, read,
+                         [](uint16_t x) { return ggml_fp16_to_fp32(x); },p->image_delta(),
+                         p->images.empty()?qfn_state::position_reader{}:qfn_state::position_reader{[&](uint32_t i){return p->image_position(i);}});
+        const int closed = fclose(fp); fp = nullptr;
+        require(closed == 0, "QFN snapshot close failed");
+
+        bytes = expected;
+        return true;
+    } catch (const std::exception &e) {
+        if (fp) fclose(fp);
+
+        err = e.what(); return false;
+    }
+}
+
+bool qfn_engine::export_delta(uint32_t base,uint32_t base_mtp,const std::vector<float> &logits,
+        uint64_t budget,uint64_t &bytes,const std::function<void(const void *,size_t)> &sink,
+        uint32_t &target_mtp,std::string &err) {
+    bytes=0;
+    try {
+        p->require_live_context();require(sink&&logits.size()==p->hp->n_vocab,"delta requires sink and complete logits");
+        for(float v:logits)require(std::isfinite(v),"nonfinite delta logits");
+        const auto shape=p->paired_shape();qfn_native_plan plan{};
+        target_mtp=p->mtp_ok?uint32_t(p->seq.size()):0;
+        require(qfn_native_geometry(&shape,base,uint32_t(p->seq.size()),base_mtp,target_mtp,0,&plan)&&
+            plan.bytes<=UINT64_MAX-40&&plan.bytes+40<=budget,"delta geometry or byte budget differs");
+        p->paired_prepare(logits);
+        const uint64_t extent=plan.bytes+40;
+        const uint32_t header[10]={0x444e4651,1,p->opt.n_ctx,base,plan.target,base_mtp,target_mtp,0,
+            uint32_t(extent),uint32_t(extent>>32)};
+        sink(header,sizeof(header));sink(p->seq.data()+base,size_t(plan.target-base)*4);
+        sink(logits.data(),logits.size()*4);
+        std::vector<uint8_t> page(65536);
+        for(uint32_t i=0;i<plan.count;i++) {
+            const auto &r=plan.slices[i];
+            if(r.owner==QFN_CONV||r.owner==QFN_PLE) {
+                std::vector<float> history(size_t(r.bytes/4));p->paired_owner(r,history.data(),false);
+                sink(history.data(),size_t(r.bytes));continue;
+            }
+            for(uint64_t at=0;at<r.bytes;) {
+                const size_t n=size_t(std::min<uint64_t>(page.size(),r.bytes-at));
+                const qfn_native_slice part={r.owner,r.layer,r.offset+at,n};
+                p->paired_owner(part,page.data(),false);sink(page.data(),n);at+=n;
+            }
+        }
+        bytes=extent;return true;
+    }catch(const std::exception &e){err=e.what();return false;}
+}
+
+bool qfn_engine::apply_decode_delta(uint32_t base,uint32_t target,uint32_t base_mtp,uint32_t target_mtp,
+        uint64_t bytes,uint64_t budget,const std::function<void(void *,size_t)> &read,
+        std::vector<int32_t> &tokens,std::vector<float> &logits,std::string &err) {
+    bool mutated=false;
+    try {
+        p->require_live_context();require(read&&p->seq.size()==base&&p->paired_rows==base_mtp,
+            "reverse delta base owner frontier differs");
+        const auto shape=p->paired_shape();qfn_native_plan plan{};
+        require(qfn_native_geometry(&shape,base,target,base_mtp,target_mtp,1,&plan)&&
+            plan.bytes<=UINT64_MAX-40&&bytes==plan.bytes+40&&bytes<=budget,"reverse delta extent or budget differs");
+        uint32_t header[10];read(header,sizeof(header));
+        require(header[0]==0x444e4651&&header[1]==1&&header[2]>=target&&header[3]==base&&
+            header[4]==target&&header[5]==base_mtp&&header[6]==target_mtp&&header[7]==1&&
+            ((uint64_t(header[9])<<32)|header[8])==bytes,"reverse delta header identity differs");
+        std::vector<int32_t> add(target-base);std::vector<float> lg(shape.vocab);
+        read(add.data(),add.size()*4);read(lg.data(),lg.size()*4);
+        for(int32_t t:add)require(t>=0&&uint32_t(t)<shape.vocab,"reverse delta token outside vocabulary");
+        for(float v:lg)require(std::isfinite(v),"nonfinite reverse delta logits");
+        p->alloc_carry();p->paired_allocate();ggml_backend_synchronize(p->gpu);
+        mutated=true;p->seq.insert(p->seq.end(),add.begin(),add.end());
+        std::vector<uint8_t> page(65536);
+        for(uint32_t i=0;i<plan.count;i++) {
+            const auto &r=plan.slices[i];
+            if(r.owner==QFN_CONV||r.owner==QFN_PLE) {
+                std::vector<float> history(size_t(r.bytes/4));read(history.data(),size_t(r.bytes));
+                for(float v:history)require(std::isfinite(v),"nonfinite reverse history owner");
+                p->paired_owner(r,history.data(),true);continue;
+            }
+            for(uint64_t at=0;at<r.bytes;) {
+                const size_t n=size_t(std::min<uint64_t>(page.size(),r.bytes-at));read(page.data(),n);
+                if(r.owner==QFN_GDN||r.owner==QFN_INDEX||r.owner==QFN_CARRY) {
+                    require(n%4==0,"reverse float owner alignment differs");
+                    for(size_t j=0;j<n;j+=4){float v;std::memcpy(&v,page.data()+j,4);require(std::isfinite(v),"nonfinite reverse float owner");}
+                }else if(r.owner==QFN_KEY||r.owner==QFN_VALUE||r.owner==QFN_POOL) {
+                    require(n%2==0,"reverse half owner alignment differs");
+                    for(size_t j=0;j<n;j+=2){uint16_t v;std::memcpy(&v,page.data()+j,2);require((v&0x7c00)!=0x7c00,"nonfinite reverse half owner");}
+                }
+                const qfn_native_slice part={r.owner,r.layer,r.offset+at,n};p->paired_owner(part,page.data(),true);at+=n;
+            }
+        }
+        ggml_backend_synchronize(p->gpu);p->paired_rows=target_mtp;
+        p->mtp_pend.clear();p->last_step_n=0;p->verify_checkpoint_ready=false;p->sampling_started=false;
+        p->handover_draft_pending=p->mtp_ok; // source-aligned drafter is rebuilt only if CUDA local decode is requested
+        if(p->mtp_ok)p->carry_row(target-1,p->h_last);
+        tokens=p->seq;logits=std::move(lg);return true;
+    }catch(const std::exception &e){if(mutated)p->doorbell_poisoned=true;err=e.what();return false;}
+}
+
+bool qfn_engine::save_paired_anchor(const std::vector<float> &logits,uint64_t budget,uint64_t &bytes,std::string &err) {
+    bytes=0;
+    try {
+        p->require_live_context();const auto shape=p->paired_shape();impl::paired_anchor_state next;
+        require(logits.size()==shape.vocab&&qfn_native_anchor_geometry(&shape,uint32_t(p->seq.size()),p->paired_rows,&next.plan),
+            "paired anchor geometry/logits differ");
+        require(next.plan.bytes+logits.size()*4+p->seq.size()*4<=budget,"paired anchor exceeds explicit host byte budget");
+        next.tokens=p->seq;next.logits=logits;next.images=p->images;next.owners.resize(size_t(next.plan.bytes));
+        ggml_backend_synchronize(p->gpu);size_t cursor=0;
+        for(uint32_t i=0;i<next.plan.count;i++) {
+            const auto &r=next.plan.slices[i];
+            if(r.owner==QFN_CONV||r.owner==QFN_PLE){p->paired_owner(r,next.owners.data()+cursor,false);cursor+=size_t(r.bytes);continue;}
+            for(uint64_t off=0;off<r.bytes;) {
+                const size_t n=size_t(std::min<uint64_t>(65536,r.bytes-off));
+                const qfn_native_slice part={r.owner,r.layer,r.offset+off,n};p->paired_owner(part,next.owners.data()+cursor,false);cursor+=n;off+=n;
+            }
+        }
+        require(cursor==next.owners.size(),"paired anchor owner extent differs");
+        bytes=next.owners.size()+next.tokens.size()*4+next.logits.size()*4;p->paired_anchor=std::move(next);return true;
+    }catch(const std::exception &e){err=e.what();return false;}
+}
+
+bool qfn_engine::rewind_paired_anchor(std::vector<int32_t> &tokens,std::vector<float> &logits,std::string &err,bool test_owner_readback) {
+    bool mutated=false;
+    try {
+        p->require_live_context();const auto &a=p->paired_anchor;
+        require(!a.owners.empty()&&a.tokens.size()<=p->seq.size()&&std::equal(a.tokens.begin(),a.tokens.end(),p->seq.begin()),
+            "paired rewind anchor prefix is unavailable");
+        ggml_backend_synchronize(p->gpu);mutated=true;p->seq=a.tokens;p->images=a.images;size_t cursor=0;
+        for(uint32_t i=0;i<a.plan.count;i++) {
+            const auto &r=a.plan.slices[i];
+            if(r.owner==QFN_CONV||r.owner==QFN_PLE){p->paired_owner(r,const_cast<uint8_t*>(a.owners.data()+cursor),true);cursor+=size_t(r.bytes);continue;}
+            for(uint64_t off=0;off<r.bytes;) {
+                const size_t n=size_t(std::min<uint64_t>(65536,r.bytes-off));
+                const qfn_native_slice part={r.owner,r.layer,r.offset+off,n};p->paired_owner(part,const_cast<uint8_t*>(a.owners.data()+cursor),true);cursor+=n;off+=n;
+            }
+        }
+        require(cursor==a.owners.size(),"paired rewind extent differs");ggml_backend_synchronize(p->gpu);
+        if(test_owner_readback) {
+            size_t checked=0;
+            for(uint32_t i=0;i<a.plan.count;i++) {
+                const auto &r=a.plan.slices[i];
+                if(r.owner==QFN_CONV||r.owner==QFN_PLE) {
+                    std::vector<uint8_t> page(size_t(r.bytes));p->paired_owner(r,page.data(),false);
+                    require(!std::memcmp(page.data(),a.owners.data()+checked,page.size()),"test rewind history readback differs");checked+=page.size();continue;
+                }
+                std::vector<uint8_t> page(65536);
+                for(uint64_t off=0;off<r.bytes;) {
+                    const size_t n=size_t(std::min<uint64_t>(page.size(),r.bytes-off));
+                    const qfn_native_slice part={r.owner,r.layer,r.offset+off,n};p->paired_owner(part,page.data(),false);
+                    require(!std::memcmp(page.data(),a.owners.data()+checked,n),"test rewind actual owner readback differs");off+=n;checked+=n;
+                }
+            }
+            require(checked==a.owners.size(),"test rewind readback extent differs");
+            std::fprintf(stderr,"QFN_TEST_ANCHOR_READBACK bytes=%llu position=%llu actual_native_owners=1 matched=1\n",
+                (unsigned long long)checked,(unsigned long long)a.tokens.size());
+        }
+        p->paired_rows=a.plan.target_mtp;p->mtp_pend.clear();p->handover_draft_pending=p->mtp_ok;
+        p->last_step_n=0;p->sampling_started=false;p->verify_checkpoint_ready=false;
+        if(p->mtp_ok)p->carry_row(int64_t(p->seq.size())-1,p->h_last);
+        tokens=p->seq;logits=a.logits;return true;
+    }catch(const std::exception &e){if(mutated)p->doorbell_poisoned=true;err=e.what();return false;}
+}
+
+void qfn_engine::set_prefill_progress(std::function<void(uint32_t,uint32_t,uint64_t)> progress) {
+    p->prefill_progress=std::move(progress);
+}
 
 bool qfn_engine::prefill(const std::vector<int32_t> & tokens, const qfn_logits_request & req, std::string & err) {
     try {

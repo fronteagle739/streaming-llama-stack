@@ -56,6 +56,9 @@ extern "C" {
 // gate/up/SwiGLU; 0 retains separate gate/up outputs and a separate SwiGLU
 // launch before identical Q8_1 hidden quantization. Both grouped middle-stage
 // schedules also remain available. Qualification pending.
+// Vector policy2 is the explicit F32 activation arm: original packed weight
+// values/scales/globals, no activation quantization, same short mode6 extents.
+// Both middle-stage schedules remain supported; policy0/1 are unchanged.
 QFN_NATIVE_NVFP4_API int qfn_native_nvfp4_abi(void);
 // Initializes original DLL, AOT modules and kernel attributes before capture.
 QFN_NATIVE_NVFP4_API int qfn_native_nvfp4_prepare(void * stream);

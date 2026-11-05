@@ -1020,7 +1020,7 @@ template <int mmq_y, bool need_check> static __device__ __forceinline__ void loa
 }
 #endif // 0 (end of load_tiles_q6_0 guard — not supported in this tree)
 
-// QFNSTREAM (mmq_id: the row stride is in bytes here, in blocks in mmq.cuh): Q2_0 tiles in the Q8_0 layout: int8 values q-1 (upstream __byte_perm unpack), one scale per 32 values.
+// QFN (mmq_id: the row stride is in bytes here, in blocks in mmq.cuh): Q2_0 tiles in the Q8_0 layout: int8 values q-1 (upstream __byte_perm unpack), one scale per 32 values.
 template <int mmq_y, bool need_check> static __device__ __forceinline__ void load_tiles_q2_0(
     const char * __restrict__ x, int * __restrict__ x_tile, const int kbx0, const int i_max, const int stride) {
     constexpr int nwarps = mmq_get_nwarps_device();

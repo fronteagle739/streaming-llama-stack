@@ -64,7 +64,7 @@ def replacement_budget(cfg, maximum, previous_budget, timeout=60):
     if previous_budget is None:
         return budget(cfg, maximum)
     requested = {**cfg, 'mac_host_budget_gib': cfg.get('mac_host_budget_gib') or previous_budget}
-    # Owner rule (no fixed timeouts): `timeout` is the no-progress window; it is renewed while
+    # Runtime contract (no fixed timeouts): `timeout` is the no-progress window; it is renewed while
     # available memory keeps rising (the retired buffers are still draining).
     from .memory_counters import available_physical_bytes
     window = Window(timeout)
@@ -135,7 +135,10 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
         if not model.is_file():
             raise ValueError('ds4 requires a GGUF model file')
         wired = int(subprocess.check_output(['sysctl', '-n', 'iogpu.wired_limit_mb'], text=True).strip())
-        if wired < 512000:
+        qfn=cfg.get('model_family')=='qfn'
+        wired_min=int(cfg['host_budget_gib']*1024) if qfn else 512000
+        if wired < wired_min:
+            if qfn:raise ValueError('QFN declared device/host budget exceeds the existing wired limit; no system setting changed')
             raise ValueError('Native 1017 preset needs a larger wired limit. Run: sudo sysctl iogpu.wired_limit_mb=512000')
         directory = ROOT / 'engines/ds4-mac'
         binary = directory / 'ds4-server'
@@ -145,11 +148,14 @@ def setup(cfg, backend='ds4', *, check=False, zig=None):
         current = (binary.is_file() and previous.get('source_sha256') == source_pin
                    and previous.get('binary_sha256') == sha256(binary))
         if not current and not check:
-            if not shutil.which('clang') or not shutil.which('make') or not shutil.which('cmake'):
+            cmake=str(cfg.get('build_cmake') or shutil.which('cmake') or '')
+            if not shutil.which('clang') or not shutil.which('make') or not cmake or (cfg.get('build_cmake') and not Path(cmake).is_file()):
                 raise ValueError('Mac ds4 build requires Xcode command line tools and CMake')
-            build_cfg = {**cfg, 'host_budget_gib': 2, 'min_available_gib': 4}
-            flags = '-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1'
-            OwnedProcess(build_cfg, ['make', '-j2', 'ds4-server', 'CFLAGS=' + flags], 'build-mac-ds4',
+            build_cfg = {**cfg, 'host_budget_gib': 2, 'min_available_gib': 16 if qfn else 4,
+                         **({'runtime_min_free_gib':16,'job_commit_gib':3} if qfn else {})}
+            flags = ('-O3 -ffast-math -g0 -mcpu=native -Wall -Wextra -std=c11 -DDS4_NATIVE_FRONTIER_ENABLE=1' if qfn else
+                     '-O3 -ffast-math -g -mcpu=native -Wall -Wextra -std=c99 -DDS4_NATIVE_FRONTIER_ENABLE=1')
+            OwnedProcess(build_cfg, ['make', '-j2', 'ds4-server', 'CFLAGS=' + flags, *(['CMAKE='+cmake] if qfn else [])], 'build-mac-ds4',
                          cwd=ROOT / 'engines/ds4-mac', timeout=900, scope='ds4-mac').wait()
             if source_digest(directory) != source_pin:
                 raise ValueError('Mac source changed during its build; binary is unqualified')
@@ -201,6 +207,34 @@ def addresses():
 
 
 class Receiver:
+    def valid_pair_token(self,value):
+        return isinstance(value,str) and bool(re.fullmatch(r'[A-Za-z0-9_-]{16,128}',value))
+
+    def pair_extra_fields(self):
+        return set()
+
+    def validate_pair_extra(self,row):
+        if self.pair_extra_fields():
+            raise NotImplementedError('A family declaring extra pairing fields must validate them')
+
+    def health_fields(self):
+        return {}
+
+    def local_model_description(self,keep):
+        from .native_broker import model_digest,model_receipt
+        from .model_compatibility import model_description
+        return model_description(path(self.cfg['model']),model_digest(self.cfg,model_receipt(self.cfg)),keep)
+
+    def normalize_request(self,body):
+        from .paired_generation import decode_request
+        return decode_request(body)
+
+    def qualification_vocab(self):
+        return 129280
+
+    def qualification_directory(self):
+        return Path(self.cfg['runtime_root'])/'state'
+
     def __init__(self, cfg, backend, build):
         self.cfg, self.backend, self.build = cfg, backend, build
         self.lock = threading.RLock()
@@ -210,10 +244,10 @@ class Receiver:
         self.peer = None
         self.relay = None
         self.qualification = {}
-        self.token_file = Path(cfg['runtime_root']) / 'state' / 'pair.token'
+        self.token_file = Path(cfg.get('pairing_state_root',Path(cfg['runtime_root'])/'state')) / 'pair.token'
         self.token_file.parent.mkdir(parents=True, exist_ok=True)
         supplied = cfg.get('pair_token')
-        if supplied is not None and (not isinstance(supplied,str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,128}',supplied)):
+        if supplied is not None and not self.valid_pair_token(supplied):
             raise ValueError('Pairing token must contain 16–128 URL-safe letters, digits, _ or -')
         if supplied and self.token_file.exists() and self.token_file.read_text().strip() != supplied:
             raise ValueError('Stored token differs; use a separate runtime directory for another pairing')
@@ -241,7 +275,7 @@ class Receiver:
             self.engine_budget = None
 
     def pair(self, row, client_ip):
-        allowed = {'model_compatibility', 'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}
+        allowed = {'model_compatibility', 'producer_sha256', 'producer_source_revision', 'producer_ipv4', 'broker_port', 'tier'}|self.pair_extra_fields()
         keep=row.get('yoco_keep',0);version=row.get('yoco_state_version',0)
         from .yoco import require_state
         require_state(keep,version)
@@ -252,10 +286,10 @@ class Receiver:
             raise ValueError('Producer address must match the authenticated peer connection')
         if type(row['broker_port']) is not int or not 1 <= row['broker_port'] <= 65535 or row['tier'] not in ('accurate', 'fast', 'ultra', 'hyper'):
             raise ValueError('Invalid broker port or native tier')
+        self.validate_pair_extra(row)
         self.close()
-        from .native_broker import model_digest, model_receipt
-        from .model_compatibility import model_description, require_compatible
-        local = model_description(path(self.cfg['model']), model_digest(self.cfg, model_receipt(self.cfg)), keep)
+        from .model_compatibility import require_compatible
+        local = self.local_model_description(keep)
         mixed = require_compatible(local, row['model_compatibility'])
         print('NATIVE_MODEL_COMPATIBILITY '+json.dumps(dict(producer=row['model_compatibility'], receiver=local, cross_quant=mixed)), flush=True)
         self.peer = {**row, 'receiver_model_compatibility': local, 'cross_quant': mixed, 'receiver_sha256': self.build['binary_sha256'], 'status': 'candidate'}
@@ -369,7 +403,7 @@ class Receiver:
                                    unbounded=True, scope='ds4-mac' if self.backend == 'ds4' else 'mlx-serve')
         self.engine_mode = native
         self.engine_budget = cfg['host_budget_gib']
-        # Owner rule (no fixed timeouts): readiness lives while the backend tree shows progress.
+        # Runtime contract (no fixed timeouts): readiness lives while the backend tree shows progress.
         window = Window(readiness_seconds(cfg))
         while not window.expired():
             if self.engine.proc.poll() is not None:
@@ -388,8 +422,7 @@ class Receiver:
         if qualification is None and self.backend == 'ds4' and (not self.peer or self.peer.get('status') != 'qualified'):
             raise ValueError('Complete the real native/pair parity handshake first')
         if self.backend == 'ds4':
-            from .paired_generation import decode_request
-            body = decode_request(body)
+            body = self.normalize_request(body)
         native = self.backend == 'ds4' and qualification != 'native'
         self.ready(native)
         body = dict(body, stream=False)
@@ -399,9 +432,9 @@ class Receiver:
         response = http_json(f'http://127.0.0.1:{self.cfg.get("mac_engine_port", 8181)}/v1/chat/completions',
                              body, timeout=None)   # silent until done (stream=False); the owned engine bounds it
         if qualification and self.peer.get('cross_quant'):
-            logits = Path(self.cfg['runtime_root'])/'state'/('qualification-'+qualification+'.f32')
-            raw = (Path(self.cfg['runtime_root'])/'state/qualification-current.f32').read_bytes()
-            if len(raw) != 8*129280*4:raise ValueError('Incomplete cross-quant continuation observation')
+            logits = self.qualification_directory()/('qualification-'+qualification+'.f32')
+            raw = (self.qualification_directory()/'qualification-current.f32').read_bytes()
+            if len(raw) != 8*self.qualification_vocab()*4:raise ValueError('Incomplete cross-quant continuation observation')
             logits.write_bytes(raw)
         if qualification:
             message = response['choices'][0]['message']
@@ -420,8 +453,8 @@ class Receiver:
                 raise ValueError('Native/paired continuation decisions differ; pair remains unqualified')
             if self.peer.get('cross_quant'):
                 from .model_compatibility import continuation_kl
-                state=Path(self.cfg['runtime_root'])/'state'
-                evidence=continuation_kl((state/'qualification-native.f32').read_bytes(), (state/'qualification-paired.f32').read_bytes())
+                state=self.qualification_directory()
+                evidence=continuation_kl((state/'qualification-native.f32').read_bytes(), (state/'qualification-paired.f32').read_bytes(),self.qualification_vocab())
                 # Explicit numerical qualification, never a byte-identity bypass.
                 evidence.update(mean_limit_nats=.1, max_limit_nats=.5, continuation_token=42)
                 atomic_json(state/'qualification-kl.json', evidence)
@@ -439,8 +472,7 @@ class Receiver:
     def events(self, body):
         if self.backend != 'ds4' or not self.peer or self.peer.get('status') != 'qualified':
             raise ValueError('Complete native pairing before streaming')
-        from .paired_generation import decode_request
-        body = decode_request(body)
+        body = self.normalize_request(body)
         self.ready(True)
         from .pairing import conversation_key
         from .streaming import events
@@ -452,7 +484,7 @@ class Receiver:
 
 def wait_for_receiver(cfg, job):
     """Relay only the owned receiver's user-facing startup lines to its terminal."""
-    window = Window(readiness_seconds(cfg))   # no-progress window (owner rule), not a 60 s cap
+    window = Window(readiness_seconds(cfg))   # no-progress window (Runtime contract), not a 60 s cap
     bind = cfg.get('mac_bind','0.0.0.0')
     host = '127.0.0.1' if bind == '0.0.0.0' else bind
     while not window.expired():
@@ -477,9 +509,7 @@ def wait_for_receiver(cfg, job):
                        % (window.idle(), window.elapsed()))
 
 
-def serve(cfg, backend, build):
-    receiver = Receiver(cfg, backend, build)
-
+def receiver_server(receiver,cfg,backend,build):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
         def log_message(self, *args):
@@ -504,7 +534,7 @@ def serve(cfg, backend, build):
                                  'paired_tier': peer.get('tier'), 'yoco_state_version':1,
                                  'yoco_state_versions':[1,2],
                                  'paired_yoco_keep':peer.get('yoco_keep',0),
-                                 'paired_yoco_state_version':peer.get('yoco_state_version',0)})
+                                 'paired_yoco_state_version':peer.get('yoco_state_version',0),**receiver.health_fields()})
             elif self.path == '/v1/models' and self.authorized():
                 self.reply(200, {'object': 'list', 'data': [{'id': cfg['model_name'], 'object': 'model'}]})
             else:
@@ -550,6 +580,13 @@ def serve(cfg, backend, build):
     port = cfg.get('mac_port', 8180)
     server = ThreadingHTTPServer((cfg.get('mac_bind', '0.0.0.0'), port), Handler)
     server.daemon_threads = True
+    return server
+
+
+def serve(cfg,backend,build):
+    receiver=Receiver(cfg,backend,build)
+    server=receiver_server(receiver,cfg,backend,build)
+    port=cfg.get('mac_port',8180)
     announced = addresses() if cfg.get('mac_bind','0.0.0.0') == '0.0.0.0' else [cfg['mac_bind']]
     for address in announced:
         print(f'MAC ENDPOINT: http://{address}:{port}', flush=True)

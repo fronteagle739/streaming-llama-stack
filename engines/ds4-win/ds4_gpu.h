@@ -2,6 +2,7 @@
 #define DS4_GPU_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "ds4_qwen4_vision.h"
 
@@ -22,6 +23,7 @@ extern "C" {
 #define DS4_GPU_TENSOR_DEFINED
 typedef struct ds4_gpu_tensor ds4_gpu_tensor;
 #endif
+uint64_t ds4_gpu_direction_allocated_bytes(void);
 int ds4_gpu_fuse_output_q8_lora(ds4_gpu_tensor *out, const void *model_map,
     uint64_t model_size, uint64_t offset, uint32_t hidden, uint32_t vocab,
     const float *a, const float *b, uint32_t rank, float scale);
@@ -2721,6 +2723,32 @@ int ds4_gpu_directional_steering_project_tensor(
         uint32_t                width,
         uint32_t                rows,
         float                   scale);
+
+/* CUDA writer-space adapters: all dot products use the original row, then
+ * one additive update. Pack [layer][site=attention,FFN][adapter][scale,r...]. */
+int ds4_gpu_direction_stack_tensor(ds4_gpu_tensor *x,const ds4_gpu_tensor *pack,
+        uint32_t layer,uint32_t site,uint32_t width,uint32_t count);
+
+/* Uses A=r^T W from this target's original weights and the shared fusion kernel.
+ * Changes VRAM scratch only. Scalar, single-device DSV4.1 candidate. */
+void ds4_gpu_direction_fused_clear(void);
+void ds4_gpu_direction_fused_stats(uint64_t *fusions,uint64_t *hits,uint64_t *resident_bytes);
+int ds4_gpu_direction_matmul(ds4_gpu_tensor *out,const void *model_map,
+    uint64_t model_size,uint64_t offset,uint32_t type,uint32_t input,uint32_t output,
+    const ds4_gpu_tensor *x,const ds4_gpu_tensor *pack,uint32_t layer,uint32_t site,uint32_t count);
+/* Bounded component control: one packed CPU assignment plus one GPU assignment.
+ * cpu_base is an independently supplied base row; no model inference is run. */
+int ds4_gpu_direction_packed_mixed_control(ds4_gpu_tensor *out,const void *model_map,
+    uint64_t model_size,uint64_t offset,const ds4_gpu_tensor *x,const ds4_gpu_tensor *pack,
+    const ds4_gpu_tensor *cpu_base,uint32_t layer,uint32_t site,uint32_t count);
+int ds4_gpu_direction_routed_moe_one_tensor(ds4_gpu_tensor *out,ds4_gpu_tensor *gate,
+    ds4_gpu_tensor *up,ds4_gpu_tensor *mid,ds4_gpu_tensor *down,const void *model_map,
+    uint64_t model_size,uint64_t gate_offset,uint64_t up_offset,uint64_t down_offset,
+    uint32_t gate_type,uint32_t down_type,uint64_t gate_expert_bytes,uint64_t gate_row_bytes,
+    uint64_t down_expert_bytes,uint64_t down_row_bytes,uint32_t input,uint32_t middle,uint32_t output,
+    const ds4_gpu_tensor *selected,const ds4_gpu_tensor *weights,uint32_t experts,uint32_t used,
+    float clamp,const ds4_gpu_tensor *x,uint32_t layer,bool force_resident,
+    const ds4_gpu_tensor *pack,uint32_t count);
 
 
 /* Rerank existing unbiased router probabilities using current cache slots only.

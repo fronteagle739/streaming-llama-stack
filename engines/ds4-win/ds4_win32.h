@@ -334,7 +334,7 @@ char *ds4_win32_realpath(const char *path, char *resolved);
 void ds4_win32_enable_utf8_console(void);
 bool ds4_win32_host_memory_begin(void);
 bool ds4_win32_host_memory_check(uint64_t requested_bytes, const char *reason);
-/* Owner rule: never force-kill this process while it may hold VRAM or DirectStorage
+/* Runtime contract: never force-kill this process while it may hold VRAM or DirectStorage
  * resources. A host-memory breach requests a graceful abort instead: every later
  * allocation is refused, every session cancel check returns true (the current request
  * fails, new ones are refused) and the process stays up for a graceful shutdown. */

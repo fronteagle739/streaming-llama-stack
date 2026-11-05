@@ -1,17 +1,21 @@
 param([Parameter(Mandatory=$true)][string]$AotDirectory,
       [Parameter(Mandatory=$true)][string]$CutlassRuntimeLibrary,
-      [Parameter(Mandatory=$true)][string]$Workspace)
+      [Alias('Workspace')][Parameter(Mandatory=$true)][string]$TaskRoot,
+      [string]$BinDirectory='')
 $ErrorActionPreference='Stop'
 # Run in the existing serial guarded VS x64/CUDA13.2 build environment.
-# Stable DLL name; all intermediates stay in the one QFN scratch tree.
-$taskRoot=[IO.Path]::GetFullPath($Workspace)
+# Stable DLL name; all intermediates stay in the explicit workspace.
+$taskRoot=[IO.Path]::GetFullPath($TaskRoot)
 $stack=Split-Path (Split-Path (Split-Path $PSScriptRoot))
 $output=Join-Path $taskRoot 'build/native-nvfp4'
-$bin=Join-Path $stack 'bin'
+$bin=if($BinDirectory){[IO.Path]::GetFullPath($BinDirectory)}else{Join-Path $stack 'bin'}
 $cudaRoot=$env:CUDA_PATH
 if(!$cudaRoot){throw 'CUDA_PATH must name CUDA13.2'}
-if(![IO.Path]::GetFullPath($AotDirectory).StartsWith([IO.Path]::GetFullPath($taskRoot),[StringComparison]::OrdinalIgnoreCase)){
-    throw 'AOT output must stay under the explicit Workspace'
+if(!$bin.StartsWith($taskRoot.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){
+    throw 'Stable DLL output must stay under the explicit workspace'
+}
+if(!(Test-Path -LiteralPath $AotDirectory -PathType Container) -or !(Test-Path -LiteralPath $CutlassRuntimeLibrary -PathType Leaf)){
+    throw 'Existing read-only AOT inputs and runtime library are required'
 }
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 New-Item -ItemType Directory -Path $bin -Force | Out-Null

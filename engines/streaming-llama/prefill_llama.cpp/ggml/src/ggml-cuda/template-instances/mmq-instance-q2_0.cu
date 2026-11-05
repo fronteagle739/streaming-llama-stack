@@ -1,4 +1,4 @@
-// QFNSTREAM: Q2_0 MMQ instance (same form as the generated ones).
+// QFN: Q2_0 MMQ instance (same form as the generated ones).
 
 #include "../mmq.cuh"
 

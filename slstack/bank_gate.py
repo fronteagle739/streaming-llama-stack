@@ -11,7 +11,7 @@ import re
 LAYOUT = re.compile(rb'LLAMADECODE_PREFILL_LAYOUT banks=(\d+) streaming_banks=(\d+)')
 SWITCH = re.compile(rb'LLAMADECODE_LAYOUT_SWITCH decode=(\d)')
 # The only allowed single-banked prefill: the plan's explicit long-context VRAM fallback, logged
-# with its reason and numbers (owner rule; shrink L2/expert cache first).
+# with its reason and numbers (Runtime contract; shrink L2/expert cache first).
 SINGLE = re.compile(rb'LLAMADECODE_PREFILL_SINGLE_BANK reason=(\S+) kv_bytes=(\d+) free_bytes=(\d+)')
 BEGIN = re.compile(rb'\[dsv41-sweep\] layer=0 begin tokens=(\d+)')
 LEDGER = re.compile(rb'DS4PERF_LAYER_WALL_LEDGER layer=(\d+) wall_ms=([0-9.]+) acquire_ms=([0-9.]+)')

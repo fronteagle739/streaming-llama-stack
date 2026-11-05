@@ -36,7 +36,8 @@ def completed_artifact_sha256(path):
             time.sleep(.02)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from slstack.config import load, environment
+from slstack.config import environment
+from scripts.dsv41_100k_ram_profile import load_performance_config
 from slstack.combo_producer import ComboProducer, prefill_plan
 from slstack.lease import gpu_lease, AdmissionRefused
 from slstack.process import OwnedProcess
@@ -61,7 +62,7 @@ def evidence(root, experiment, cfg):
     row=dict(checked_at=datetime.now(timezone.utc).isoformat(),
              result_present=bool(result and result.exists()),result_sha256=hashlib.sha256(data).hexdigest(),
              ordering='E13,E2c,E6,E8,E9,E7,E10,E14,E15,E17; E12 dropped',
-             decision='Owner correction takes priority. Published ledger: Engram selected rows, not whole tables; 315825603008 weight bytes/full pass.')
+             decision='Measured I/O ledger: Engram selected rows, not whole tables; 315825603008 weight bytes/full pass.')
     (root/(experiment+'-e1-check.json')).write_text(json.dumps(row,indent=2))
     return row
 
@@ -138,6 +139,8 @@ def run_child(args, cfg, arm, label):
     observer=threading.Thread(target=observe,daemon=True);observer.start()
     try:
         opened=time.monotonic()
+        from slstack.performance_contract import seal
+        cfg=seal(cfg,'dsv41')
         producer=ComboProducer(cfg,secrets.token_hex(16),1,tokens,lambda:False,on_start=owner.append)
         result.update(prefill_seconds=producer.prefill_seconds,tok_s=len(tokens)/producer.prefill_seconds,
                       plan=producer.prefill_plan,ready=producer.process.ready,
@@ -243,6 +246,8 @@ def run_child(args, cfg, arm, label):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
+    from scripts.dsv41_100k_ram_profile import add_performance_flags, apply_performance_flags
+    add_performance_flags(p)
     p.add_argument('--root',type=Path,required=True)
     p.add_argument('--experiment',required=True)
     p.add_argument('--candidate',type=parse_setting,required=True)
@@ -279,7 +284,7 @@ def main():
     args.root=root
     if Path(args.config_name).name!=args.config_name or not args.config_name.endswith('.json'):
         raise ValueError('Config must be a JSON basename in the configured scratch root')
-    cfg=load(root/args.config_name)
+    cfg=apply_performance_flags(load_performance_config(root/args.config_name, experiment=args.performance_experiment), args)
     cfg['_pair_config_sha256']=hashlib.sha256(json.dumps(cfg,sort_keys=True,default=str).encode()).hexdigest()
     if Path(cfg['runtime_root']).resolve().parent!=root:
         raise ValueError('Runtime and evidence must use the one configured scratch root')

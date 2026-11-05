@@ -11,7 +11,16 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('262k', '1m')][string]$Preset,
     [string]$Config = '',
     [string]$Model = '',
+    [string]$Python = '',
     [ValidateSet(0,140,2541)][int]$YocoKeep = 2541,
+    [double]$HostBudgetGiB = 10.25,
+    [double]$WorkerHostBudgetGiB = 10,
+    [double]$ProducerHostBudgetGiB = 6.25,
+    [string]$ProducerHostMaxGiB = '7.75',
+    [string]$EngramScanRings = 'auto',
+    [string]$PrefillSweepTokens = 'auto',
+    [hashtable]$PerformanceFlags = @{},
+    [switch]$PerformanceExperiment,
     [switch]$WebUI,
     [switch]$Vision,
     [switch]$DryRun,
@@ -19,7 +28,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Python = (Get-Command python -ErrorAction Stop).Source
+if (-not $Python) { $Python = (Get-Command python -ErrorAction Stop).Source }
 if (-not $Config) {
     $default = Join-Path $Root 'my.local.json'
     if (Test-Path -LiteralPath $default) { $Config = $default }
@@ -31,6 +40,13 @@ $StartConfig = Join-Path $Root "runtime\dsv41-single-$Preset$ModeSuffix.local.js
 $genArgs = @('-B', (Join-Path $Root 'scripts\dsv41_single.py'), '--preset', $Preset, '--write', $StartConfig)
 $profile = if ($YocoKeep -eq 2541) { 'ultra-cone' } elseif ($YocoKeep -eq 140) { 'ultra-yoco' } else { 'ultra' }
 $genArgs += @('--profile', $profile)
+if ($PerformanceExperiment) { $genArgs += '--performance-experiment' }
+$genArgs += @('--host-budget-gib', "$HostBudgetGiB", '--combo-worker-host-budget-gib', "$WorkerHostBudgetGiB",
+    '--producer-host-budget-gib', "$ProducerHostBudgetGiB", '--producer-host-max-gib', $ProducerHostMaxGiB,
+    '--producer-engram-scan-rings', $EngramScanRings, '--producer-prefill-sweep-tokens', $PrefillSweepTokens)
+foreach ($key in $PerformanceFlags.Keys) {
+    $genArgs += @('--' + $key.TrimStart('-'), [string]$PerformanceFlags[$key])
+}
 if ($Vision) { $genArgs += '--vision' }
 if ($Config) { $genArgs += @('--config', $Config) }
 if ($Model) { $genArgs += @('--model', $Model) }

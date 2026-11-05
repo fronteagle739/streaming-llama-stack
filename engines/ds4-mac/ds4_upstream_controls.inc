@@ -187,7 +187,7 @@ int ds41_upstream_control_value(const char *name,int upstream_default) {
     if (!ds41_upstream_any_override) return upstream_default;
     ds41_upstream_control *c=ds41_upstream_control_find(name);
     if (!c || !c->implemented) {
-        fprintf(stderr,"BLOCKED-OWNER: unimplemented internal control %s\n",name?name:"(null)"); abort();
+        fprintf(stderr,"Unsupported operation: unimplemented internal control %s\n",name?name:"(null)"); abort();
     }
     return c->explicit_value ? c->value : upstream_default;
 }

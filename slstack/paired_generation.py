@@ -6,11 +6,11 @@ reasoning/answer transition cannot accidentally freeze the first temperature.
 from .generation import SAMPLERS, number, validate
 
 
-def decode_request(body):
+def decode_request(body,*,vocab=129280,top_k_max=None,bias_max=None):
     result = dict(body)
     profile = result.get('slstack_generation')
     if profile is not None:
-        profile = validate(profile)
+        profile = validate(profile,vocab=top_k_max,bias_max=bias_max)
         if profile['per_phase']:
             result['slstack_phase_samplers'] = profile['phases']
             result.setdefault('quality_speed', {p:v['bias'] for p,v in profile['phases'].items()})
@@ -22,8 +22,18 @@ def decode_request(body):
         from .native_broker import vendor
         vendor()
         from studio.quality_speed_contract import validate as quality
-        result['quality_speed'] = quality(result['quality_speed'])
-    for key, (lo, hi) in SAMPLERS.items():
+        value=result['quality_speed']
+        if bias_max is None:result['quality_speed']=quality(value)
+        else:
+            from studio.quality_speed_contract import PHASES,validate_scalar
+            scalar=lambda x:validate_scalar(x) if isinstance(x,str) else number(x,0,bias_max)
+            if isinstance(value,dict):
+                if set(value)==set(PHASES)-{'code'}:value={**value,'code':value['answer']}
+                if set(value)!=set(PHASES):raise ValueError('Four quality phases required')
+                result['quality_speed']={k:scalar(v) for k,v in value.items()}
+            else:result['quality_speed']=scalar(value)
+    limits={**SAMPLERS,**({'top_k':(0,top_k_max)} if top_k_max is not None else {})}
+    for key, (lo, hi) in limits.items():
         if key in result:
             result[key] = number(result[key], lo, hi, key == 'top_k')
     if 'seed' in result:
@@ -40,7 +50,7 @@ def decode_request(body):
         biases = result['logit_bias']
         if not isinstance(biases, dict) or len(biases)>1024: raise ValueError('logit_bias requires at most1024 token entries')
         for token,value in biases.items():
-            if not isinstance(token,str) or not token.isascii() or not token.isdigit() or not 0<=int(token)<129280:
+            if not isinstance(token,str) or not token.isascii() or not token.isdigit() or not 0<=int(token)<vocab:
                 raise ValueError('logit_bias token outside native vocabulary')
             number(value,-100,100)
     for key,limits in dict(typical_p=(0,1),typ_p=(0,1),top_n_sigma=(-1,100),xtc_probability=(0,1),

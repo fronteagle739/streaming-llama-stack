@@ -8,7 +8,7 @@ def certified(proof):
 
 
 def vram_window(cfg):
-    """Owner rule (no fixed timeouts): the barrier waits while free VRAM keeps RISING (the
+    """Runtime contract (no fixed timeouts): the barrier waits while free VRAM keeps RISING (the
     driver is still releasing); vram_release_stall_seconds (default 30) is the no-progress window."""
     return Window(float(cfg.get('vram_release_stall_seconds',30)))
 

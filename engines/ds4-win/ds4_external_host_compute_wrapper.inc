@@ -9,12 +9,16 @@
  * CPU lane just before the down projection: it waits only if the CPU job is
  * still running, uploads each CPU expert's per-row sums, and the down kernel
  * adds them in slot order (the GPU's own summation order). No per-expert
- * waits on the critical path; one join per layer. */
+ * waits on the critical path; one join per layer.
+ * Direction banks additionally upload an unchanged borrowed packed down slot
+ * once per expert/bank to construct its target factors on the GPU. No host
+ * dequantization or weight fusion is introduced; cached A remains in VRAM. */
 extern "C" int ds4_cpu_fp4_init(int threads);
 extern "C" int ds4_cpu_fp4_submit(const float *x, const uint8_t *const *gate, const uint8_t *const *up,
                                   const uint8_t *const *down, const float *w, int k, float clamp, float *const *acc);
 extern "C" double ds4_cpu_fp4_wait(void);
-struct external_fp4_pinned { int32_t ids[8]; float w[8]; float x[5120]; float acc[6][5120]; };
+extern "C" const float *ds4_cpu_fp4_mid(void);
+struct external_fp4_pinned { int32_t ids[8]; float w[8]; float x[5120]; float acc[6][5120]; float mid[6][2304]; };
 static external_fp4_pinned *g_fp4_pin = nullptr;
 static int g_fp4_state = 0;               // 0 unset, 1 ready, -1 refused
 static uint32_t g_fp4_positions[6], g_fp4_count = 0;
@@ -85,12 +89,21 @@ static int external_fp4_cpu_join(void *, cudaStream_t stream) {
     const double service = ds4_cpu_fp4_wait();
     g_fp4_wait_last = external_ms(t);
     if (service < 0) return 0;
+    const float *mid=g_fp4_direction_mid?ds4_cpu_fp4_mid():nullptr;
+    if(g_fp4_direction_mid && !mid)return 0;
     g_fp4_service_ms += service;
     if (g_fp4_count) g_fp4_t_cpu += 0.05 * (service / g_fp4_count - g_fp4_t_cpu);
     for (uint32_t i = 0; i < g_fp4_count; ++i) {
         const uint32_t a = g_fp4_positions[i];
         if (!cuda_ok(cudaMemcpyAsync(g_fp4_cpu_acc_dev + (size_t)a * 5120u, g_fp4_pin->acc[a], 5120u * sizeof(float),
                                      cudaMemcpyHostToDevice, stream), "CPU expert sums upload")) return 0;
+        if(g_fp4_direction_mid) {
+            // Preserve whichever existing SwiGLU option produced the CPU lane's
+            // actual weighted mid. The common Q8_1 quantizer consumes it next.
+            std::memcpy(g_fp4_pin->mid[a],mid+(size_t)i*2304u,2304u*sizeof(float));
+            if(!cuda_ok(cudaMemcpyAsync(g_fp4_direction_mid+(size_t)a*2304u,g_fp4_pin->mid[a],2304u*sizeof(float),
+                                       cudaMemcpyHostToDevice,stream),"direction CPU-lane mid upload"))return 0;
+        }
     }
     g_fp4_join_ms += external_ms(t);
     return 1;
@@ -184,6 +197,7 @@ static int external_fp4_cpu_launch(
     }
     const uint8_t *pg[6], *pu[6], *pd[6]; float w[6]; float *acc[6];
     g_external_cpu_ids.clear();
+    std::fill(std::begin(g_fp4_cpu_down_source),std::end(g_fp4_cpu_down_source),nullptr);
     for (uint32_t c = 0; c < n_cpu; ++c) {
         const uint32_t a = cand[c];
         const int slot = external_host_find(layer_index, (uint32_t)ids[a]);
@@ -192,6 +206,7 @@ static int external_fp4_cpu_launch(
         pu[c] = (const uint8_t *)external_host_payload((uint32_t)slot, 1);
         pd[c] = (const uint8_t *)external_host_payload((uint32_t)slot, 2);
         if (!pg[c] || !pu[c] || !pd[c]) return 0;
+        g_fp4_cpu_down_source[a]=pd[c];
         g_external_host_borrowed[(uint32_t)slot] = 1; g_fp4_borrowed[c] = (uint32_t)slot;
         w[c] = g_fp4_pin->w[a]; acc[c] = g_fp4_pin->acc[a]; g_fp4_positions[c] = a;
         g_external_cpu_ids.push_back(ids[a]);

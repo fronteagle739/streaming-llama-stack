@@ -71,8 +71,12 @@ def add_flags(parser, *, suppress=False):
     import argparse
     for row in rows():
         if row['flag']:
-            parser.add_argument(row['flag'], dest='env_' + row['var'], default=argparse.SUPPRESS if suppress else None,
-                                help=row['doc'])
+            # Service --port and the engine's PORT environment setting have
+            # different destinations. Keep the explicit engine flag everywhere,
+            # plus the old alias wherever it is unambiguous.
+            aliases=[a for a in row.get('aliases',()) if a not in parser._option_string_actions]
+            parser.add_argument(row['flag'], *aliases, dest='env_' + row['var'], default=argparse.SUPPRESS if suppress else None,
+                                help=row['doc'].replace('%', '%%'))
 
 
 def apply(env, cfg, scope):
@@ -181,8 +185,8 @@ def redact_cfg(cfg):
     """A config copy that is safe to write into a job spec or a worker request."""
     def clean(value):
         if isinstance(value, dict):
-            # The model's tokenizer is a local asset path, not an access token.
-            return {k: '<redacted>' if str(k) != 'tokenizer' and is_secret(str(k)) else clean(v) for k, v in value.items()}
+            # Tokenizer paths and model identifiers are functional public fields.
+            return {k: '<redacted>' if str(k) not in ('tokenizer', 'model_key') and is_secret(str(k)) else clean(v) for k, v in value.items()}
         if isinstance(value, list):
             return [clean(v) for v in value]
         return value

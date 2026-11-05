@@ -11135,7 +11135,7 @@ void ggml_compute_forward_opt_step_sgd(const ggml_compute_params * params, ggml_
     }
 }
 
-// ggml_compute_forward_gated_delta_net (QFNSTREAM: upstream ggml-org reference, rows split by thread)
+// ggml_compute_forward_gated_delta_net (QFN: upstream ggml-org reference, rows split by thread)
 
 void ggml_compute_forward_gated_delta_net(
         const ggml_compute_params * params,
@@ -11246,7 +11246,7 @@ void ggml_compute_forward_gated_delta_net(
     }
 }
 
-// ggml_compute_forward_qfn_qsa_select (QFNSTREAM): the reference the CUDA kernel must match exactly.
+// ggml_compute_forward_qfn_qsa_select (QFN): the reference the CUDA kernel must match exactly.
 // Keys are the rectified scores; a pool is kept when its key beats the n_top-th key, or equals it and its
 // index is at most that of the n_top-th pool in (key desc, index asc) order. Kept pools are emitted in pool order.
 
@@ -11297,7 +11297,7 @@ void ggml_compute_forward_qfn_qsa_select(
     }
 }
 
-// ggml_compute_forward_qfn_qsa_attn (QFNSTREAM): plain FP32 reference of the CUDA sparse attention.
+// ggml_compute_forward_qfn_qsa_attn (QFN): plain FP32 reference of the CUDA sparse attention.
 
 void ggml_compute_forward_qfn_qsa_attn(
         const ggml_compute_params * params,

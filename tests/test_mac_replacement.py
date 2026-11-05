@@ -56,7 +56,7 @@ class MacReplacementTests(unittest.TestCase):
         self.assertNotIn('mac_host_budget_gib',cfg)
 
     def test_replacement_wait_stops_when_memory_stops_recovering(self):
-        # Owner rule: 60 s is a NO-PROGRESS window (renewed while available RAM rises), not a cap.
+        # Runtime contract: 60 s is a NO-PROGRESS window (renewed while available RAM rises), not a cap.
         with patch('slstack.memory_counters.available_physical_bytes',return_value=80*2**30), \
              patch('slstack.mac.time.monotonic',side_effect=[10,10,71,71,71]), \
              patch('slstack.mac.time.sleep') as sleep:

@@ -71,8 +71,8 @@ int decode_vector_policy(){
         char option[8]{};SetLastError(ERROR_SUCCESS);
         const DWORD n=GetEnvironmentVariableA("QFN_NATIVE_NVFP4_DECODE_VECTOR",option,sizeof(option));
         if(!n&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return 0;
-        if(n==1&&(option[0]=='0'||option[0]=='1'))return int(option[0]-'0');
-        std::fprintf(stderr,"QFN_NATIVE_NVFP4_DECODE_VECTOR must be exactly 0 or 1 before admission\n");return -1;
+        if(n==1&&(option[0]>='0'&&option[0]<='4'))return int(option[0]-'0');
+        std::fprintf(stderr,"QFN_NATIVE_NVFP4_DECODE_VECTOR must be exactly 0 through 4 before admission\n");return -1;
     }();return value;
 }
 
@@ -541,6 +541,15 @@ extern "C" int qfn_native_nvfp4_prepare(void * stream){
     qfn_vector_gate_up<false><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
     qfn_vector_swiglu<<<1,256,0,cs>>>(nullptr,nullptr,0);
     qfn_vector_down<<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<true><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<false><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_down<<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<true,3><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<false,3><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_down<3><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<true,4><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_gate_up<false,4><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,nullptr,0);
+    qfn_vector_float_down<4><<<1,256,0,cs>>>(nullptr,nullptr,nullptr,nullptr,0);
     err=cudaGetLastError();if(err==cudaSuccess)err=cudaStreamSynchronize(cs);
     if(err==cudaSuccess)prepared[dev].store(true,std::memory_order_release);return int(err);
 }
@@ -586,6 +595,45 @@ extern "C" int qfn_native_nvfp4_run(const float * x,const int32_t * physical,con
     auto cs=static_cast<cudaStream_t>(stream);
     const bool shared_gu=mode==6&&nt>4&&share_gu_input_policy()==1;
     if(mode>=4){validate_calibration<<<6,256,0,cs>>>(calibration,NE*3,shared_gu);TRY_CUDA(cudaGetLastError());}
+    if(mode==6&&nt<=4&&decode_vector_policy()==2){
+        Arena a{static_cast<uint8_t *>(workspace)};auto s=vector_layout(a,nt);
+        const int rows=nt*K;
+        validate_routes<<<(rows+255)/256,256,0,cs>>>(physical,logical,bank,slots,rows,false,true);
+        if(fused_mid_policy()==1)
+            qfn_vector_float_gate_up<true><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+        else {
+            qfn_vector_float_gate_up<false><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+            qfn_vector_swiglu<<<(uint64_t(rows)*F+255)/256,256,0,cs>>>(s.hidden,s.up,uint64_t(rows)*F);
+        }
+        qfn_vector_float_down<<<dim3(E/8,rows),256,0,cs>>>(bank,physical,s.hidden,out,rows);
+        return int(cudaGetLastError());
+    }
+    if(mode==6&&nt<=4&&decode_vector_policy()==3){
+        Arena a{static_cast<uint8_t *>(workspace)};auto s=vector_layout(a,nt);
+        const int rows=nt*K;
+        validate_routes<<<(rows+255)/256,256,0,cs>>>(physical,logical,bank,slots,rows,false,true);
+        if(fused_mid_policy()==1)
+            qfn_vector_float_gate_up<true,3><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+        else {
+            qfn_vector_float_gate_up<false,3><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+            qfn_vector_swiglu<<<(uint64_t(rows)*F+255)/256,256,0,cs>>>(s.hidden,s.up,uint64_t(rows)*F);
+        }
+        qfn_vector_float_down<3><<<dim3(E/8,rows),256,0,cs>>>(bank,physical,s.hidden,out,rows);
+        return int(cudaGetLastError());
+    }
+    if(mode==6&&nt<=4&&decode_vector_policy()==4){
+        Arena a{static_cast<uint8_t *>(workspace)};auto s=vector_layout(a,nt);
+        const int rows=nt*K;
+        validate_routes<<<(rows+255)/256,256,0,cs>>>(physical,logical,bank,slots,rows,false,true);
+        if(fused_mid_policy()==1)
+            qfn_vector_float_gate_up<true,4><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+        else {
+            qfn_vector_float_gate_up<false,4><<<dim3(F/8,rows),256,0,cs>>>(bank,physical,x,s.hidden,s.up,rows);
+            qfn_vector_swiglu<<<(uint64_t(rows)*F+255)/256,256,0,cs>>>(s.hidden,s.up,uint64_t(rows)*F);
+        }
+        qfn_vector_float_down<4><<<dim3(E/8,rows),256,0,cs>>>(bank,physical,s.hidden,out,rows);
+        return int(cudaGetLastError());
+    }
     if(mode==6&&nt<=4&&decode_vector_policy()==1){
         Arena a{static_cast<uint8_t *>(workspace)};auto s=vector_layout(a,nt);
         const int rows=nt*K;

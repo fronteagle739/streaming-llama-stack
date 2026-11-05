@@ -342,10 +342,86 @@ def apply_preset_crossover(cfg,profile,tokens):
 PROFILE_QUALIFICATION=('combo_qualification_root','combo_native_binding','combo_ultra_guard')
 
 
+def inherit_launch_lease(cfg, environ=None):
+    """Borrow an explicit live ancestor reservation for a managed GUI launch.
+
+    The immutable installed config stays unchanged. gpu_lease supplies the
+    existing process-identity, ledger, budget and foreign-hold validation.
+    A caller may also name transient storage inside its own lease scratch root.
+    """
+    source=(os.environ if environ is None else environ).get('SLSTACK_PARENT_GPU_LEASE')
+    if not source:return deepcopy(cfg)
+    if cfg.get('_gpu_parent_lease') not in (None,source):
+        raise ValueError('Conflicting inherited GPU reservations')
+    record=Path(source)
+    if not record.is_absolute() or record.stat().st_size>65536:
+        raise ValueError('An absolute bounded ancestor lease record is required')
+    result=deepcopy(cfg);result['_gpu_parent_lease']=source
+    with gpu_lease(result):
+        row=json.loads(record.read_text(encoding='utf-8'))
+        runtime=row.get('child_runtime_root')
+        if runtime:
+            runtime=Path(runtime)
+            if not runtime.is_absolute() or not runtime.resolve().is_relative_to(record.parent.parent.resolve()):
+                raise ValueError('Transient runtime must stay within the ancestor lease scratch root')
+            result['runtime_root']=str(runtime)
+            env=result.setdefault('env_overrides',{})
+            for key,directory in (('TEMP','temp'),('TMP','temp'),('TMPDIR','temp'),('CUDA_CACHE_PATH','cuda-cache')):
+                env[key]=str(runtime/directory)
+    return result
+
+
+def transient_runtime_config(cfg, environ=None):
+    """Use an explicitly chosen transient directory without changing admission.
+
+    Managed packages stay immutable. Ordinary independent GPU leases, memory
+    budgets, progress checks and all model/sampler settings remain unchanged.
+    """
+    environ=os.environ if environ is None else environ
+    key='SLSTACK_TRANSIENT_RUNTIME_ROOT'
+    if key not in environ:return deepcopy(cfg)
+    raw=environ[key]
+    if not isinstance(raw,str) or not raw.strip() or len(raw)>4096 or '\0' in raw:
+        raise ValueError('A nonempty absolute transient runtime directory is required')
+    target=Path(raw)
+    if not target.is_absolute() or (target.exists() and not target.is_dir()):
+        raise ValueError('An absolute transient runtime directory is required')
+    if cfg.get('_gpu_parent_lease') and target.resolve()!=Path(cfg['runtime_root']).resolve():
+        raise ValueError('Transient runtime conflicts with the inherited reservation directory')
+    result=deepcopy(cfg);result['runtime_root']=str(target)
+    env=result.setdefault('env_overrides',{})
+    for name,directory in (('TEMP','temp'),('TMP','temp'),('TMPDIR','temp'),('CUDA_CACHE_PATH','cuda-cache')):
+        env[name]=str(target/directory)
+    return result
+
+
+def decode_vram_margin_config(cfg, environ=None):
+    """Reserve explicit extra physical VRAM beside the decoded-expert cache.
+
+    This changes cache capacity, never the physical floor or a model option.
+    An unset override preserves the packaged, qualified configuration.
+    """
+    source=os.environ if environ is None else environ
+    key='SLSTACK_DECODE_VRAM_MARGIN_MIB'
+    result=deepcopy(cfg)
+    explicit=cfg.get('env_overrides',{}).get(key)
+    inherited=source.get(key)
+    if explicit is not None and inherited is not None and str(explicit)!=inherited:
+        raise ValueError('Explicit decode VRAM margin flag conflicts with inherited environment')
+    raw=str(explicit) if explicit is not None else inherited
+    if raw is None and key not in source and explicit is None:return result
+    if not isinstance(raw,str) or not raw.isascii() or not raw.isdigit() or not 0<=int(raw)<=4096:
+        raise ValueError(key+' must be an integer from 0 through 4096')
+    result.setdefault('env_overrides',{})['LLAMADECODE_VRAM_MARGIN_MIB']=str(int(raw))
+    return result
+
+
 def guarded(cfg,config):
     from .guard import supervise,admit
     from .config import environment
-    cfg=deepcopy(cfg);cfg['combo_worker_host_budget_gib']=request_worker_config(cfg)['host_budget_gib']
+    from .paging_limits import owned_paging_limit_bytes
+    cfg=decode_vram_margin_config(transient_runtime_config(inherit_launch_lease(cfg)));cfg['combo_worker_host_budget_gib']=request_worker_config(cfg)['host_budget_gib']
+    paging_limit=owned_paging_limit_bytes(cfg)
     root=Path(cfg['runtime_root']);root.mkdir(parents=True,exist_ok=True)
     admit(cfg['host_budget_gib'],cfg['min_available_gib'])
     run_id=secrets.token_hex(16);window=root/('gpu-window-'+run_id+'.json')
@@ -357,7 +433,7 @@ def guarded(cfg,config):
     run_config=root/('server-'+run_id+'.config.json');atomic_json(run_config,cfg)
     command=[sys.executable,'-B','-m','slstack.combo_proxy','--config',str(run_config),'--serve','--run-id',run_id,'--window',str(window)]
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
-        gpu_uuid=cfg.get('gpu_uuid'),
+        gpu_uuid=cfg.get('gpu_uuid'),owned_paging_limit_bytes=paging_limit,
         host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
         
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),

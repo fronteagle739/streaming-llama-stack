@@ -10,6 +10,24 @@ import pytest
 
 from slstack import qfn_single
 
+
+def test_example_native_ram_budget_reaches_command_without_dropping_options(tmp_path):
+    from pathlib import Path
+    cfg = json.loads((Path(__file__).resolve().parents[1] /
+                      'examples/single-machine/qfn.example.json').read_text())
+    cfg.update(runtime_root=str(tmp_path), qfn_nvfp4_mode='dsv-native',
+               qfn_nvfp4_decode_mode='dsv-native', qfn_qsa_indexer='dsv-fp4',
+               qfn_qsa_attention='basalt', qfn_cache_slots=42)
+    from slstack.performance_contract import seal
+    cfg = seal(cfg, 'qfn')
+    argv = qfn_single.QfnEngine(cfg).command()
+    for flag, value in (('--host-budget-gib', '6'), ('--tile', '2048'),
+                        ('--nvfp4-mode', 'dsv-native'), ('--nvfp4-decode-mode', 'dsv-native'),
+                        ('--qsa-indexer', 'dsv-fp4'), ('--qsa-attention', 'basalt'),
+                        ('--cache-slots', '42')):
+        assert argv[argv.index(flag) + 1] == value
+    assert (cfg['host_budget_gib'], cfg['min_available_gib'], cfg['job_commit_gib']) == (4.25, 6, 44.25)
+
 FAKE = r'''
 import json, socket, sys
 srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -43,7 +61,7 @@ class FakeJob:
     def __init__(self, argv):
         self.proc = subprocess.Popen(argv)
     def wait(self):
-        return self.proc.wait()
+        return dict(release_allowed=self.proc.wait()==0)
     def stop(self):
         self.proc.terminate();self.proc.wait()
 

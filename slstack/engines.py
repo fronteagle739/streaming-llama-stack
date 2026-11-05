@@ -272,7 +272,7 @@ class Engines:
             self.journal.update(self.attach_entry, 'attaching', pid=self.llm.proc.pid,
                                 pid_created=psutil.Process(self.llm.proc.pid).create_time())
             self.attach_guard_recorded = True
-        # Owner rule (no fixed timeouts): readiness lives while the server tree shows progress (job
+        # Progress-based readiness: readiness lives while the server tree shows progress (job
         # log, I/O, CPU, members); it fails on exit or a no-progress window. A guardian waiting for
         # the GPU hold is idle by design, so gpu_wait_seconds widens the window, not a total cap.
         window = Window(readiness_seconds(self.cfg) + self.cfg.get('gpu_wait_seconds', 0))
@@ -323,7 +323,7 @@ class Engines:
         self.llm = OwnedProcess(self.cfg, [sys.executable, '-B', '-m', 'slstack.combo_proxy', '--config', str(config)],
                                 'single-engine', scope='ds4-win', telemetry=False,
                                 cwd=Path(__file__).resolve().parents[1], timeout=86400)
-        window = Window(readiness_seconds(self.cfg))   # no-progress window (owner rule), as above
+        window = Window(readiness_seconds(self.cfg))   # no-progress window as above
         while not window.expired():
             if self.llm.proc.poll() is not None:
                 self.llm.wait()

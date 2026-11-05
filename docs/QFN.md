@@ -21,6 +21,16 @@ set `QFN_JSON_INCLUDE_DIR`, `QFN_DSTORAGE_INCLUDE_DIR`, and
 `QFN_DSTORAGE_LIBRARY` to the installed dependencies. The stable output is
 `bin/qfn-engine.exe`; its companion bridge DLL remains adjacent.
 
+Run CMake from an x64 Native Tools console. Set `DS_SDK_DIR` to the complete
+DirectStorage SDK package root, including headers, import libraries and runtime
+DLLs. The QFN include/library defaults and the shared llama target use that
+same SDK root. Headers alone are insufficient. For example, under the RAM guard:
+
+```text
+cmake -S engines/streaming-llama/prefill_llama.cpp -B BUILD_DIR -G Ninja -DLLAMA_QFN_ENGINE=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=120 -DDS_SDK_DIR=SDK_ROOT
+cmake --build BUILD_DIR --target qfn-engine --parallel 2
+```
+
 The native grouped kernel exporter under `engines/streaming-llama/flashinfer-sm120`
 requires the pinned CUTLASS DSL 4.8.1 and the checked-in FlashInfer source closure.
 Pass explicit workspace, DSL-site, AOT directory and CUTLASS runtime arguments

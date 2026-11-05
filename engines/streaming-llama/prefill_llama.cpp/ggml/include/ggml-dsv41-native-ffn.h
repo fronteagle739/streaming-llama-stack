@@ -4,7 +4,7 @@
 #include <cstring>
 #include <cmath>
 inline bool ggml_dsv41_native_ffn_requested(const ggml_tensor *t){
-    return t&&t->op==GGML_OP_CUSTOM&&t->op_params[0]==0x46494e31&&t->op_params[1]==1;
+    return t&&t->op==GGML_OP_CUSTOM&&t->op_params[0]==0x46494e31&&(t->op_params[1]==1||t->op_params[1]==2);
 }
 inline bool ggml_dsv41_native_ffn_valid(const ggml_tensor *t){
     if(!ggml_dsv41_native_ffn_requested(t)||t->type!=GGML_TYPE_F32||!ggml_is_contiguous(t)||
@@ -15,7 +15,8 @@ inline bool ggml_dsv41_native_ffn_valid(const ggml_tensor *t){
        weights->ne[0]!=6||weights->ne[1]!=t->ne[1]||weights->ne[2]!=1||weights->ne[3]!=1||
        std::memcmp(weights->ne,ids->ne,sizeof(ids->ne))||!ggml_is_contiguous(x)||!ggml_is_contiguous(weights)||!ggml_is_contiguous(ids))return false;
     for(int i=3;i<6;++i){const auto *w=t->src[i];
-        if(!w||w->type!=GGML_TYPE_MXFP4||!ggml_is_contiguous(w)||w->ne[2]!=384||w->ne[3]!=1||
+        if(!w||w->type!=GGML_TYPE_MXFP4||!ggml_is_contiguous(w)||
+           (t->op_params[1]==1?w->ne[2]!=384:(w->ne[2]<1||w->ne[2]>384))||w->ne[2]!=t->src[3]->ne[2]||w->ne[3]!=1||
            w->ne[0]!=(i==5?2304:5120)||w->ne[1]!=(i==5?5120:2304))return false;
     }
     float limit;std::memcpy(&limit,t->op_params+2,sizeof(limit));

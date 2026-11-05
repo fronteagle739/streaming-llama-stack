@@ -164,8 +164,9 @@
       "path": "job_paging.py",
       "source_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
       "source_sha256": "205f347b92be699b4f72863942568cc08d534ac19e8b7b154cad2521d6d2c120",
+      "derived_body_sha256": "72e613722e3dcb1fbb8ebf8cd948b8ddca3b063606ab494a473808d0b11a31ef",
       "selected": null,
-      "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
+      "changes": "59c3f5f adds bounded page-address diagnostics and a receipt field. Removing only those three additions recovers the original source body exactly; enforcement remains unchanged. The exact derived LF-normalized body digest is checked before use."
     },
     {
       "path": "job_guard.py",
@@ -253,7 +254,7 @@
         "path": "vendor/studio/studio/krea2_diffusion.py",
         "source_path": "backend/studio/krea2_diffusion.py",
         "source_sha256": "6431857c1e3392ac17795a2142e0cb0e6033086782b49393d4dad18e42aa9e16",
-        "export_sha256": "29a1ff519234ced64ed6d259730c5178286dcbec8ca06bb4978549ec70fae38b",
+        "export_sha256": "a63bb9c7acddf3974f785064c1b8653a4dde0841ed968ee5f0242a6b805cbb6c",
         "selected": null,
         "changes": "Use selected local VAE with strict Diffusers key conversion; load resident CUDA tensors through DirectStorage groups with owned copies before ring release."
       },
@@ -261,154 +262,154 @@
         "path": "vendor/studio/studio/krea_hf_stream.py",
         "source_path": "backend/studio/krea_hf_stream.py",
         "source_sha256": "edc2b3315fe7921e22e3ef91d797715856aeba1d5dea80d64e61f10466d45ad5",
-        "export_sha256": "c04cecf8221951a0b9577f2a9f02fc50cf0a20540dd215e62946f1c89fcfc6c1",
+        "export_sha256": "e77b6a430ecc575ad040c2b4bf1123e3d360c8f7328733f57fbabeb4411f3ff4",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/boogu_krea.py",
         "source_path": "backend/studio/boogu_krea.py",
         "source_sha256": "0ff19623db0cc9e04ead63cd7d95709bf4271444da86016ce3007d656a3b8be9",
-        "export_sha256": "c85bd60e9406a9f6ec6713fcb0ce6610525073ccd317db796b47b063b8dd8c21",
+        "export_sha256": "61da7a4cc7b68d5f1a2f0d0e8721904972a9671d5bb037489b4909ac989edf23",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/krea2_lokr.py",
         "source_path": "backend/studio/krea2_lokr.py",
         "source_sha256": "36b79f9910df0aa96f7c2e88b00a46999c7b76eb12535b226561b4410d43561d",
-        "export_sha256": "aae38e4a4a425fed8e26f8c6e40b473173d7a19bbc3155f226016929d8cad432",
+        "export_sha256": "229338a1e8c2dab5588ede79adf6a1c50137af25712be9b06bf20a249a9dbc6f",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/krea_tiled.py",
         "source_path": "backend/studio/krea_tiled.py",
         "source_sha256": "6134cf6a24b06c9a3e75ce18b12b51871d712956d296e8012317f98d23ae8acb",
-        "export_sha256": "6fed8d21248c0f8d34df6961a19ebf2124d7ba5153ba7707d867c2b471618c37",
+        "export_sha256": "3b855d52e362259a7b45bd039aaabd1ca8c11a4324ded0b42344a461ec161212",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/moss_image.py",
         "source_path": "backend/studio/moss_image.py",
         "source_sha256": "5ed70e1fe09d2b96246f3c54d8b891bd2c82839c862cbb8a4fb1584c222b5a26",
-        "export_sha256": "28d261bf9751fd93cf42eba18ee0514cb80a2ba9c84b6f301707ba144192d863",
+        "export_sha256": "262b5af5445241f706ad8683f84fbd60d62b483f8b2e978165c3c8b7519a6631",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_image21.py",
         "source_path": "backend/studio/qwen_image21.py",
         "source_sha256": "15d4ec5aeb86ad3745b5b2a4ff2416793ac4854f6497987bacfaa065a7579e09",
-        "export_sha256": "caaf250bbcd6977aaaae51ad48b8f791274fa7d5e1d9daf2828ba147348bdea8",
+        "export_sha256": "f55fe5c1b59749fc34a41d63ef1cc93248a21ce172df2ee057c287c78458aeab",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_worker_client.py",
         "source_path": "backend/studio/qwen_worker_client.py",
         "source_sha256": "75dfafa9ba0d04653009988b67d9c2bc9e879a6c9b69e10c441536320267547b",
-        "export_sha256": "086bbf43d64aae0aa7699874bb2b70d2634d25c7e88ca01bfee3d7d4ae9738a0",
+        "export_sha256": "376160d2b207d267126dac87606817a2a2d543f962c8efbfc4702cf6483613ee",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_comfy_load.py",
         "source_path": "backend/studio/qwen_comfy_load.py",
         "source_sha256": "b35822193d1892522b23a4b8bd3c7fb4f140c36ad4168cc1d69cce4257293caf",
-        "export_sha256": "d5773dd1fc388c74662724ae7c822ee1d63b10e6c672b7261d0de8d7348fa75e",
+        "export_sha256": "55fe25d16e19da6a5cfcabb317b3ab3a0a6a99aa64869476d7262b6d062ab0b3",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/ram_preflight.py",
         "source_path": "backend/studio/ram_preflight.py",
         "source_sha256": "021f302bf82acdfcdd2d6cfa2e3962bc2771c1a07d7a23f123e78bf7ba2c68c0",
-        "export_sha256": "68bd48a0178fea73ce6c37a91e014328f0a3512a6c22b1b7feab7966caed4559",
+        "export_sha256": "04178a9e1fe86073eef87799099c04180cec6e059bf38e8a51b2142ce4d796e0",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/direct_vram.py",
         "source_path": "backend/studio/direct_vram.py",
         "source_sha256": "4afd844f3e2991ad234be80072fa2e79fc30877f6149e249030c722fd276748a",
-        "export_sha256": "8f95b72c632f6b17ba71232332ab21d982f8a2fbfc2e36665e0c813c7b8c4958",
+        "export_sha256": "3a915e04b04de42d9d9b705e7f422793e81114cb1be400e540f176a4fbe23496",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/res4lyf_registry.py",
         "source_path": "backend/studio/res4lyf_registry.py",
         "source_sha256": "061189cd7c61e58846a810332784f970b4af4900c6bd5f8788878777902952ed",
-        "export_sha256": "0508f21ec2e0eae93dc56558579886a1574397109a00661014639be0d459e41f",
+        "export_sha256": "767c06fd2044294b8e7c77d09272df4d95941b841f0f17e914cf1fe1acc954dd",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_direct_load.py",
         "source_path": "backend/studio/qwen_direct_load.py",
         "source_sha256": "02737187bcc0f90b9e0e1bc502fa04fdfe8acc1de20ee8afd1d95081300ab266",
-        "export_sha256": "4ebca3795fac8073462ae913c398cbef54badcd2bb0cdaa2eeb51e5d85a8ccda",
+        "export_sha256": "406369222efe749b4462d59252be21423373a6d64bacc6b5766167aa94bc6456",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_block_weights.py",
         "source_path": "backend/studio/qwen_block_weights.py",
         "source_sha256": "9f2f783e80b129d583c82bbb4a4f774fa369a2af32769190bfe7ceee1931b2b3",
-        "export_sha256": "50408d01dd91442a70fc74878f6853993b39cac4ab572a830aa4facb2d9e4dcb",
+        "export_sha256": "cb405a668b34177004efbc89b459b884db5308650f9bf69feead5f678512d64d",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_lora.py",
         "source_path": "backend/studio/qwen_lora.py",
         "source_sha256": "d55e088d2b2ce9cda58c4dd762b8213b1164507513bc03b7f5816aac8fc42c13",
-        "export_sha256": "cf6ce07fbbe415656f37a70dd67a13a2eb9047a64322ad95ffde7f810777fea5",
+        "export_sha256": "c54dae6b4bf5b1922735b77d296a76b414b8a8a1a408d7f02a7c328f227b0203",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/h3_weight_io.py",
         "source_path": "backend/studio/h3_weight_io.py",
         "source_sha256": "8653476f8b50de669f31e9f678309b8731574017fa673f395cf07dbfab964064",
-        "export_sha256": "54b8906a9e355541b2079726005637e11cb20c3913f93303d2c9f70409981f21",
+        "export_sha256": "9ca3bfd1a9a43b66b56a28728e43da7423adde0e972a5357411437cb80f43426",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/qwen_attention.py",
         "source_path": "backend/studio/qwen_attention.py",
         "source_sha256": "073551c8fa4d77d1384581a8de00cfa99be97320527319909740fe72692cf0da",
-        "export_sha256": "9c598a534d289b0051d81be8947f7ab3a4089f718c2d0bd39bcb5e984b4ebe34",
+        "export_sha256": "f6791d1a45a3ecb6b93b4bd2ec066c1a62d8c412b026d88cfe5d1bf62ee0b291",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/progress.py",
         "source_path": "backend/studio/progress.py",
         "source_sha256": "77a35928c08359223df583f27d0a90a31dd05f609804b4c58d527490cc9b3478",
-        "export_sha256": "9dff103f1f907961a213c3e64bec8757fd651408ff91bb74419ec26e18f39d3f",
+        "export_sha256": "ea321495994581e44b5285ae760c28a6e07a9515cec15b6a0ab94bf13f78c530",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/cuda_device_identity.py",
         "source_path": "backend/studio/cuda_device_identity.py",
         "source_sha256": "8e52a6cabcab487dca2e71e72adbc56ab5be1cfbdc6cbbe0a4f592a79cf077c3",
-        "export_sha256": "88057519cc1c389da3b5298142adeb2fe906e5b088db421548b70b1332607ef2",
+        "export_sha256": "00d69e0dc35df085a4f14aa63b87a310cfce92bc65611d4641a668b9edc2ac92",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/safety.py",
         "source_path": "backend/studio/safety.py",
         "source_sha256": "387330c66192a8fb6356faf7fc9ed863a73f3d7dccc0b07bdd7a7e64d491aa47",
-        "export_sha256": "5d47027df5474872967bcf7f11db09455835ddd1198c9bcf097b8cddf5809f7e",
+        "export_sha256": "cfcc5b63a105959fd93f4fb58a0d02c1b507c2e6b2968b904b271f59437f16b1",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/h3_live.py",
         "source_path": "backend/studio/h3_live.py",
         "source_sha256": "399b63489f8d51c8d453b48d5b027a1223cc2814600a50468ed182fb50ab8f28",
-        "export_sha256": "dca3ba72b5c638a5a3af128e98e4b60c86cbf561acf20a9f8f520c4750dec404",
+        "export_sha256": "9b644f858022ea6263c0c28769aba4f62708b52d5a832cac182578907fd49154",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/h3_single_file.py",
         "source_path": "backend/studio/h3_single_file.py",
         "source_sha256": "cf8a7c27082b5df110903aa7424c0cd47cc5cdf5c51b63061ecfd109f686e09e",
-        "export_sha256": "e75429839d857c327b7454df75308ae37f783441b192e85c636f0443a1620d4f",
+        "export_sha256": "f66a07085d9d7edce90453def01bb0213dcd071395a5efbd40fd288baa20597a",
         "selected": null
       },
       {
         "path": "vendor/studio/studio/h3_image_mode.py",
         "source_path": "backend/studio/h3_image_mode.py",
         "source_sha256": "4223ea9666b670d9a20d1afd4e2a7cb0cedaeed5c95052fb646ddd86fb09845d",
-        "export_sha256": "64c1152d9408db718e1b20f4341cebd0382c9ae704e8d96f0278e2ce88fb27bf",
+        "export_sha256": "8e635498eb0ea3960f594f68504985546012c4b79ed02ffa77d9fbb39cf9bf9d",
         "selected": null,
         "changes": "Wrap plain video prompts in the same labelled audiovisual caption format used by Studio; preserve explicitly formatted captions unchanged."
       },
@@ -416,7 +417,7 @@
         "path": "vendor/studio/studio/h3_model_profiles.py",
         "source_path": "backend/studio/h3_model_profiles.py",
         "source_sha256": "59159eb3fe6830d897e8e4727f0be42f88df6d6adec54833a4ae6cb0728d991e",
-        "export_sha256": "0841e79df691562ed202900ce2ab995ddb6bc9f4e5f19ce087d72f9ce02ac172",
+        "export_sha256": "7ff2943bb3f5c59be23404bb25c291ab59c46b4a0d48eec600a2307904409ac5",
         "selected": null,
         "changes": "Recognize known fused sectioned-QKV exports in selected transformer folders; respect an explicit qkv_layout in model config."
       },
@@ -424,7 +425,7 @@
         "path": "vendor/studio/studio/jobs.py",
         "source_path": "backend/studio/jobs.py",
         "source_sha256": "48757f893cd7015b197d480dea5d480f241018c2c57ab0a380aecc2865e4d14b",
-        "export_sha256": "64e66b0f874811e40719ba487eb6f81c66129980f1ccb451afeb1abbd0a11b96",
+        "export_sha256": "ca80dfcaa42dfa3aa2ff96bdcc72f3fdd51b33be6caa662da5baab246de03cc9",
         "selected": [
           "_cosmos_windows_roots",
           "_unbuffered_env",

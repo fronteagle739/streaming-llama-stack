@@ -51,21 +51,23 @@ def number(value, lo, hi, integer=False):
     return int(value) if integer else float(value)
 
 
-def validate(row):
+def validate(row,*,vocab=None,bias_max=None):
     if not isinstance(row, dict) or set(row) != {'revision', 'per_phase', 'value', 'sampler', 'phases'}:
         raise ValueError('Unknown or missing generation settings')
     out = deepcopy(row)
     if type(out['per_phase']) is not bool:raise ValueError('per_phase must be a boolean')
     if type(out['revision']) is not int or out['revision'] < 1:raise ValueError('Invalid revision')
     vendor();from studio.quality_speed_contract import validate_scalar
-    out['value'] = validate_scalar(out['value'])
+    scalar=lambda x:number(x,0,bias_max) if bias_max is not None and not isinstance(x,str) else validate_scalar(x)
+    limits={**SAMPLERS,**({'top_k':(0,vocab)} if vocab is not None else {})}
+    out['value'] = scalar(out['value'])
     if not isinstance(out['phases'], dict) or set(out['phases']) != set(PHASES):raise ValueError('Four phases required')
     for sampler in [out['sampler'], *out['phases'].values()]:
         phase = sampler is not out['sampler']
         if not isinstance(sampler, dict) or set(sampler) != set(SAMPLERS) | ({'bias'} if phase else set()):
             raise ValueError('Unknown or missing sampler settings')
-        if phase:sampler['bias'] = validate_scalar(sampler['bias'])
-        for key, (lo, hi) in SAMPLERS.items():sampler[key] = number(sampler[key], lo, hi, key == 'top_k')
+        if phase:sampler['bias'] = scalar(sampler['bias'])
+        for key, (lo, hi) in limits.items():sampler[key] = number(sampler[key], lo, hi, key == 'top_k')
     return out
 
 

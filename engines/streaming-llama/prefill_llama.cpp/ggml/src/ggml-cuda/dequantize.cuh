@@ -10,7 +10,7 @@ static __device__ __forceinline__ void dequantize_q2_0(const void * vx, const in
     v.y = (c1 - 1) * d;
 }
 
-// QFNSTREAM: IQ4_NL for get_rows (raw n-gram rows decoded on the GPU); byte iqs holds values iqs and iqs+16
+// QFN: IQ4_NL for get_rows (raw n-gram rows decoded on the GPU); byte iqs holds values iqs and iqs+16
 static __device__ __forceinline__ void dequantize_iq4_nl(const void * vx, const int64_t ib, const int iqs, float2 & v){
     const block_iq4_nl * x = (const block_iq4_nl *) vx;
     const float d = x[ib].d;

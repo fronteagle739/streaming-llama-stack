@@ -96,7 +96,7 @@ return info
 
 
 def apply_layout(plan,reference,quantizer,alignment=16384):
-    """The per-tensor recipe is extracted from the owner's GGUF header."""
+    """The per-tensor recipe is extracted from the reference GGUF header."""
     if {p.name for p in plan} != set(reference):raise ValueError('Planned tensor names differ from reference header')
     offset = 0
     for item in plan:

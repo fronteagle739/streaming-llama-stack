@@ -57,8 +57,14 @@ class Images:
         return Path(value).resolve(strict=True)
 
     def encode(self,raw,before_encode):
-        encoder=self.encoder();library=Path(self.cfg['llama_producer']).parent/'ds4-decode.dll'
-        key=hashlib.sha256((hashlib.sha256(raw).hexdigest()+self.pin(encoder)+self.pin(library)).encode()).hexdigest()
+        qfn=self.cfg.get('model_family')=='qfn'
+        if qfn:
+            selected=self.cfg.get('env_overrides',{}).get('MTMD_BACKEND_DEVICE')
+            if selected is not None and selected!=self.cfg['vision_backend']:
+                raise ValueError('Vision backend flag conflicts with the explicit mtmd backend option')
+        encoder=self.encoder();library=Path(self.cfg['qfn_engine']) if qfn else Path(self.cfg['llama_producer']).parent/'ds4-decode.dll'
+        settings={k:self.cfg[k] for k in ('vision_backend','vision_min_tokens','vision_max_tokens','vision_threads','vision_flash_attention','env_overrides') if k in self.cfg} if qfn else {}
+        key=hashlib.sha256((hashlib.sha256(raw).hexdigest()+self.pin(encoder)+self.pin(library)+(json.dumps(settings,sort_keys=True) if qfn else '')).encode()).hexdigest()
         root=Path(self.cfg['runtime_root'])/'vision';root.mkdir(parents=True,exist_ok=True)
         output=root/(key+'.vision');manifest=root/(key+'.json')
         if manifest.is_file():
@@ -74,13 +80,30 @@ class Images:
         from .config import environment
         libraries=[str(library.parent),*[str(p) for p in self.cfg.get('producer_library_directories',[])]]
         request=dict(library=str(library),libraries=libraries,model=self.cfg['model'],encoder=str(encoder),image=str(image),output=str(output))
+        if qfn:
+            request.update(family='qfn',backend=self.cfg['vision_backend'],min_tokens=self.cfg['vision_min_tokens'],
+                max_tokens=self.cfg['vision_max_tokens'],threads=self.cfg['vision_threads'],flash_attention=self.cfg.get('vision_flash_attention',0),host_budget_gib=self.cfg['vision_host_budget_gib'])
         env=environment(self.cfg,'rtx-producer');env['PATH']=os.pathsep.join([*libraries,env.get('PATH','')])
-        proc=subprocess.run([sys.executable,'-B','-m','slstack.vision_worker'],input=json.dumps(request)+'\n',
-                            text=True,encoding='utf-8',errors='replace',capture_output=True,env=env,
-                            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        (root/(key+'.log')).write_text(proc.stderr,encoding='utf-8')
-        rows=[json.loads(line.removeprefix('SLSTACK_VISION ')) for line in proc.stdout.splitlines() if line.startswith('SLSTACK_VISION ')]
-        if proc.returncode or len(rows)!=1 or rows[0].get('error'):
+        if qfn:
+            from .process import OwnedProcess
+            from .paging_limits import shared_owned_paging_limit_bytes
+            budget=self.cfg['vision_host_budget_gib']
+            worker_cfg={**self.cfg,'host_budget_gib':budget,'job_commit_gib':budget+40,
+                'owned_paging_limit_bytes':shared_owned_paging_limit_bytes(),'runtime_root':str(root/'worker')}
+            job=OwnedProcess(worker_cfg,[sys.executable,'-B','-m','slstack.vision_worker'],'qfn-vision',
+                stdin=json.dumps(request)+'\n',scope='qfn-engine',telemetry=True,unbounded=True)
+            result=job.wait();log=job.log.read_text(encoding='utf8',errors='replace')
+            (root/(key+'.log')).write_text(log,encoding='utf8')
+            rows=[json.loads(line.removeprefix('SLSTACK_VISION ')) for line in log.splitlines() if line.startswith('SLSTACK_VISION ')]
+            failed=not result.get('release_allowed')
+        else:
+            proc=subprocess.run([sys.executable,'-B','-m','slstack.vision_worker'],input=json.dumps(request)+'\n',
+                                text=True,encoding='utf-8',errors='replace',capture_output=True,env=env,
+                                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            (root/(key+'.log')).write_text(proc.stderr,encoding='utf-8')
+            rows=[json.loads(line.removeprefix('SLSTACK_VISION ')) for line in proc.stdout.splitlines() if line.startswith('SLSTACK_VISION ')]
+            failed=bool(proc.returncode)
+        if failed or len(rows)!=1 or rows[0].get('error'):
             raise RuntimeError((rows[0].get('error') if rows else 'Native vision worker failed')+'; see '+str(root/(key+'.log')))
         row=dict(rows[0],key=key,file=str(output),sha256=self.pin(output));publish(manifest,row);return row
 

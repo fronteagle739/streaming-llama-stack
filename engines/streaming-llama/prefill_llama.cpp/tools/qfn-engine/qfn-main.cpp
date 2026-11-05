@@ -1,4 +1,4 @@
-// QFNSTREAM: qfn-engine command line.
+// QFN: qfn-engine command line.
 //   qfn-engine --model PACK.basalt --tokens FILE.le32 --out PREFIX [--out-start N] [--top1-all] [--ctx N] [--tile N]
 // Sampling: --temp, --top-k, --top-p, --min-p, --typical-p, --repeat-penalty,
 // --repeat-last-n (-1 whole history, 0 off), --presence-penalty, --frequency-penalty,
@@ -11,7 +11,9 @@
 //   PREFIX.top1  int32 argmax per position, PREFIX.lse float32 logsumexp per position (with --top1-all)
 //   PREFIX.json  a small header
 #include "qfn-engine.h"
+#include "qfn-state.h"
 #include "qfn-tokenizer.h"
+#include "qfn-vision.h"
 #include "ggml-qfn-nvfp4.h"
 #include "ggml-qfn-qsa-score.h"
 #include "qfn-qsa-node-test.h"
@@ -100,6 +102,74 @@ int main(int argc, char ** argv) {
     std::signal(SIGABRT, qfn_on_abort);
     std::set_terminate(qfn_on_terminate);
     std::atexit(qfn_on_exit);
+    if(argc==2&&std::string(argv[1])=="--paired-layout-self-test") {
+        try {
+            const qfn_native_shape shape={4,4,2,2,2,1,16,2,2,6,3,2,4,6,16,1};
+            qfn_native_plan plan{};
+            auto check=[](bool value,const char *why){if(!value)throw std::runtime_error(why);};
+            check(qfn_native_geometry(&shape,4,5,4,5,0,&plan)&&plan.bytes==580&&plan.count==17,
+                "independent one-row frontier accounting differs");
+            bool parent=false,pool=false;
+            for(uint32_t i=0;i<plan.count;i++) {
+                const auto &r=plan.slices[i];
+                if(r.owner==QFN_KEY&&r.layer==4)parent=r.offset==12&&r.bytes==8;
+                if(r.owner==QFN_POOL&&r.layer==4)pool=r.offset==0&&r.bytes==4;
+            }
+            check(parent&&pool,"provisional predictor row / pool boundary omitted");
+            check(qfn_native_geometry(&shape,4,5,4,5,1,&plan)&&plan.bytes==596&&plan.count==18,
+                "reverse target carry omitted");
+            check(!qfn_native_geometry(&shape,5,5,5,5,0,&plan),"empty delta accepted");
+            check(!qfn_native_geometry(&shape,6,5,5,5,0,&plan),"backward delta accepted");
+            check(!qfn_native_geometry(&shape,4,17,4,5,0,&plan),"context overflow accepted");
+            check(!qfn_native_geometry(&shape,4,5,5,5,0,&plan),"base predictor exceeds base");
+            check(!qfn_native_geometry(&shape,4,5,4,6,0,&plan),"target predictor exceeds target");
+            auto no_mtp=shape;no_mtp.mtp=0;
+            check(qfn_native_geometry(&no_mtp,4,5,0,0,1,&plan)&&plan.bytes==560&&plan.count==14,
+                "MTP-off family layout differs");
+            check(!qfn_native_geometry(&no_mtp,4,5,1,1,0,&plan),"MTP owners silently accepted when absent");
+            auto invalid=shape;invalid.index_dim=UINT32_MAX;
+            check(!qfn_native_geometry(&invalid,4,5,4,5,0,&plan),"oversized geometry accepted");
+            check(qfn_native_anchor_geometry(&shape,5,5,&plan)&&plan.bytes==464&&plan.count==13,
+                "mutable-only anchor accounting differs");
+            for(uint32_t i=0;i<plan.count;i++)check(plan.slices[i].owner!=QFN_POS&&
+                (plan.slices[i].owner<QFN_KEY||plan.slices[i].owner>QFN_POOL||plan.slices[i].layer==shape.layers),
+                "anchor copied immutable target prefix caches");
+            check(!qfn_native_anchor_geometry(&shape,0,0,&plan),"empty anchor accepted");
+            std::puts("paired layout self-test PASS: canonical owner extents, provisional MTP row, pool crossing, reverse carry, absent-MTP and malformed-frontier refusals");return 0;
+        }catch(const std::exception &e){std::fprintf(stderr,"paired layout self-test failed: %s\n",e.what());return 16;}
+    }
+    if ((argc == 3 || argc == 5 || argc == 7) && std::string(argv[1]) == "--state-codec-fixture") {
+        try {
+            qfn_state::shape s{16,4,5,4,2,2,2,1,16,4,2,2,6,3,2,4,6,0,true};
+            bool narrow=false;
+            for(int i=3;i<argc;i+=2) {
+                const std::string flag=argv[i],value=argv[i+1];
+                if(flag=="--state-codec-mtp-rows" && value=="0")s.mtp_rows=0;
+                else if(flag=="--state-codec-narrow-index" && value=="1")narrow=true;
+                else throw std::runtime_error("unknown codec fixture setting");
+            }
+            FILE *fp = nullptr;
+            if (fopen_s(&fp, argv[2], "wbx") || !fp) throw std::runtime_error("fixture output must not exist");
+            try {
+                auto read = [](const std::string &owner, uint32_t layer, uint64_t off, void *dst, size_t n) {
+                    auto *out = static_cast<uint8_t *>(dst);
+                    const bool half = owner == "key" || owner == "value" || owner == "index" || owner == "pool";
+                    const uint32_t width = half ? 2 : 4;
+                    qfn_state::require(off % width == 0 && n % width == 0, "unaligned synthetic owner read");
+                    for (size_t j = 0; j < n / width; ++j) {
+                        if (half) { uint16_t x = uint16_t(0x3c00 + layer * 16 + off / 2 + j); std::memcpy(out + j * 2, &x, 2); }
+                        else { float x = float(layer * 1000 + off / 4 + j); std::memcpy(out + j * 4, &x, 4); }
+                    }
+                };
+                qfn_state::write_to([&](const void *p,size_t n){if(fwrite(p,1,n,fp)!=n)throw std::runtime_error("fixture write failed");},
+                    s,{1,2,3,4,5},std::vector<float>(16,0.25f),qfn_state::payload_bytes(s,narrow),
+                    read,[](uint16_t x){return ggml_fp16_to_fp32(x);},narrow);
+            } catch (...) { fclose(fp); throw; }
+            if (fclose(fp)) throw std::runtime_error("fixture close failed");
+            std::printf("QFN complete-state codec fixture: %llu bytes\n", (unsigned long long)qfn_state::payload_bytes(s,narrow));
+            return 0;
+        } catch (const std::exception &e) { std::fprintf(stderr, "%s\n", e.what()); return 2; }
+    }
     qfn_options opt;
     std::string tokens_path, out_prefix;
     int64_t out_start = -1;
@@ -114,10 +184,17 @@ int main(int argc, char ** argv) {
     int max_tokens = INT32_MAX;
     bool max_tokens_set = false;
     std::string gen_out, vocab_gguf, tokenizer_cases;
+    bool validate_options = false;
     bool serve = false, sampling_test = false, cache_policy_test = false, nvfp4_node_test = false, qsa_node_test = false, pack_check = false, pack_check_other_option = false;
+    bool protect_host_working_set = false;
+    bool vision_encode=false,vision_flash_attention=false;
+    bool vision_args_seen=false;
+    std::string vision_model,vision_image,vision_output,vision_backend="CUDA0";
+    uint32_t vision_min_tokens=64,vision_max_tokens=1024;int vision_threads=8;
     try {
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
+        if(a.rfind("--vision-",0)==0)vision_args_seen=true;
         if (a != "--pack-check" && a != "--model") pack_check_other_option = true;
         auto next = [&]() -> std::string {
             if (i + 1 >= argc) { std::fprintf(stderr, "missing value for %s\n", a.c_str()); std::exit(2); }
@@ -164,6 +241,35 @@ int main(int argc, char ** argv) {
             opt.nvfp4_decode_mode=mode=="dsv-native" ? 6 : mode=="calibrated-w4a4" ? 5 : 2;
             opt.nvfp4_decode_mode_explicit=true;
         }
+        else if(a=="--reference-prefill-max-tokens") {
+            const auto value=integer().get<int>();
+            if(value<0||value>1024)throw std::runtime_error("Reference prefill token bound must be0..1024");
+            opt.reference_prefill_max_tokens=uint32_t(value);
+        }
+        else if (a == "--handover-prefill") opt.handover_prefill = true;
+        else if(a=="--ple-submit-low-water") {auto v=integer().get<int>();if(v<0||v>256)throw std::runtime_error("PLE submit low watermark must be 0..256");opt.ple_submit_low_water=uint32_t(v);}
+        else if(a=="--ple-thread-priority") {const auto v=next();if(v!="normal"&&v!="above-normal")throw std::runtime_error("PLE thread priority must be normal or above-normal");opt.ple_thread_above_normal=v=="above-normal";}
+        else if(a=="--ple-slot-threads") {auto v=integer().get<int>();if(v<1||v>32)throw std::runtime_error("PLE slot threads must be 1..32");opt.ple_slot_threads=uint32_t(v);}
+        else if(a=="--ple-io-workers") {auto v=integer().get<int>();if(v<1||v>8)throw std::runtime_error("PLE IO workers must be 1..8");opt.ple_io_workers=uint32_t(v);}
+        else if(a=="--ple-poll-us") {auto v=integer().get<int>();if(v<0||v>5000)throw std::runtime_error("PLE completion polling must be 0..5000 microseconds");opt.ple_poll_us=uint32_t(v);}
+        else if(a=="--process-qos") {const auto v=next();if(v!="inherit"&&v!="high")throw std::runtime_error("process QoS must be inherit or high");opt.process_qos_high=v=="high";}
+        else if(a=="--lock-host-resident") {auto v=integer().get<int>();if(v<0||v>1)throw std::runtime_error("host residency lock must be 0 or 1");opt.lock_host_resident=v!=0;}
+        else if(a=="--trim-host-heap-cache") {const auto v=integer();if(v!=0&&v!=1)throw std::runtime_error("host heap cache trim must be 0 or 1");opt.trim_host_heap_cache=v==1;}
+        else if(a=="--populate-host-heaps") {const auto v=integer();if(v!=0&&v!=1)throw std::runtime_error("host heap population must be 0 or 1");opt.populate_host_heaps=v==1;}
+        else if(a=="--vision-encode")vision_encode=true;
+        else if(a=="--vision-model")vision_model=next();
+        else if(a=="--vision-image")vision_image=next();
+        else if(a=="--vision-output")vision_output=next();
+        else if(a=="--vision-backend")vision_backend=next();
+        else if(a=="--vision-flash-attn") {auto v=integer().get<int>();if(v<0||v>1)throw std::runtime_error("vision flash attention must be 0 or 1");vision_flash_attention=v!=0;}
+        else if(a=="--vision-min-tokens")vision_min_tokens=uint32_t(std::stoul(next()));
+        else if(a=="--vision-max-tokens")vision_max_tokens=uint32_t(std::stoul(next()));
+        else if(a=="--vision-threads")vision_threads=std::stoi(next());
+        else if (a == "--protect-host-working-set") {
+            const auto value=next();
+            if(value!="0"&&value!="1")throw std::runtime_error("--protect-host-working-set needs 0 or 1");
+            protect_host_working_set=value=="1";
+        }
         else if (a == "--pack-check") pack_check = true;
         else if (a == "--model") opt.model = next();
         else if (a == "--qsa-attention") {
@@ -173,6 +279,10 @@ int main(int argc, char ** argv) {
         }
         else if (a == "--experts-file") opt.experts_path = next();
         else if (a == "--ple-row-dump") opt.ple_row_dump = next();
+        else if (a == "--warmup-prompt") opt.warmup_prompt = next();
+        else if (a == "--pair-token-file") opt.pair_token_file = next();
+        else if (a == "--pair-model-sha256") opt.pair_model_sha256 = next();
+        else if (a == "--pair-compatibility-sha256") opt.pair_compatibility_sha256 = next();
         else if (a == "--tokens") tokens_path = next();
         else if (a == "--out") out_prefix = next();
         else if (a == "--out-start") out_start = std::atoll(next().c_str());
@@ -218,6 +328,7 @@ int main(int argc, char ** argv) {
             if (value != "0" && value != "1") throw std::runtime_error("--mtp must be 0 or 1");
             _putenv_s("QFN_MTP", value.c_str());
         }
+        else if (a == "--validate-options") validate_options = true;
         else if (a == "--serve") serve = true;
         else if (a == "--port") serve_port = std::atoi(next().c_str());
         else if (a == "--vocab-gguf") vocab_gguf = next();
@@ -227,6 +338,22 @@ int main(int argc, char ** argv) {
         else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 2; }
     }
     } catch (const std::exception & e) { std::fprintf(stderr, "invalid option: %s\n", e.what()); return 2; }
+    if((opt.trim_host_heap_cache||opt.populate_host_heaps)&&!serve){std::fputs("Host heap cache/population controls require --serve\n",stderr);return 2;}
+    if(vision_args_seen&&!vision_encode){std::fputs("Vision worker options require --vision-encode\n",stderr);return 2;}
+    if(vision_encode) {
+        const std::vector<std::string> values={"--vision-model","--vision-image","--vision-output","--vision-backend",
+            "--vision-min-tokens","--vision-max-tokens","--vision-threads","--vision-flash-attn","--host-budget-gib","--protect-host-working-set","--process-qos"};
+        for(int i=1;i<argc;i++) {
+            const std::string arg=argv[i];if(arg=="--vision-encode"||arg=="--validate-options")continue;
+            if(std::find(values.begin(),values.end(),arg)==values.end()) {std::fprintf(stderr,"Unrelated option in isolated vision worker: %s\n",arg.c_str());return 2;}
+            i++;
+        }
+    }
+    if(validate_options) {
+        if((vision_encode?(vision_model.empty()||vision_image.empty()||vision_output.empty()):opt.model.empty()) ||
+            opt.n_ctx<1 || opt.tile<1 || opt.host_budget<1) {std::fputs("invalid model/context/tile/budget\n",stderr);return 2;}
+        std::puts("qfn-engine option parser PASS; no model or listener started");return 0;
+    }
     if (!tokenizer_cases.empty()) {
         if (argc != 7 || opt.model.empty() || vocab_gguf.empty()) {
             std::fprintf(stderr, "--tokenizer-check CASES accepts only --model PACK --vocab-gguf FILE\n"); return 2;
@@ -494,6 +621,70 @@ int main(int argc, char ** argv) {
         return 0;
     }
     n_gen = std::min(n_gen, max_tokens);
+    if(opt.process_qos_high&&!serve&&!vision_encode&&tokens_path.empty()) {
+        std::fputs("Explicit process QoS requires an execution mode\n",stderr);return 2;
+    }
+    if(serve||vision_encode||!tokens_path.empty()) {
+        PROCESS_POWER_THROTTLING_STATE qos{};qos.Version=PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+        if(opt.process_qos_high) {
+            qos.ControlMask=PROCESS_POWER_THROTTLING_EXECUTION_SPEED;qos.StateMask=0;
+            if(!SetProcessInformation(GetCurrentProcess(),ProcessPowerThrottling,&qos,sizeof(qos))) {
+                std::fprintf(stderr,"Owned process HighQoS selection failed: %lu\n",GetLastError());return 2;
+            }
+        }
+        const BOOL available=GetProcessInformation(GetCurrentProcess(),ProcessPowerThrottling,&qos,sizeof(qos));
+        if(opt.process_qos_high&&(!available||!(qos.ControlMask&PROCESS_POWER_THROTTLING_EXECUTION_SPEED)||
+            (qos.StateMask&PROCESS_POWER_THROTTLING_EXECUTION_SPEED))) {
+            std::fputs("Owned process HighQoS readback differs\n",stderr);return 2;
+        }
+        std::fprintf(stderr,"QFN_PROCESS_QOS policy=%s available=%d control_mask=%lu state_mask=%lu system_settings_unchanged=1\n",
+            opt.process_qos_high?"high":"inherit",int(available),qos.ControlMask,qos.StateMask);
+    }
+    if(protect_host_working_set) {
+        // Same admitted hard minimum/advisory maximum policy as
+        // slstack/working_set.py. Per-process memory policy only; the existing
+        // physical-floor, RSS, commit and zero-paging guardians still apply.
+        const SIZE_T minimum=SIZE_T(opt.host_budget),maximum=minimum+(64ull<<20);
+        if(!SetProcessWorkingSetSizeEx(GetCurrentProcess(),minimum,maximum,
+                                      QUOTA_LIMITS_HARDWS_MIN_ENABLE|QUOTA_LIMITS_HARDWS_MAX_DISABLE)) {
+            std::fprintf(stderr,"QFN host working-set admission failed: Win32 %lu\n",GetLastError());return 3;
+        }
+        SIZE_T actual_min=0,actual_max=0;DWORD flags=0;
+        if(!GetProcessWorkingSetSizeEx(GetCurrentProcess(),&actual_min,&actual_max,&flags)||
+           actual_min!=minimum||actual_max<minimum||!(flags&QUOTA_LIMITS_HARDWS_MIN_ENABLE)||
+           (flags&QUOTA_LIMITS_HARDWS_MAX_ENABLE)) {
+            std::fputs("QFN host working-set protection was not retained\n",stderr);return 3;
+        }
+        std::fprintf(stderr,"QFN_HOST_RESIDENCY minimum=%llu maximum=%llu flags=%lu paging_limit_unchanged=1\n",
+            (unsigned long long)actual_min,(unsigned long long)actual_max,flags);
+    }
+    if(vision_encode) {
+        if(serve||vision_model.empty()||vision_image.empty()||vision_output.empty()) {
+            std::fputs("Isolated vision encoding requires model/image/output and cannot also serve language requests\n",stderr);return 2;
+        }
+        qfn_vision_result result;std::string error;
+        if(!qfn_vision_encode_file(vision_model,vision_image,vision_min_tokens,vision_max_tokens,
+                                  vision_threads,vision_backend,vision_flash_attention,result,error)) {
+            std::fprintf(stderr,"QFN vision encoding failed: %s\n",error.c_str());return 3;
+        }
+        FILE *output=nullptr;
+        if(_wfopen_s(&output,std::filesystem::u8path(vision_output).wstring().c_str(),L"wbx")||!output) {
+            std::fputs("Vision output must be a new writable file\n",stderr);return 3;
+        }
+        const uint32_t header[4]={0x49564c53,1,result.count,result.width};
+        const bool written=fwrite(header,sizeof(header),1,output)==1&&
+            fwrite(result.fingerprint.data(),1,32,output)==32&&
+            fwrite(result.values.data(),sizeof(float),result.values.size(),output)==result.values.size();
+        const int closed=fclose(output);if(!written||closed){std::fputs("Vision embedding output failed\n",stderr);return 3;}
+        nlohmann::ordered_json row={{"event","qfn_vision_encoded"},{"count",result.count},{"width",result.width},
+            {"grid_height",result.grid_height},{"grid_width",result.grid_width},{"backend",vision_backend},
+            {"image_width",result.image_width},{"image_height",result.image_height},{"flash_attention",vision_flash_attention},
+            {"preprocess_seconds",result.preprocess_seconds},{"load_seconds",result.load_seconds},
+            {"encode_seconds",result.encode_seconds},{"unload_seconds",result.unload_seconds},
+            {"free_vram_before",result.free_before},{"free_vram_after_load",result.free_after_load},
+            {"free_vram_after_unload",result.free_after_unload},{"language_model_loaded",false}};
+        std::printf("%s\n",row.dump().c_str());return 0;
+    }
     if (serve) {
         if (opt.model.empty() || vocab_gguf.empty()) { std::fprintf(stderr, "--serve needs --model and --vocab-gguf\n"); return 2; }
         if (!stops.empty()) sampling_body["stop"] = stops;
@@ -502,6 +693,8 @@ int main(int argc, char ** argv) {
     }
     if (opt.model.empty() || tokens_path.empty() || out_prefix.empty()) {
         std::fprintf(stderr, "usage: qfn-engine --model PACK --tokens FILE.le32 --out PREFIX [--out-start N] [--top1-all] [--ctx N] [--tile N] [--qsa-attention native|basalt]\n");
+        std::fprintf(stderr, "  --ple-submit-low-water 0..256: PLE refill batching (0 retains the shared policy)\n");
+        std::fprintf(stderr, "  --ple-thread-priority normal|above-normal --ple-slot-threads 1..32 --ple-io-workers 1..8\n");
         return 2;
     }
     const auto toks = read_tokens(tokens_path);

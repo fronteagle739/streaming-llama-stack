@@ -39,6 +39,25 @@ class CompatibilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):continuation_kl(a,b[:-4],2)
         with self.assertRaises(ValueError):continuation_kl(a,struct.pack('<4f',1,2,float('nan'),4),2)
 
+    def test_file_comparison_excludes_imported_frontier_and_preserves_all_rows(self):
+        import struct,tempfile
+        from pathlib import Path
+        from slstack.model_compatibility import continuation_kl_files
+        # Keep the tiny fixture under the guardian's configured temp root;
+        # this task's evidence must not be removed during qualification.
+        directory=tempfile.mkdtemp(prefix='qfn-rows-')
+        a,b=Path(directory)/'control',Path(directory)/'candidate'
+        a.write_bytes(struct.pack('<6f',99,0,1,2,3,4))
+        b.write_bytes(struct.pack('<4f',2,3,4,5))
+        result=continuation_kl_files(a,b,2,1,0)
+        self.assertEqual(result['rows'],2)
+        self.assertEqual(result['top1'],1)
+        self.assertEqual(len(result['per_token_nats']),2)
+        self.assertAlmostEqual(result['mean_nats'],0)
+        with self.assertRaises(ValueError):continuation_kl_files(a,b,2,0,0)
+        b.write_bytes(struct.pack('<4f',2,3,float('nan'),5))
+        with self.assertRaises(ValueError):continuation_kl_files(a,b,2,1,0)
+
     def test_pairing_and_observation_settings_reach_the_mac_engine(self):
         from slstack.config import load, environment
         settings={key:'a'*64 for key in ['DS4_NATIVE_SESSION_MODEL_SHA256',

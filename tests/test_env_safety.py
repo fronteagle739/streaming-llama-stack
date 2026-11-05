@@ -9,6 +9,15 @@ class EnvironmentSafetyTests(unittest.TestCase):
     def setUp(self):
         self.cfg = load(overrides={'gpu_uuid': 'GPU-test'})
 
+    def test_writer_trace_reaches_native_child_without_affecting_other_scopes(self):
+        for value in ('0', '1'):
+            cfg = {**self.cfg, 'env_overrides': {'DS4_DIRECTION_TRACE': value}}
+            self.assertEqual(apply({}, cfg, 'rtx-producer')['DS4_DIRECTION_TRACE'], value)
+            self.assertEqual(apply({}, cfg, 'ds4-win')['DS4_DIRECTION_TRACE'], value)
+            self.assertNotIn('DS4_DIRECTION_TRACE', apply({'DS4_DIRECTION_TRACE': value}, cfg, 'build'))
+        with self.assertRaisesRegex(ValueError, 'memory-residency'):
+            apply({}, {**self.cfg, 'env_overrides': {'DS4_DIRECTION_TRACE': '2'}}, 'rtx-producer')
+
     def test_native_prefill_keeps_core_and_ignores_inherited_eviction(self):
         with contextlib.redirect_stderr(io.StringIO()) as output:
             env = apply({'DS4_CUDA_PREFILL_EDGE_VRAM': '1'}, self.cfg, 'ds4-win')

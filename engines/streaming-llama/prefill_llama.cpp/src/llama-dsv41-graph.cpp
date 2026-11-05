@@ -1,6 +1,7 @@
 #include "llama-dsv41-profile-stage.h"
 #include "ggml-dsv41-pv-view-f32.h"
 #include "llama-dsv41-graph.h"
+#include "ggml-dsv41-writer-bank.h"
 #include "boundary-capture.h"
 #include "ggml-dsv41-shared-sparse.h"
 #include "ggml-dsv41-hc-expand.h"
@@ -690,10 +691,16 @@ llama_dsv41_graph_ops::sublayer llama_dsv41_graph_ops::prepare(
 }
 
 ggml_tensor * llama_dsv41_graph_ops::complete(ggml_tensor * block, const sublayer & layer) const {
+    if(observe)observe(block,"dsv41_writer_ffn");
     return expand(block, layer.residual, layer.next);
 }
 
+ggml_tensor * llama_dsv41_graph_ops::writer(ggml_tensor *base,ggml_tensor *weight,ggml_tensor *input,uint32_t site)const {
+    return dsv41_writer_bank::writer(ctx,base,weight,input,writer_layer,site);
+}
+
 ggml_tensor * llama_dsv41_graph_ops::complete_attention(ggml_tensor * block, const sublayer & layer) const {
+    if(observe)observe(block,"dsv41_writer_attention");
     return expand(block, layer.residual, layer.next, hc_bf16_carry_enabled());
 }
 

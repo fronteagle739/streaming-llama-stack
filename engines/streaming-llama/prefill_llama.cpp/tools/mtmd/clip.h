@@ -70,6 +70,9 @@ int clip_n_output_tokens_y(const struct clip_ctx * ctx, struct clip_image_f32 * 
 
 // this should be equal to the embedding dimension of the text model
 int clip_n_mmproj_embd(const struct clip_ctx * ctx);
+// QFN's retained companion uses align-corners learned positions and exact
+// merger GELU. Opt in only after validating that specific tower's shape.
+bool clip_use_qfn_reference_geometry(struct clip_ctx * ctx);
 
 struct clip_image_size      * clip_image_size_init(void);
 struct clip_image_u8        * clip_image_u8_init (void);

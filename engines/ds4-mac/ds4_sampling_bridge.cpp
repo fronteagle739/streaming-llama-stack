@@ -40,14 +40,25 @@ extern "C" void *ds4_chain_create(const ds4_chain_config *cfg,void *engine,const
         std::unique_ptr<ds4_chain> c(new ds4_chain);c->cfg=*cfg;
         std::vector<int> order;
         if(cfg->order_set)order.assign(cfg->order,cfg->order+cfg->order_count);
-        else order={DS4_CHAIN_TOP_K,DS4_CHAIN_TYPICAL,DS4_CHAIN_TOP_P,DS4_CHAIN_MIN_P,DS4_CHAIN_XTC,DS4_CHAIN_TEMP};
-        if(cfg->dry_multiplier>0 && std::find(order.begin(),order.end(),DS4_CHAIN_DRY)==order.end())order.insert(order.begin(),DS4_CHAIN_DRY);
+        else order={DS4_CHAIN_PENALTIES,DS4_CHAIN_TOP_K,DS4_CHAIN_TYPICAL,DS4_CHAIN_TOP_P,DS4_CHAIN_MIN_P,DS4_CHAIN_XTC,DS4_CHAIN_TEMP};
+        if(cfg->dry_multiplier>0 && std::find(order.begin(),order.end(),DS4_CHAIN_DRY)==order.end()) {
+            if(cfg->order_set)throw std::runtime_error("dry_multiplier requires dry in the selected sampler order");
+            order.insert(order.begin()+1,DS4_CHAIN_DRY);
+        }
+        if(cfg->top_n_sigma>=0 && std::find(order.begin(),order.end(),DS4_CHAIN_SIGMA)==order.end()) {
+            if(cfg->order_set)throw std::runtime_error("top_n_sigma requires top_n_sigma in the selected sampler order");
+            auto at=std::find(order.begin(),order.end(),DS4_CHAIN_TOP_K);
+            order.insert(at==order.end()?order.begin():at+1,DS4_CHAIN_SIGMA);
+        }
         for(int kind:order){
             llama_sampler *p=nullptr;
             if(kind==DS4_CHAIN_TYPICAL)p=llama_sampler_init_typical(cfg->typical,1);
             else if(kind==DS4_CHAIN_XTC){uint32_t folded=uint32_t(seed)^uint32_t(seed>>32);if(folded==LLAMA_DEFAULT_SEED)folded--;p=llama_sampler_init_xtc(cfg->xtc_probability,cfg->xtc_threshold,1,folded);}
-            else if(kind==DS4_CHAIN_DRY && cfg->dry_multiplier>0)p=llama_sampler_init_dry_testing(1000001,cfg->dry_multiplier,cfg->dry_base,cfg->dry_allowed_length,cfg->dry_last_n,breakers(static_cast<ds4_engine*>(engine)));
+            else if(kind==DS4_CHAIN_DRY && cfg->dry_multiplier>0)p=llama_sampler_init_dry_testing(cfg->context,cfg->dry_multiplier,cfg->dry_base,cfg->dry_allowed_length,cfg->dry_last_n,breakers(static_cast<ds4_engine*>(engine)));
             else if(kind==DS4_CHAIN_SIGMA)p=llama_sampler_init_top_n_sigma(cfg->top_n_sigma);
+            else if(kind==DS4_CHAIN_PENALTIES)p=llama_sampler_init_penalties(
+                cfg->repeat_last_n<0?cfg->context:cfg->repeat_last_n,
+                cfg->repeat>0?cfg->repeat:1.0f,cfg->frequency,cfg->presence);
             // Core filters get their phase-specific values at the token boundary.
             c->nodes.push_back({kind,p});
         }
@@ -63,10 +74,10 @@ extern "C" int ds4_chain_sample(void *opaque,float *logits,int vocab,float tempe
         llama_token_data_array data={c->candidates.data(),c->candidates.size(),-1,false};
         for(auto &node:c->nodes){
             bool changed=false;
-            if(node.kind==DS4_CHAIN_TOP_K && top_k!=c->top_k){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_top_k(top_k);changed=true;}
-            if(node.kind==DS4_CHAIN_TOP_P && top_p!=c->top_p){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_top_p(top_p,1);changed=true;}
-            if(node.kind==DS4_CHAIN_MIN_P && min_p!=c->min_p){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_min_p(min_p,1);changed=true;}
-            if(node.kind==DS4_CHAIN_TEMP && temperature!=c->temperature){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_temp_ext(temperature,c->cfg.dyn_range,c->cfg.dyn_exponent);changed=true;}
+            if(node.kind==DS4_CHAIN_TOP_K && (!node.sampler||top_k!=c->top_k)){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_top_k(top_k);changed=true;}
+            if(node.kind==DS4_CHAIN_TOP_P && (!node.sampler||top_p!=c->top_p)){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_top_p(top_p,1);changed=true;}
+            if(node.kind==DS4_CHAIN_MIN_P && (!node.sampler||min_p!=c->min_p)){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_min_p(min_p,1);changed=true;}
+            if(node.kind==DS4_CHAIN_TEMP && (!node.sampler||temperature!=c->temperature)){llama_sampler_free(node.sampler);node.sampler=llama_sampler_init_temp_ext(temperature,c->cfg.dyn_range,c->cfg.dyn_exponent);changed=true;}
             (void)changed;if(node.sampler)llama_sampler_apply(node.sampler,&data);
         }
         c->top_k=top_k;c->top_p=top_p;c->min_p=min_p;c->temperature=temperature;

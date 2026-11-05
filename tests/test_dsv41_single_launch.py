@@ -18,6 +18,8 @@ GATED_ENV = {'DS4_DS_READ_PARTS': '8', 'LLAMADECODE_VRAM_RESERVE_MIB': '128', 'L
              'LLAMADECODE_APPEND_DECODE_MAX': '0', 'LLAMADECODE_APPEND_RESIDENT_SWEEP': '1',
              'LLAMA_DSV41_INDEX_FP4': '1', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS': '1', 'LLAMADECODE_HOST_COPY_STAGING': 'auto',
              'LLAMADECODE_RECENCY_LFU': '1', 'LLAMADECODE_LFU_HALF_LIFE': '16'}
+from scripts.dsv41_100k_ram_profile import PERFORMANCE_ENV_DEFAULTS
+GATED_ENV.update(PERFORMANCE_ENV_DEFAULTS)
 
 
 class LaunchConfigTests(unittest.TestCase):
@@ -43,7 +45,7 @@ class LaunchConfigTests(unittest.TestCase):
         cfg = dsv41_single.overlay('262k')
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (262144, 'f32', True))
         self.assertEqual(cfg['serving'], 'single_engine')
-        self.assertEqual(cfg['producer_host_reserve_gib'], .5)
+        self.assertEqual(cfg['producer_host_reserve_gib'], 4)
         self.assertEqual(cfg['env_overrides'], GATED_ENV)
         self.assertEqual((cfg['producer_prefill_sweep_tokens'], cfg['producer_prefill_fold_cap_tokens'], cfg['producer_host_max_gib']),
                          ('auto', 61440, 7.75))   # single stream by default (OPUS22 round 6)
@@ -68,7 +70,7 @@ class LaunchConfigTests(unittest.TestCase):
         cfg = dsv41_single.overlay('262k', local, model='N.gguf')
         self.assertEqual((cfg['model'], cfg['port'], cfg['context']), ('N.gguf', 9000, 262144))
         self.assertEqual(cfg['env_overrides'], {'FOO': '1', **GATED_ENV, 'LLAMADECODE_ENGRAM_CACHE_MB': '64'})
-        self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (7.75, 'auto'))   # gated sweep plan wins
+        self.assertEqual((cfg['producer_host_max_gib'], cfg['producer_prefill_sweep_tokens']), (12, 98304))   # explicit local settings survive
         self.assertEqual(local['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '64')   # input untouched
 
     def test_resolved_producer_flags_env_and_sweep(self):
@@ -93,7 +95,7 @@ class LaunchConfigTests(unittest.TestCase):
                                   row['sweep_plan']['fold_cap_tokens']), ('fold', sweep, int(flags['--context']) - 1))
                 self.assertEqual(row['sweep_plan']['capacity_tokens'], 49152)   # a short prompt keeps the base bank
                 self.assertGreater(row['sweep_plan']['max_host_bytes'], row['sweep_plan']['base_host_bytes'])
-                self.assertEqual(row['single_engine']['producer_host_reserve_gib'], .5)
+                self.assertEqual(row['single_engine']['producer_host_reserve_gib'], 4)
 
     def test_default_cone_reaches_native_args_and_keeps_qualified_routing_boundary(self):
         from slstack.combo_producer import prefill_arguments, routed_prefill_choice
@@ -145,7 +147,7 @@ class LaunchConfigTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell'), 'Windows PowerShell launcher')
     def test_powershell_dry_run_starts_nothing(self):
-        result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+        result = subprocess.run(['powershell', '-NoProfile', '-File',
                                  str(ROOT / 'scripts' / 'start-dsv41-single-262k.ps1'), '-DryRun', '-WebUI', '-Model', 'M.gguf'],
                                 capture_output=True, text=True, timeout=120, cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -177,7 +179,7 @@ class KeptKeyTests(unittest.TestCase):
         self.assertEqual(Path(row['cache_affinity_spread_file']), ROOT / 'presets' / 'dsv41-affinity-spreads.txt')
         self.assertEqual((row['context'], row['ctx_cache_precision'], row['ctx_cache_growable']), (262144, 'f32', True))
         self.assertEqual(row['env_overrides']['LLAMADECODE_ENGRAM_CACHE_MB'], '0')
-        self.assertEqual(row['producer_host_reserve_gib'], .5)
+        self.assertEqual(row['producer_host_reserve_gib'], 4)
 
     def test_stack_single_engine_creates_its_hold_file_on_a_fresh_runtime(self):
         from slstack.single_runtime import stack_config

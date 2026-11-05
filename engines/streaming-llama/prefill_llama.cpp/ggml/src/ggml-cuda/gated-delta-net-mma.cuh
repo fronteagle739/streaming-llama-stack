@@ -1,4 +1,4 @@
-// QFNSTREAM: upstream ggml-org gated-delta-net-mma.cuh (a91eab67d).
+// QFN: upstream ggml-org gated-delta-net-mma.cuh (a91eab67d).
 #pragma once
 
 #include "common.cuh"

@@ -21,17 +21,29 @@ BASE = dict(gpu_uuid='GPU-1', gpu_idle_max_mib=1024, hold_file=str(FIXTURE / 'gp
             producer_library_directories=[str(FIXTURE / 'scratch/engines/ds4-win'), str(FIXTURE / 'cuda/bin')],
             cache_affinity_spread_file=str(FIXTURE / 's.txt'), model_receipt=str(FIXTURE / 'scratch/m.json'), ds4_command=['native.exe'],
             env_overrides={'CUDA_CACHE_DISABLE': '1'}, host='127.0.0.1', port=18748)
+BASE.update(combo_worker_host_budget_gib=9.25,producer_host_max_gib=7.75,
+            producer_engram_scan_rings='auto',performance_experiment=True)
+from slstack.performance_contract import seal
+def recorded(cfg):
+    return seal(cfg,'dsv41')
 INSTALLED = FIXTURE / 'installed/0123abcd'
 STUDIO_NATIVE = ROOT.parent / 'front-eagle-stack/backend/studio/ds4_native.py'
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_writer_hook_qualification_survives_runtime_packaging(self):
+        from slstack.writer_directions import qualified
+        cfg = sr.single_config(recorded(dict(BASE, writer_directions_qualified_sha256=BASE['producer_sha256'])), INSTALLED, 'rev')
+        self.assertTrue(qualified(cfg))
+        self.assertFalse(qualified(sr.single_config(recorded(BASE), INSTALLED, 'rev')))
+        self.assertFalse(qualified(sr.single_config(recorded(dict(BASE, writer_directions_qualified_sha256='b' * 64)), INSTALLED, 'rev')))
+
     def test_packed_fp4_extension_and_temp_paths_survive_scratch_retirement(self):
         env=dict(BASE['env_overrides'], LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL=str(FIXTURE/'scratch/bin/native.dll'),
                  LLAMA_DSV41_STORED_MXFP4='1', LLAMADECODE_PREFILL_ROUTED='0',
                  TEMP=str(FIXTURE/'scratch'), TMP=str(FIXTURE/'scratch'), TMPDIR=str(FIXTURE/'scratch'),
                  CUDA_CACHE_PATH=str(FIXTURE/'scratch/cache'))
-        cfg=sr.single_config(dict(BASE,env_overrides=env),INSTALLED,'rev')
+        cfg=sr.single_config(recorded(dict(BASE,env_overrides=env)),INSTALLED,'rev')
         self.assertEqual(Path(cfg['env_overrides']['LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL']),INSTALLED/'native.dll')
         self.assertEqual(cfg['env_overrides']['LLAMA_DSV41_STORED_MXFP4'],'1')
         self.assertEqual(cfg['env_overrides']['LLAMADECODE_PREFILL_ROUTED'],'0')
@@ -53,7 +65,7 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(loaded.call_args.args[1]['runtime_min_free_gib'],float(argv[argv.index('--runtime-min-free-gib')+1]))
 
     def test_installed_config_is_self_contained(self):
-        cfg = sr.single_config(BASE, INSTALLED, 'rev')
+        cfg = sr.single_config(recorded(BASE), INSTALLED, 'rev')
         self.assertEqual(cfg['serving_mode'], 'single_engine')
         self.assertEqual(cfg['env_overrides'], {'CUDA_CACHE_DISABLE': '1', 'LLAMADECODE_DS4_DECODE': '1'})
         self.assertEqual(Path(cfg['llama_producer']), INSTALLED / 'llamadecode-r.exe')
@@ -66,6 +78,7 @@ class RuntimeTests(unittest.TestCase):
         preset = sr.preset(BASE, INSTALLED)
         self.assertEqual(preset['name'], 'DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine)')
         rtx = preset['rtx'];self.assertEqual(rtx['backend'], 'ds4')
+        self.assertEqual(rtx['shape'], 'deepseek41')
         self.assertEqual(Path(rtx['ds4_binary']), INSTALLED / 'ds4-server.exe')
         self.assertEqual(rtx['ds4_env'], {'LLAMADECODE_DS4_DECODE': '1'})
         self.assertTrue(rtx['ds4_cache_affinity_spread_file'])   # Studio offers the quality-speed tool only then
@@ -78,7 +91,7 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):ctx_cache(dict(BASE, **bad))
         big = dict(BASE, context=999424, ctx_cache_precision='bf16', ctx_cache_growable=True,
                    preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 1M)')
-        cfg = sr.single_config(big, INSTALLED, 'rev')
+        cfg = sr.single_config(recorded(big), INSTALLED, 'rev')
         self.assertEqual((cfg['context'], cfg['ctx_cache_precision'], cfg['ctx_cache_growable']), (999424, 'bf16', True))
         preset = sr.preset(big, INSTALLED)
         self.assertEqual((preset['name'], preset['rtx']['ctx']), (big['preset_name'], 999424))
@@ -86,7 +99,7 @@ class RuntimeTests(unittest.TestCase):
     def test_runtime_floor_survives_managed_runtime_and_worker_config(self):
         for floor in (0, 4.0, 6.5):
             with self.subTest(floor=floor):
-                cfg = sr.single_config(dict(BASE, runtime_min_free_gib=floor), INSTALLED, 'rev')
+                cfg = sr.single_config(recorded(dict(BASE, runtime_min_free_gib=floor)), INSTALLED, 'rev')
                 self.assertEqual(cfg['runtime_min_free_gib'], floor)
                 self.assertEqual(request_worker_config(cfg)['runtime_min_free_gib'], floor)
 

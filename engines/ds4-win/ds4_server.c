@@ -761,6 +761,17 @@ static void random_tool_id(char *dst, size_t dstlen, api_style api) {
 }
 
 typedef struct server server;
+typedef struct {
+    char method[8];
+    char path[256];
+    char *body;
+    size_t body_len;
+    bool quality_authorized;
+} http_request;
+enum {DIRECTION_BANK_CAPACITY=32,DIRECTION_STACK_CAPACITY=8};
+typedef struct {char id[65];float strength;} direction_selection_row;
+typedef struct {uint32_t count;bool present;direction_selection_row row[DIRECTION_STACK_CAPACITY];} direction_selection;
+typedef struct {char id[65];float *pack;} direction_bank_entry;
 static void server_inference_lock(server *s);
 static void server_inference_unlock(server *s);
 static bool server_encode_image(server *s, const server_image_input *input,
@@ -867,6 +878,7 @@ typedef struct {
     char *raw_body;
     bool quality_speed_set;
     float quality_speed;
+    direction_selection directions;
     bool quality_per_phase;
     float quality_phases[DS4_QUALITY_PHASE_COUNT];
     char *prompt_text;
@@ -10110,6 +10122,8 @@ struct server_slot {
     live_tool_state anthropic_live;
     visible_live_state thinking_live;
     int continued_last_store_tokens;
+    char direction_key[65];
+    uint32_t direction_count;
 
     job *assigned;
     job *running;
@@ -10257,6 +10271,8 @@ struct server {
     int ctx_size;
     bool batched_mode;
     bool training_features;
+    direction_bank_entry direction_bank[DIRECTION_BANK_CAPACITY];
+    uint32_t direction_bank_count;
     pthread_t *slot_threads;
     pthread_t decode_thread;
     int default_tokens;
@@ -10269,6 +10285,7 @@ struct server {
     pthread_mutex_t tool_mu;
     pthread_mutex_t kv_mu;
     pthread_mutex_t inference_mu;
+    pthread_mutex_t direction_mu; /* single-slot generation versus teacher forcing */
     pthread_mutex_t model_mu;
     pthread_cond_t model_cv;
     bool model_busy;
@@ -11386,7 +11403,7 @@ static bool kv_cache_store_live_prefix_text(server *s, server_slot *slot,
                                             const char *cache_text_override,
                                             uint8_t cache_text_ext,
                                             const char *cache_text_key) {
-    if (!s || !slot) return false;
+    if (!s || !slot || slot->direction_count) return false;
     char err[160] = {0};
     ds4_kvstore_trailer_hooks hooks = kv_cache_tool_map_hooks(s, NULL);
     pthread_mutex_lock(&s->inference_mu);
@@ -11552,7 +11569,7 @@ static int kv_cache_try_load_text(server *s, server_slot *slot,
                                   char **loaded_path_out,
                                   uint8_t *loaded_ext_flags_out,
                                   bool responses_protocol) {
-    if (!s || !slot) return 0;
+    if (!s || !slot || slot->direction_count) return 0;
     if (loaded_path_out) *loaded_path_out = NULL;
     if (loaded_ext_flags_out) *loaded_ext_flags_out = 0;
     ds4_kvstore_load_result lr = {0};
@@ -14322,10 +14339,15 @@ static void *decode_worker_main(void *arg) {
  * shorter than the full prompt, we prefill to that boundary, store it, and
  * immediately continue to the real prompt.  The live graph therefore always
  * moves forward. */
+#include "ds4_direction_server.h"
+
 static void generate_job_inner(server *s, server_slot *slot, job *j) {
     char err[160];
     err[0] = '\0';
     if (ds4_combo_active) ds4_t1_request("generate");
+    if(!direction_bind_request(s,slot,&j->req.directions,err,sizeof(err))) {
+        http_error(j->fd,s->enable_cors,409,err);return;
+    }
     if (quality_request_apply(&j->req)) {
         http_error(j->fd,s->enable_cors,409,"quality vs speed unsupported");return;
     }
@@ -15803,6 +15825,7 @@ decode_again:
  * return in the large protocol/generation path. The callback is cleared before
  * the client thread can destroy its stack-owned job. */
 static void generate_job(server *s, server_slot *slot, job *j) {
+    if(s->slot_count==1)pthread_mutex_lock(&s->direction_mu);
     pthread_mutex_lock(&s->model_mu);
     slot->running = j;
     pthread_mutex_unlock(&s->model_mu);
@@ -15829,6 +15852,7 @@ static void generate_job(server *s, server_slot *slot, job *j) {
     if (slot->running == j) slot->running = NULL;
     pthread_cond_broadcast(&s->model_cv);
     pthread_mutex_unlock(&s->model_mu);
+    if(s->slot_count==1)pthread_mutex_unlock(&s->direction_mu);
 }
 
 static bool live_state_contains_all(const live_tool_state *state,
@@ -16018,14 +16042,6 @@ static void *slot_worker_main(void *arg) {
     }
     return NULL;
 }
-
-typedef struct {
-    char method[8];
-    char path[256];
-    char *body;
-    size_t body_len;
-    bool quality_authorized;
-} http_request;
 
 static void http_request_free(http_request *r) {
     free(r->body);
@@ -16440,9 +16456,20 @@ static void *client_main(void *arg) {
     }
     if (!strncmp(hr.path, "/v1/train/", 10)) {
         if (!hr.quality_authorized) http_error(fd,s->enable_cors,401,"authenticated frozen-prefix training required");
+        else if (!strcmp(hr.method,"GET") && !strcmp(hr.path,"/v1/train/direction-model")) ds4_direction_model(s,fd);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-stack")) ds4_direction_stack(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-register")) direction_register(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-evaluate")) ds4_direction_evaluate(s,fd,&hr);
         else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/prompt")) ds4_training_prompt(s,fd,&hr);
         else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/tokens")) ds4_training_text(s,fd,&hr);
         else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/features")) ds4_training_features(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/directions")) ds4_training_directions(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-parity")) ds4_training_directions(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-tokens")) ds4_direction_tokens(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/direction-prompt")) ds4_direction_prompt(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strncmp(hr.path,"/v1/train/residuals/",strlen("/v1/train/residuals/"))) ds4_training_residuals(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strncmp(hr.path,"/v1/train/parity/",strlen("/v1/train/parity/"))) ds4_training_residuals(s,fd,&hr);
+        else if (!strcmp(hr.method,"POST") && !strcmp(hr.path,"/v1/train/parity-suffix")) ds4_training_residuals(s,fd,&hr);
         else if (!strcmp(hr.method,"GET") && !strcmp(hr.path,"/v1/train/info")) {
             buf b={0};buf_printf(&b,"{\"hidden_dim\":%d,\"vocab\":%d,\"main_layers\":%d,\"server_pid\":%lu,\"prefix_backend\":\"native_quantized_streaming\"}\n",
                 ds4_engine_output_features_dim(s->engine),ds4_engine_vocab_size(s->engine),ds4_engine_output_features_layers(s->engine),(unsigned long)getpid());
@@ -16498,6 +16525,15 @@ static void *client_main(void *arg) {
             http_error(fd,s->enable_cors,hr.quality_authorized?409:401,"quality_speed requires authenticated calibrated CUDA SSD streaming");http_request_free(&hr);goto done;
         }
     }
+    direction_selection direction_request={0};
+    if(!direction_parse_request(hr.body,&direction_request)) {
+        http_error(fd,s->enable_cors,400,"direction_adapters requires unique registered IDs and finite strengths0..4");
+        http_request_free(&hr);goto done;
+    }
+    if(direction_request.count && !hr.quality_authorized) {
+        http_error(fd,s->enable_cors,401,"authenticated direction selection required");
+        http_request_free(&hr);goto done;
+    }
     request req;
     char err[160];
     bool ok = false;
@@ -16519,7 +16555,11 @@ static void *client_main(void *arg) {
         http_request_free(&hr);
         goto done;
     }
-    if (ok) {req.raw_body = xstrndup(hr.body, hr.body_len);quality_request_store(&req,quality_present,&quality);}
+    if (ok) {
+        req.raw_body = xstrndup(hr.body, hr.body_len);
+        quality_request_store(&req,quality_present,&quality);
+        req.directions=direction_request;
+    }
     http_request_free(&hr);
     if (!ok) {
         http_error(fd, s->enable_cors, 400, err);
@@ -16707,6 +16747,8 @@ static void log_context_memory(ds4_backend backend, int ctx_size,
     }
 }
 static void server_close_resources(server *s) {
+    for(uint32_t i=0;i<s->direction_bank_count;i++)free(s->direction_bank[i].pack);
+    s->direction_bank_count=0;
     if (s->peer_listener) {
         ds4_peer_listener_stop(s->peer_listener);
         s->peer_listener = NULL;
@@ -16741,6 +16783,7 @@ static void server_close_resources(server *s) {
     pthread_mutex_destroy(&s->tool_mu);
     pthread_mutex_destroy(&s->kv_mu);
     pthread_mutex_destroy(&s->inference_mu);
+    pthread_mutex_destroy(&s->direction_mu);
     pthread_mutex_destroy(&s->model_mu);
     pthread_mutex_destroy(&s->trace_mu);
     pthread_cond_destroy(&s->model_cv);
@@ -17465,6 +17508,7 @@ int main(int argc, char **argv) {
     pthread_mutexattr_init(&inference_attr);
     pthread_mutexattr_settype(&inference_attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&s.inference_mu, &inference_attr);
+    pthread_mutex_init(&s.direction_mu, NULL);
     pthread_mutexattr_destroy(&inference_attr);
     pthread_mutex_init(&s.model_mu, NULL);
     pthread_cond_init(&s.model_cv, NULL);
@@ -23920,7 +23964,40 @@ static void test_quality_speed_request_validation(void) {
     TEST_ASSERT(ds4_quality_speed_set(0)==2); /* no calibrated model loaded */
 }
 
+static void test_direction_quality_request_mapping(void) {
+    bool found=false;quality_setting setting={0};request req={0};
+    TEST_ASSERT(quality_config_body("{\"quality_speed\":{\"reasoning\":0.35,\"tool_call\":0.2,\"answer\":1.36125,\"code\":0}}",false,&found,&setting));
+    TEST_ASSERT(found && setting.per_phase);
+    quality_request_store(&req,found,&setting);
+    TEST_ASSERT(sizeof(req.quality_phases)==DS4_QUALITY_PHASE_COUNT*sizeof(float));
+    TEST_ASSERT(req.quality_phases[DS4_QUALITY_ANSWER]==1.36125f && req.quality_phases[DS4_QUALITY_CODE]==0);
+    TEST_ASSERT(quality_config_body("{\"quality_speed\":{\"reasoning\":0.35,\"tool_call\":0.2,\"answer\":1.36125,\"code\":0.9}}",false,&found,&setting));
+    quality_request_store(&req,found,&setting);
+    TEST_ASSERT(req.quality_phases[DS4_QUALITY_CODE]==.9f && req.quality_phases[DS4_QUALITY_ANSWER]==1.36125f);
+}
+
+static void test_direction_request_binding_validation(void) {
+    const char *a="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const char *b="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    direction_selection parsed={0};buf input={0};
+    TEST_ASSERT(direction_parse_request("{}",&parsed) && !parsed.present && !parsed.count);
+    TEST_ASSERT(direction_parse_request("{\"direction_adapters\":[]}",&parsed) && parsed.present && !parsed.count);
+    buf_printf(&input,"{\"messages\":[],\"direction_adapters\":[{\"id\":\"%s\",\"strength\":0.7},{\"strength\":0.5,\"id\":\"%s\"}]}",b,a);
+    TEST_ASSERT(direction_parse_request(input.ptr,&parsed) && parsed.count==2 && !strcmp(parsed.row[0].id,a));
+    TEST_ASSERT(parsed.row[0].strength==.5f && parsed.row[1].strength==.7f);buf_free(&input);
+    buf_printf(&input,"{\"direction_adapters\":[{\"id\":\"%s\",\"strength\":0},{\"id\":\"%s\",\"strength\":1}]}",a,a);
+    TEST_ASSERT(!direction_parse_request(input.ptr,&parsed));buf_free(&input);
+    buf_printf(&input,"{\"direction_adapters\":[{\"id\":\"%s\",\"strength\":5}]}",a);
+    TEST_ASSERT(!direction_parse_request(input.ptr,&parsed));buf_free(&input);
+    TEST_ASSERT(!direction_parse_request("{\"direction_adapters\":[],\"direction_adapters\":[]}",&parsed));
+    TEST_ASSERT(!direction_parse_request("{\"direction_adapters\":[{\"id\":\"bad\",\"strength\":1}]}",&parsed));
+    TEST_ASSERT(!direction_parse_request("{\"direction_adapters\":[],}",&parsed));
+    TEST_ASSERT(!direction_parse_request("{\"direction_adapters\":[]} trailing",&parsed));
+}
+
 static void ds4_server_unit_tests_run(void) {
+    test_direction_request_binding_validation();
+    test_direction_quality_request_mapping();
     test_quality_speed_request_validation();
     test_deepseek41_server_stream();
     test_deepseek41_server_tools();

@@ -11,6 +11,20 @@ SS = dict(CFG, producer_host_max_gib=12.0)
 
 
 class PrefillPlan(unittest.TestCase):
+    def test_writer_bank_keeps_physical_provider_and_kernel_workspace(self):
+        from slstack.combo_producer import prefill_arguments
+        from slstack.writer_directions import device_reserve, prefill_device_reserve
+        cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541,
+                   ctx_cache_precision='bf16', ctx_cache_growable=True,
+                   env_overrides={'LLAMA_DSV41_FLASHINFER_MXFP4':'1',
+                                  'LLAMA_DSV41_FLASHINFER_NATIVE_FFN_DLL':'x.dll'})
+        before, _ = prefill_arguments(cfg, 23, 14 << 30)
+        after, plan = prefill_arguments(dict(cfg, direction_bank_count=1), 23, 14 << 30)
+        self.assertEqual(after, before)
+        self.assertEqual(plan['writer_prefill_device_bytes'], prefill_device_reserve(1))
+        self.assertEqual(plan['writer_resident_device_bytes'], device_reserve(1))
+        self.assertLess(plan['writer_prefill_device_bytes'], plan['writer_resident_device_bytes'])
+
     def test_explicit_graph_floor_preserves_device_and_context_budgets(self):
         from slstack.combo_producer import prefill_arguments
         cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541,
@@ -98,7 +112,7 @@ class PrefillPlan(unittest.TestCase):
 
     def test_measured_available_caps_and_pages(self):
         avail = 17324515328   # ss-91k launch
-        SS = dict(globals()['SS'], producer_desktop_reserve_gib=1)   # the pre-desktop-reserve 1 GiB headroom
+        SS = dict(globals()['SS'], producer_desktop_reserve_gib=1)   # the explicit 1 GiB headroom
         p = prefill_plan(SS, 93668, avail)
         self.assertTrue(p['single_sweep']);self.assertEqual(p['capacity'], 93668);self.assertEqual(p['capped_by'], 'producer_host_max_gib')   # 1 GiB reserve: 12 GiB max binds first
         self.assertEqual(p['host_bytes'] % 65536, 0)

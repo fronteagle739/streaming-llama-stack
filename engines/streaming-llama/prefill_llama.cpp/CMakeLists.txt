@@ -103,7 +103,7 @@ option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 # utils
 option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 option(LLAMA_DSV41_OFFLINE_PRODUCER "Build the opt-in original V4.1 offline streaming producer" OFF)
-option(LLAMA_QFN_ENGINE "Build the opt-in Qwen3.8 Flash Next streaming engine (QFNSTREAM)" OFF)
+option(LLAMA_QFN_ENGINE "Build the opt-in Qwen3.8 Flash Next streaming engine (QFN)" OFF)
 
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
@@ -308,7 +308,7 @@ if(WIN32 AND GGML_CUDA AND NOT BUILD_SHARED_LIBS)
     target_link_libraries(slstack-weight-fetcher PRIVATE llama ggml-cuda CUDA::cudart)
     add_custom_command(TARGET slstack-weight-fetcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${PROJECT_SOURCE_DIR}/external/directstorage/native/bin/x64/dstorage.dll"
-            "${PROJECT_SOURCE_DIR}/external/directstorage/native/bin/x64/dstoragecore.dll"
+            "${DS_SDK_DIR}/native/bin/x64/dstorage.dll"
+            "${DS_SDK_DIR}/native/bin/x64/dstoragecore.dll"
             "$<TARGET_FILE_DIR:slstack-weight-fetcher>")
 endif()

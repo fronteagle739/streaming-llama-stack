@@ -23,7 +23,7 @@ from . import combo_abort
 
 
 def record_stuck(cfg, directory, process, error):
-    """Owner rule: a native/producer still alive after every graceful step is never
+    """Retirement contract: a native/producer still alive after every graceful step is never
     killed. Stop all further GPU work (GPU_STOP), keep its receipt, and say so loudly."""
     message = str(error)
     receipt = dict(getattr(process, 'receipt', None) or {}, stuck=message)
@@ -218,7 +218,7 @@ class Native:
 
         def startup(process):
             self.process=process
-            # Owner rule (no fixed timeouts): readiness lives while the native process shows
+            # Progress-based readiness: readiness lives while the native process shows
             # progress (its stderr log, I/O or CPU change); it fails only on exit or a no-progress window.
             window=Window(readiness_seconds(cfg))
             while True:

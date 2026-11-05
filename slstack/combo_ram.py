@@ -30,7 +30,7 @@ def runtime_min_free_gib(cfg):
 
 
 def wait_for_host_capacity(host_bytes,floor_bytes,cancelled,*,timeout_s=30,available=None,clock=time.monotonic,sleep=time.sleep):
-    """Allow OS RAM reclamation after certified engine retirement. Owner rule (no fixed
+    """Allow OS RAM reclamation after certified engine retirement. Runtime contract (no fixed
     timeouts): the wait lives while available RAM keeps rising (reclamation is progressing);
     timeout_s is the NO-PROGRESS window, renewed by every new maximum, not a total cap."""
     if any(type(n) is not int or n<=0 for n in (host_bytes,floor_bytes)):
@@ -62,7 +62,7 @@ def wait_for_host_capacity(host_bytes,floor_bytes,cancelled,*,timeout_s=30,avail
 OWNED_INIT_RSS=8<<20
 def wait_owned_initialization(job,rss,*,threshold=OWNED_INIT_RSS,stall_s=30.0,clock=time.monotonic,sleep=time.sleep):
     """Wait for a new owned process's working set to reach `threshold` before protecting it.
-    Owner rule (no fixed timeouts): it lives while the process is alive and its RSS grows; it
+    Runtime contract (no fixed timeouts): it lives while the process is alive and its RSS grows; it
     fails only when the process exits or its RSS makes no progress for stall_s, with the reason.
     (A fixed 2 s deadline failed right after a large producer freed ~11 GB: page zeroing is slow.)"""
     started=progress=clock();best=-1;polls=0;announced=False

@@ -1,0 +1,45 @@
+{
+  "common": {
+    "engine": "SET_ENGINE",
+    "producer-build-manifest": "SET_PRODUCER_BUILD_MANIFEST",
+    "producer-pack": "SET_PRODUCER_PACK",
+    "producer-receipt": "SET_PRODUCER_RECEIPT",
+    "producer-sha256": "REPLACE_WITH_VERIFIED_PACK_SHA256",
+    "gpu-uuid": "REPLACE_WITH_SELECTED_GPU_UUID",
+    "pair-token-file": "SET_PAIR_TOKEN_FILE",
+    "ssh-host": "REPLACE_WITH_PRIVATE_SSH_HOST",
+    "transport": "direct",
+    "mac-private-host": "REPLACE_WITH_MAC_PRIVATE_LINK_IPV4",
+    "mac-root": "SET_MAC_ROOT",
+    "mac-python": "SET_MAC_PYTHON",
+    "mac-server": "SET_MAC_SERVER",
+    "mac-vision": "SET_MAC_VISION",
+    "mac-vision-receipt": "SET_MAC_VISION_RECEIPT",
+    "rtx-vision": "SET_RTX_VISION",
+    "rtx-vision-receipt": "SET_RTX_VISION_RECEIPT",
+    "rtx-vision-control-port": 8096,
+    "vision-backend": "CUDA0",
+    "vision-min-tokens": 64,
+    "vision-max-tokens": 1024,
+    "vision-threads": 8,
+    "vision-flash-attn": 0,
+    "vision-host-budget-gib": 3,
+    "mac-host-budget-gib": 320,
+    "mac-floor-gib": 16,
+    "hold-file": "SET_HOLD_FILE",
+    "output": "SET_OUTPUT",
+    "progress-log": "SET_PROGRESS_LOG"
+  },
+  "formats": {
+    "q4": {
+      "profile": "examples/dual-machine/qfn/native.q4.settings.json",
+      "mac-model": "SET_MAC_MODEL",
+      "mac-receipt": "SET_MAC_RECEIPT"
+    },
+    "q8": {
+      "profile": "examples/dual-machine/qfn/native.settings.json",
+      "mac-model": "SET_MAC_MODEL",
+      "mac-receipt": "SET_MAC_RECEIPT"
+    }
+  }
+}

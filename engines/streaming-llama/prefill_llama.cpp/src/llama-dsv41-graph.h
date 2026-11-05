@@ -9,6 +9,8 @@
 class llama_dsv41_graph_ops {
 public:
     using observer = std::function<void(ggml_tensor *, const char *)>;
+    uint32_t writer_layer=0;
+    ggml_tensor * writer(ggml_tensor *base,ggml_tensor *weight,ggml_tensor *input,uint32_t site)const;
     struct mix { ggml_tensor * pre; ggml_tensor * post; ggml_tensor * comb; };
     struct sublayer { ggml_tensor * residual; mix next; ggml_tensor * input; };
     struct selection { ggml_tensor * rows; ggml_tensor * mask; ggml_tensor * candidates; };

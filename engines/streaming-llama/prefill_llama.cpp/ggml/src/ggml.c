@@ -6382,7 +6382,7 @@ struct ggml_tensor * ggml_solve_tri(
 
 // ggml_lightning_indexer
 
-// ggml_gated_delta_net (QFNSTREAM: upstream ggml-org semantics)
+// ggml_gated_delta_net (QFN: upstream ggml-org semantics)
 
 struct ggml_tensor * ggml_gated_delta_net(
         struct ggml_context * ctx,
@@ -6423,7 +6423,7 @@ struct ggml_tensor * ggml_gated_delta_net(
     return result;
 }
 
-// ggml_qfn_qsa_select (QFNSTREAM)
+// ggml_qfn_qsa_select (QFN)
 
 struct ggml_tensor * ggml_qfn_qsa_select(
         struct ggml_context * ctx,
@@ -6445,7 +6445,7 @@ struct ggml_tensor * ggml_qfn_qsa_select(
     return result;
 }
 
-// ggml_qfn_hc_mix / ggml_qfn_hc_combine (QFNSTREAM)
+// ggml_qfn_hc_mix / ggml_qfn_hc_combine (QFN)
 
 struct ggml_tensor * ggml_qfn_hc_mix(struct ggml_context * ctx, struct ggml_tensor * xn, struct ggml_tensor * gate, float scale) {
     GGML_ASSERT(xn->type == GGML_TYPE_F32 && gate->type == GGML_TYPE_F32 && ggml_is_contiguous(xn) && ggml_is_contiguous(gate));
@@ -6472,7 +6472,7 @@ struct ggml_tensor * ggml_qfn_hc_combine(struct ggml_context * ctx, struct ggml_
     return result;
 }
 
-// ggml_qfn_slot_map (QFNSTREAM)
+// ggml_qfn_slot_map (QFN)
 
 struct ggml_tensor * ggml_qfn_slot_map(
         struct ggml_context * ctx,
@@ -6506,7 +6506,7 @@ void ggml_qfn_slot_map_set_record_latch(struct ggml_tensor * slot_map, void * de
     ggml_set_op_params_i32(slot_map, 4, (int32_t) (latch >> 32));
 }
 
-// ggml_qfn_qsa_attn (QFNSTREAM)
+// ggml_qfn_qsa_attn (QFN)
 
 struct ggml_tensor * ggml_qfn_qsa_attn(
         struct ggml_context * ctx,

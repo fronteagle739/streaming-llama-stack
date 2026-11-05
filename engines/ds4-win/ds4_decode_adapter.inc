@@ -21,7 +21,7 @@
 #endif
 
 static struct {
-    bool open;
+    bool open,directions_bound;
     ds4_model model;
     ds4_weights weights;
     ds41_gpu_graph graph;
@@ -31,6 +31,28 @@ static struct {
 
 static void ds4x_set_error(char *error, size_t cap, const char *message) {
     if (error && cap) snprintf(error, cap, "%s", message);
+}
+
+/* Metadata-only native identity; no engine, CUDA calls or tensor reads. */
+DS4X_EXPORT int ds4x_direction_model_identity(const char *path,uint8_t out[32]){
+    if(g_ds4x.open||!path||!out)return 0;
+    ds4_model model={0};model_open(&model,path,false,false);
+    const bool ok=ds4_direction_model_identity(&model,out);model_close(&model);return ok?1:0;
+}
+
+/* The producer owns an immutable bank for its entire KV namespace. A fresh
+ * decoder may bind it once; mutating a live frontier is refused. */
+DS4X_EXPORT int ds4x_direction_stack(const uint8_t identity[32],const float *pack,uint32_t count,uint64_t floats,char *error,size_t cap){
+    uint8_t actual[32];
+    if(!g_ds4x.open||g_ds4x.directions_bound||!identity||!ds4_direction_model_identity(&g_ds4x.model,actual)||memcmp(identity,actual,32)){
+        ds4x_set_error(error,cap,"fresh external decoder and exact direction model identity required");return 0;}
+    if(!ds41_direction_graph_stack(&g_ds4x.graph,pack,count,floats,error,cap))return 0;
+    ds4_gpu_decode_graphs_invalidate();g_ds4x.directions_bound=true;return 1;
+}
+
+DS4X_EXPORT uint64_t ds4x_direction_allocated_bytes(void) {
+    if(!g_ds4x.open)return 0;
+    return ds4_gpu_direction_allocated_bytes()+ds4_gpu_tensor_bytes(g_ds4x.graph.direction_stack);
 }
 
 DS4X_EXPORT int ds4x_host_cpu_v1(ds4_external_dot dot) {

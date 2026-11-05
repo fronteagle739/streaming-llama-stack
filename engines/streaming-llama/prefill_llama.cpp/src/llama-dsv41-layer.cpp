@@ -48,6 +48,7 @@ llama_dsv41_layer_graph::result llama_dsv41_layer_graph::build(uint32_t layer,co
 llama_dsv41_layer_graph::attention_part llama_dsv41_layer_graph::build_attention(uint32_t layer,const llama_dsv41_tile_plan & p,
         uint32_t compressed_rows,const weights & w,const inputs & in,const cache & state,
         const llama_dsv41_expert_profile::policy & expert) const {
+    ops.writer_layer=layer;
     llama_dsv41_expert_profile::validate(expert,p.count,std::getenv("DSV41_BOUNDARY_CAPTURE"));
     GGML_ASSERT(layer<40 && p.ratio==(layer<2?0u:layer<20?2u:1u));
     GGML_ASSERT(in.residual->ne[0]==5120 && in.residual->ne[1]==4 && in.residual->ne[2]==p.count);

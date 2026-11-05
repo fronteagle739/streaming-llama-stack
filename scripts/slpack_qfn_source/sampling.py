@@ -43,12 +43,12 @@ def sampling_defaults(meta: dict, source: dict | None = None) -> dict:
             if value is None: continue
             canonical = aliases.get(key, key)
             if canonical not in SAMPLING_KEYS:
-                raise ValueError(f"BLOCKED-OWNER: unsupported checkpoint generation default {key}")
+                raise ValueError(f"Unsupported checkpoint generation default {key}")
             if key != canonical and source.get(canonical) is not None: continue
             if key == "rep_pen" and source.get("repetition_penalty") is not None: continue
             out[canonical] = value
     unknown = [key for key, value in kv.items() if key.startswith("general.sampling.") and key not in GGUF_SAMPLING and value is not None]
-    if unknown: raise ValueError(f"BLOCKED-OWNER: unsupported GGUF sampling {unknown}")
+    if unknown: raise ValueError(f"Unsupported GGUF sampling {unknown}")
     out.update({field: _short(kv[key]) for key, field in GGUF_SAMPLING.items() if kv.get(key) is not None})
     legacy = meta.get("sampling") or {}
     if not isinstance(legacy, dict):

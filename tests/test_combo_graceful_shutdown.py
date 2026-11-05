@@ -116,7 +116,7 @@ def stuck_close(self):
 
 
 class NoKill(unittest.TestCase):
-    """Owner rule: a native/producer still alive after every graceful step is never killed."""
+    """Runtime contract: a native/producer still alive after every graceful step is never killed."""
 
     def test_stuck_native_stops_gpu_work_and_keeps_its_receipt(self):
         import json

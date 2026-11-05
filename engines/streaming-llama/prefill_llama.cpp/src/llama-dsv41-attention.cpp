@@ -111,5 +111,5 @@ ggml_tensor * llama_dsv41_attention_graph::finish(
     auto * low=mm(out_a,grouped,true); // native out_a has its own BF16 store
     low=ggml_cont_2d(ctx,ggml_permute(ctx,low,0,2,1,3),rank*groups,count);
     // complete()/expand() owns the final block BF16 boundary.
-    return mm(w.out_b,low,false);
+    return ops.writer(mm(w.out_b,low,false),w.out_b,low,0);
 }

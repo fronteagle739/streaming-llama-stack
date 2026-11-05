@@ -9,6 +9,8 @@ typedef struct {
     float typical,dyn_range,dyn_exponent,xtc_probability,xtc_threshold;
     float dry_multiplier,dry_base,top_n_sigma;
     int dry_allowed_length,dry_last_n;
+    float repeat,presence,frequency;
+    int repeat_last_n,context;
 } ds4_chain_config;
 #ifdef __cplusplus
 extern "C" {

@@ -211,7 +211,7 @@ def check_runtime(args,heavy=False):
     import psutil
     if psutil.virtual_memory().available<6*2**30:raise MemoryError('Available physical RAM below 6GiB')
     if psutil.Process().memory_info().rss>4*2**30:raise MemoryError('4GiB RSS budget exceeded')
-    if (args.runtime/'STOP').exists():raise InterruptedError('Owner cooperative STOP')
+    if (args.runtime/'STOP').exists():raise InterruptedError('Cooperative STOP')
     if heavy:
         if getattr(args,'timing_marker',None) and args.timing_marker.exists():
             with args.timing_marker.open(encoding='utf-8-sig') as marker:

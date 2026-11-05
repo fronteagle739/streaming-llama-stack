@@ -77,7 +77,7 @@ class HeartbeatTest(unittest.TestCase):
 
     def test_window_is_renewed_while_progressing_and_keepalive_is_sent(self):
         beats = []
-        self.proxy.window(True, 'lease');first = json.loads(self.window.read_text())['deadline']
+        self.proxy.window(True);first = json.loads(self.window.read_text())['deadline']
         with self.proxy.heartbeat(lambda: beats.append(1)):time.sleep(.4)
         self.assertGreater(json.loads(self.window.read_text())['deadline'], first)
         self.assertGreater(len(beats), 2)
@@ -85,7 +85,7 @@ class HeartbeatTest(unittest.TestCase):
     def test_window_lapses_when_the_producer_stalls(self):
         process = type('P', (), {})();process.last_progress = time.monotonic() - 10
         self.proxy.engine.producer = type('C', (), {'process': process})()
-        self.proxy.window(True, 'lease');first = json.loads(self.window.read_text())['deadline']
+        self.proxy.window(True);first = json.loads(self.window.read_text())['deadline']
         beats = []
         with self.proxy.heartbeat(lambda: beats.append(1)):time.sleep(.3)
         self.assertEqual(json.loads(self.window.read_text())['deadline'], first)
@@ -96,7 +96,9 @@ class HeartbeatTest(unittest.TestCase):
         # the guardian stopped the server for a 'foreign' hold that was our own new lease.
         from slstack.combo_single import SingleEngine
         engine = self.proxy.engine
-        self.proxy.request_active = True;self.proxy.window(True, 'old')
+        engine.lease_id='old'
+        self.proxy.request_active = True;self.proxy.window(True)
+        self.assertEqual(json.loads(self.window.read_text())['lease_id'],'old')
         engine.lease_id = 'new';SingleEngine.lease_changed(engine)
         self.assertEqual(json.loads(self.window.read_text())['lease_id'], 'new')
         self.proxy.request_active = False;engine.lease_id = 'later';SingleEngine.lease_changed(engine)

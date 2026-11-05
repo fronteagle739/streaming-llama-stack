@@ -192,7 +192,7 @@ void qfn_pack::configure_generation(const std::string & raw, const std::string &
         }
         else if (key == "do_sample") {
             if (!value.is_boolean()) throw std::runtime_error("generation do_sample must be boolean");
-        } else throw std::runtime_error("BLOCKED-OWNER: unsupported generation default " + key);
+        } else throw std::runtime_error("Unsupported generation default " + key);
     };
     auto token = [&](const json & value, const std::string & key) {
         if (value.is_null()) return int32_t(-1); // HF None is an explicit absent role, not fallback.

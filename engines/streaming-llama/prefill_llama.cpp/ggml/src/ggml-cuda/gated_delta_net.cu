@@ -1,4 +1,4 @@
-// QFNSTREAM: upstream ggml-org gated_delta_net.cu (a91eab67d); PDL sync and launch helper removed.
+// QFN: upstream ggml-org gated_delta_net.cu (a91eab67d); PDL sync and launch helper removed.
 #include "gated_delta_net.cuh"
 #include "gated-delta-net-mma.cuh"
 #include "ggml-cuda/common.cuh"

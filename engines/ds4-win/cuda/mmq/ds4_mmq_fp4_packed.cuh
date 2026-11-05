@@ -15,6 +15,7 @@
 // block terms differs from the canonical kernel.
 //
 // Included at the end of ds4_mmq.cu (it uses that unit's ggml helpers).
+#include "../../ds4_direction_slots.h"
 
 static __device__ __forceinline__ int2 ds4_fp4p_expand(const uint32_t q4) {
     // Eight sequential nibbles -> two ints of four int8 table values each,
@@ -39,6 +40,8 @@ static __device__ __forceinline__ int2 ds4_fp4p_expand(const uint32_t q4) {
 // block's 16 bytes.
 // Slots live in the caller's first tier (the expert-cache pool, original
 // expert stride) or, read in place, its second (victim) tier.
+#include "ds4_fp4_packed_layout.cuh"
+
 struct ds4_fp4p_tiers {
     const uint8_t *l1, *l2;
     uint64_t l1_bytes, l2_bytes;
@@ -145,7 +148,7 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_gate_up_kernel(
 
 // Down projection summed over the token's six slots -> out. One CTA = 16
 // rows, one half-warp per row; slots summed in order after their reduction.
-template <int K>
+template <int K, bool Rank = false>
 static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
         const ds4_fp4p_tiers            Td,
         const block_q8_1 * __restrict__ mq,
@@ -154,7 +157,8 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
         float            * __restrict__ out,
         const uint32_t                  N,
         const uint32_t                  n_slots,
-        const float      * __restrict__ cpu_acc) {
+        const float      * __restrict__ cpu_acc,
+        ds4_mmq_writer_delta delta = {}) {
     constexpr int NB = K / 32, NG = K / 128, TOT = 6 * NB, R = 16;
     __shared__ int sx[TOT * 8];
     __shared__ float sd[TOT];
@@ -204,10 +208,69 @@ static __global__ void __launch_bounds__(256) ds4_fp4p_down_sum6_kernel(
         if (lane == 0) {
             if (id == -2) acc = cpu_acc[(uint64_t) a * N + row];
             if (!isfinite(acc)) acc = 0.0f;
+            if (Rank && ds4_direction_rank_slot_active(id)) {
+                const float *dot=delta.dots+((uint64_t)tok*6u+a)*delta.rank;
+                const float *b=delta.b+(uint64_t)row*delta.rank;
+                for(uint32_t k=0;k<delta.rank;k++)acc+=b[k]*dot[k];
+            }
             total += acc;
         }
     }
     if (lane == 0 && row < N) out[(uint64_t) tok * N + row] = total;
+}
+
+// Reuse the packed path's exact quantized activation (including its F16
+// scale), rather than re-quantizing mid on a separate arithmetic path.
+static __global__ void ds4_fp4p_rank_dot_kernel(
+        ds4_mmq_writer_delta delta, const block_q8_1 *mq,
+        uint32_t stride, uint32_t width) {
+    const uint32_t assignment=blockIdx.x, rank=blockIdx.y;
+    const float *a=delta.a+((uint64_t)assignment*delta.rank+rank)*width;
+    const block_q8_1 *x=mq+(uint64_t)assignment*stride;
+    float sum=0;
+    for(uint32_t col=threadIdx.x;col<width;col+=blockDim.x)
+        sum+=a[col]*(__low2float(x[col/32u].ds)*(float)x[col/32u].qs[col%32u]);
+    __shared__ float partial[256];partial[threadIdx.x]=sum;__syncthreads();
+    for(unsigned n=128;n;n>>=1){if(threadIdx.x<n)partial[threadIdx.x]+=partial[threadIdx.x+n];__syncthreads();}
+    if(!threadIdx.x)delta.dots[(uint64_t)assignment*delta.rank+rank]=partial[0];
+}
+
+static __global__ void ds4_fp4p_rank_add_kernel(float *out,ds4_mmq_writer_delta delta,uint32_t width) {
+    const uint32_t row=blockIdx.x*blockDim.x+threadIdx.x;
+    if(row>=width)return;
+    float change=0;
+    for(uint32_t a=0;a<6u;a++)for(uint32_t k=0;k<delta.rank;k++)
+        change+=delta.b[(uint64_t)row*delta.rank+k]*delta.dots[(uint64_t)a*delta.rank+k];
+    out[row]+=change;
+}
+
+static int ds4_fp4p_down_rank_control(const void *weight,uint64_t stride,
+        const float *mid,const int32_t *ids,float *out,uint32_t slots,
+        const float *cpu_acc,const ds4_mmq_writer_delta *delta,cudaStream_t stream) {
+    constexpr uint32_t K=2304u,N=5120u;
+    if(!weight || !mid || !ids || !out || !slots || stride!=(uint64_t)N*K/32u*17u ||
+        (delta && (!delta->a || !delta->b || !delta->dots || !delta->rank || delta->rank>256u)))return -1;
+    const uint32_t padded=(uint32_t)GGML_PAD((int64_t)K,MATRIX_ROW_PADDING);
+    static block_q8_1 *mq=nullptr;
+    if(!mq && cudaMalloc((void**)&mq,(size_t)6u*(padded/32u)*sizeof(block_q8_1))!=cudaSuccess)return -2;
+    quantize_row_q8_1_cuda(mid,nullptr,mq,GGML_TYPE_MXFP4,K,K,K,(int64_t)K*6,padded,1,6,1,stream);
+    const ds4_fp4p_tiers source{(const uint8_t*)weight,nullptr,stride,0u,slots};
+    if(delta) {
+        ds4_fp4p_rank_dot_kernel<<<dim3(6u,delta->rank),256,0,stream>>>(*delta,mq,padded/32u,K);
+        ds4_fp4p_down_sum6_kernel<K,true><<<N/16u,256,0,stream>>>(source,mq,padded/32u,ids,out,N,slots,cpu_acc,*delta);
+    } else ds4_fp4p_down_sum6_kernel<K><<<N/16u,256,0,stream>>>(source,mq,padded/32u,ids,out,N,slots,cpu_acc);
+    return cudaGetLastError()==cudaSuccess?0:-3;
+}
+extern "C" int ds4_mmq_mxfp4_packed_down_rank(const void *weight,uint64_t stride,
+        const float *mid,const int32_t *ids,float *out,uint32_t slots,
+        const ds4_mmq_writer_delta *delta,cudaStream_t stream) {
+    return ds4_fp4p_down_rank_control(weight,stride,mid,ids,out,slots,nullptr,delta,stream);
+}
+extern "C" int ds4_mmq_mxfp4_packed_down_rank_mixed(const void *weight,uint64_t stride,
+        const float *mid,const int32_t *ids,float *out,uint32_t slots,
+        const float *cpu_acc,const ds4_mmq_writer_delta *delta,cudaStream_t stream) {
+    if(!cpu_acc)return -1;
+    return ds4_fp4p_down_rank_control(weight,stride,mid,ids,out,slots,cpu_acc,delta,stream);
 }
 
 // Lossless packed -> canonical block_mxfp4 (17 B per 32 elements) for one
@@ -223,7 +286,7 @@ static __global__ void ds4_fp4p_to_canonical_kernel(
     const uint8_t *s = ds4_fp4p_slot(T, (uint32_t) ids[a]);
     const uint8_t *v = s + (uint64_t) n * (K / 2u) + (uint64_t) b * 16u;
     uint8_t *o = dst + (uint64_t) a * N * nb * 17u + t * 17u;
-    o[0] = s[(uint64_t) N * (K / 2u) + ((uint64_t) (b >> 2) * N + n) * 4u + (b & 3u)];
+    o[0] = s[ds4_fp4p_scale_offset(N,K,n,b)];
     for (int i = 0; i < 16; ++i) {
         const uint8_t lo = (v[i >> 1] >> (4 * (i & 1))) & 15u;
         const uint8_t hi = (v[(i + 16) >> 1] >> (4 * (i & 1))) & 15u;
@@ -241,7 +304,7 @@ static __global__ void ds4_fp4p_iota_kernel(int32_t *ids, uint32_t n) {
     if (i < n) ids[i] = (int32_t) i;
 }
 
-extern "C" int ds4_mmq_mxfp4_packed_moe(
+extern "C" int ds4_mmq_mxfp4_packed_moe_rank(
         const void * W_gate, const void * W_up, const void * W_down,
         uint64_t gate_slot_bytes, uint64_t down_slot_bytes,
         const void * W_gate2, const void * W_up2, const void * W_down2,
@@ -250,8 +313,12 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         float * mid_f32, float * out_f32,
         int mid_dim, int in_dim, int out_dim, int n_tokens, int n_slots,
         float clamp, int reference, cudaStream_t stream,
-        const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx) {
+        const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx,
+        const ds4_mmq_writer_delta *delta) {
     const char *tag = "ds4_mmq_mxfp4_packed_moe";
+    if(delta && (!delta->a || !delta->b || !delta->dots || !delta->rank || delta->rank>256u)) {
+        fprintf(stderr,"%s: invalid resident rank factors\n",tag);return -1;
+    }
     if (cpu_acc && (reference || n_tokens != 1 || !cpu_join)) {
         fprintf(stderr, "%s: CPU expert merge is single-row, non-reference only\n", tag);
         return -1;
@@ -271,17 +338,17 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
         // Diagnostic: packed kernels and the canonical reference on the same
         // slots; the reference result is kept, the differences are printed.
         static int calls = 0;
-        const int rc = ds4_mmq_mxfp4_packed_moe(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
+        const int rc = ds4_mmq_mxfp4_packed_moe_rank(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
                                                 gate2_slot_bytes, down2_slot_bytes, l1_slots, X_f32, ids, weights,
-                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 0, stream, nullptr, nullptr, nullptr);
+                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 0, stream, nullptr, nullptr, nullptr,delta);
         in_check = false;
         if (rc) return rc;
         std::vector<float> mp((size_t) 6 * mid_dim), op(out_dim), mr((size_t) 6 * mid_dim), orf(out_dim);
         cudaMemcpyAsync(mp.data(), mid_f32, mp.size() * 4, cudaMemcpyDeviceToHost, stream);
         cudaMemcpyAsync(op.data(), out_f32, op.size() * 4, cudaMemcpyDeviceToHost, stream);
-        const int rr = ds4_mmq_mxfp4_packed_moe(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
+        const int rr = ds4_mmq_mxfp4_packed_moe_rank(W_gate, W_up, W_down, gate_slot_bytes, down_slot_bytes, W_gate2, W_up2, W_down2,
                                                 gate2_slot_bytes, down2_slot_bytes, l1_slots, X_f32, ids, weights,
-                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 1, stream, nullptr, nullptr, nullptr);
+                                                mid_f32, out_f32, mid_dim, in_dim, out_dim, 1, n_slots, clamp, 1, stream, nullptr, nullptr, nullptr,delta);
         if (rr) return rr;
         cudaMemcpyAsync(mr.data(), mid_f32, mr.size() * 4, cudaMemcpyDeviceToHost, stream);
         cudaMemcpyAsync(orf.data(), out_f32, orf.size() * 4, cudaMemcpyDeviceToHost, stream);
@@ -327,6 +394,16 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
                                                     mid_dim, in_dim, 1, 6, 6, clamp, stream);
         if (rc == 0) rc = ds4_mmq_mxfp4_moe_down_sum6_vec(canon + 2u * gb, mid_f32, iota, out_f32,
                                                           out_dim, mid_dim, 1, 6, 6, stream);
+        if(rc==0 && delta) {
+            static block_q8_1 *rank_mq=nullptr;
+            const uint32_t stride=(uint32_t)GGML_PAD((int64_t)mid_dim,MATRIX_ROW_PADDING)/32u;
+            if(!rank_mq && cudaMalloc((void**)&rank_mq,(size_t)6u*stride*sizeof(block_q8_1))!=cudaSuccess)return -2;
+            quantize_row_q8_1_cuda(mid_f32,nullptr,rank_mq,GGML_TYPE_MXFP4,mid_dim,
+                mid_dim,mid_dim,(int64_t)mid_dim*6,stride*32u,1,6,1,stream);
+            ds4_fp4p_rank_dot_kernel<<<dim3(6u,delta->rank),256,0,stream>>>(*delta,rank_mq,stride,(uint32_t)mid_dim);
+            ds4_fp4p_rank_add_kernel<<<((unsigned)out_dim+255u)/256u,256,0,stream>>>(out_f32,*delta,(uint32_t)out_dim);
+            if(cudaGetLastError()!=cudaSuccess)return -3;
+        }
         static const int perturb = [] { const char *v = getenv("DS4_FP4_PACKED_PERTURB"); return v && v[0] == '1' && !v[1]; }();
         if (rc == 0 && perturb) ds4_fp4p_scale_kernel<<<(out_dim + 255) / 256, 256, 0, stream>>>(out_f32, (uint32_t) out_dim, 1.0f + 1.0e-6f);
         return rc;
@@ -361,16 +438,39 @@ extern "C" int ds4_mmq_mxfp4_packed_moe(
     ds4_fp4p_gate_up_kernel<5120><<<dim3((unsigned) mid_dim / 16u, (unsigned) n_assign), 256, 0, stream>>>(
         Tg, Tu, (const block_q8_1 *) xq,
         (uint32_t) (x_pad / QK8_1), ids, weights, mid_f32, (uint32_t) mid_dim, (uint32_t) n_slots, clamp);
-    quantize_row_q8_1_cuda(mid_f32, nullptr, (void *) mq, GGML_TYPE_MXFP4, mid_dim,
+    if(!(delta && cpu_acc))quantize_row_q8_1_cuda(mid_f32, nullptr, (void *) mq, GGML_TYPE_MXFP4, mid_dim,
                            mid_dim, mid_dim, (int64_t) mid_dim * n_assign, m_pad, 1, n_assign, 1, stream);
     // Join the CPU lane (RAM-tier experts) at the layer dependency: the gate/up
     // work above is already queued; the callback waits for the CPU job only if
     // it is still running and queues the upload of its per-row sums.
     if (cpu_acc && !cpu_join(cpu_join_ctx, stream)) { fprintf(stderr, "%s: CPU expert join failed\n", tag); return -4; }
-    ds4_fp4p_down_sum6_kernel<2304><<<dim3((unsigned) out_dim / 16u, (unsigned) n_tokens), 256, 0, stream>>>(
-        Td, (const block_q8_1 *) mq, (uint32_t) (m_pad / QK8_1),
-        ids, out_f32, (uint32_t) out_dim, (uint32_t) n_slots, cpu_acc);
+    if(delta && cpu_acc)quantize_row_q8_1_cuda(mid_f32, nullptr, (void *) mq, GGML_TYPE_MXFP4, mid_dim,
+                           mid_dim, mid_dim, (int64_t) mid_dim * n_assign, m_pad, 1, n_assign, 1, stream);
+    if(delta) {
+        ds4_fp4p_rank_dot_kernel<<<dim3((unsigned)n_assign,delta->rank),256,0,stream>>>(
+            *delta,(const block_q8_1 *)mq,(uint32_t)(m_pad/QK8_1),(uint32_t)mid_dim);
+        ds4_fp4p_down_sum6_kernel<2304,true><<<dim3((unsigned)out_dim/16u,(unsigned)n_tokens),256,0,stream>>>(
+            Td,(const block_q8_1 *)mq,(uint32_t)(m_pad/QK8_1),ids,out_f32,
+            (uint32_t)out_dim,(uint32_t)n_slots,cpu_acc,*delta);
+    }else ds4_fp4p_down_sum6_kernel<2304><<<dim3((unsigned) out_dim / 16u, (unsigned) n_tokens), 256, 0, stream>>>(
+            Td, (const block_q8_1 *) mq, (uint32_t) (m_pad / QK8_1),
+            ids, out_f32, (uint32_t) out_dim, (uint32_t) n_slots, cpu_acc);
     const cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) { fprintf(stderr, "%s: launch failed: %s\n", tag, cudaGetErrorString(err)); return -3; }
     return 0;
+}
+
+// Preserve the established C ABI and its unsteered specialization verbatim.
+extern "C" int ds4_mmq_mxfp4_packed_moe(
+        const void *W_gate,const void *W_up,const void *W_down,
+        uint64_t gate_slot_bytes,uint64_t down_slot_bytes,
+        const void *W_gate2,const void *W_up2,const void *W_down2,
+        uint64_t gate2_slot_bytes,uint64_t down2_slot_bytes,int l1_slots,
+        const float *X_f32,const int32_t *ids,const float *weights,float *mid_f32,float *out_f32,
+        int mid_dim,int in_dim,int out_dim,int n_tokens,int n_slots,float clamp,int reference,cudaStream_t stream,
+        const float *cpu_acc,int(*cpu_join)(void*,cudaStream_t),void *cpu_join_ctx) {
+    return ds4_mmq_mxfp4_packed_moe_rank(W_gate,W_up,W_down,gate_slot_bytes,down_slot_bytes,
+        W_gate2,W_up2,W_down2,gate2_slot_bytes,down2_slot_bytes,l1_slots,X_f32,ids,weights,
+        mid_f32,out_f32,mid_dim,in_dim,out_dim,n_tokens,n_slots,clamp,reference,stream,
+        cpu_acc,cpu_join,cpu_join_ctx,nullptr);
 }

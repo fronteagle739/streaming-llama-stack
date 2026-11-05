@@ -1,5 +1,5 @@
-# Shared public integration implementation.
-# Source body unchanged; only this two-line provenance header added.
+# Derived from Studio backend/studio/job_paging.py at 2774636281ab32bf871497f0a8caae23c6b6cdc7.
+# The stack adds bounded page-address diagnostics; enforcement is unchanged.
 """Shared paging policy and bounded, process-attributed paging observations.
 
 Windows PagefileUsage is commit, not actual swap. Anonymous page locations use
@@ -234,6 +234,7 @@ class JobPaging:
         if not 1<=max_pages<=65536:raise ValueError('bounded1..65536 page observation required')
         self.max_pages=max_pages;self.cursors={};self.scanned_pages=0;self.completed_scans=0
         self.last_seconds=0.;self.last_processes=[];self.ledger=PagefileLedger()
+        self.last_page_observations=[]
         self.hard_fault_rate=None;self.fault_source=None
         self.hard_fault_attribution='UNAVAILABLE: pagefile-specific hard-fault events are not available on this platform'
         self.attribution='bounded process pagefile observation'
@@ -309,6 +310,20 @@ class JobPaging:
                     count=min((end-address)//mmap.PAGESIZE,limit-scanned)
                     if count:
                         flags=self.windows_pages(handle,range(address,address+count*mmap.PAGESIZE,mmap.PAGESIZE))
+                        observed=[(address+i*mmap.PAGESIZE,flag) for i,flag in enumerate(flags)
+                            if pagefile_location(flag) and (region.kind!=0x1000000 or not flag&((1<<15)|(1<<30)))]
+                        if observed:
+                            module=''
+                            if region.kind in (0x1000000,0x40000):
+                                name=ctypes.create_unicode_buffer(2048)
+                                function=self.kernel.K32GetMappedFileNameW
+                                function.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_ulong]
+                                function.restype=ctypes.c_ulong
+                                if function(handle,region.base,name,len(name)):module=name.value
+                            self.last_page_observations=[dict(pid=proc.pid,address=hex(at),flags=hex(flag),
+                                region_base=hex(int(region.base or 0)),allocation_base=hex(int(region.allocation or 0)),
+                                region_bytes=region.size,kind=hex(region.kind),protect=hex(region.protect),module=module)
+                                for at,flag in observed[:8]]
                         found+=sum(pagefile_location(flag) and (region.kind!=0x1000000
                             or not flag&((1<<15)|(1<<30))) for flag in flags)*mmap.PAGESIZE
                         scanned+=count;address+=count*mmap.PAGESIZE
@@ -401,7 +416,8 @@ class PagingWatch:
             pagefile_hard_fault_attribution=self.fault_attribution,
             pagefile_hard_fault_limit_per_second=100,pagefile_hard_fault_duration_seconds=5,
             scan_pages=getattr(self.observer,'scanned_pages',None),
-            last_paged_processes=getattr(self.observer,'last_processes',None))
+            last_paged_processes=getattr(self.observer,'last_processes',None),
+            last_page_observations=getattr(self.observer,'last_page_observations',None))
 
     def close(self):
         close=getattr(self.observer,'close',None)

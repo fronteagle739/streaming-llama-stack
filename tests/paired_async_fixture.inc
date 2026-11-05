@@ -20,6 +20,7 @@ static void test_progressing_hash_reply(void){
         struct sockaddr_in addr={.sin_family=AF_INET,.sin_addr.s_addr=htonl(INADDR_LOOPBACK)};
         assert(!bind(listener,(void*)&addr,sizeof(addr))&&!listen(listener,8));socklen_t size=sizeof(addr);assert(!getsockname(listener,(void*)&addr,&size));
         ds4_ns_config cfg={0};cfg.http.broker=addr;strcpy(cfg.http.host,"localhost");strcpy(cfg.http.token,"cpu-fixture");
+        strcpy(cfg.producer_model_sha256,DS4_NF_MODEL_SHA); /* status identity must match the fixture producer */
         ds4_ns_session s={.config=&cfg};strcpy(s.id,"0123456789abcdef0123456789abcdef");
         reply_fixture f={listener,pair[1],failed};pthread_t worker;assert(!pthread_create(&worker,NULL,reply_fixture_worker,&f));
         double start=ds4_nf_now();ds4_nf_io io={.fd=pair[0],.deadline=start+.25,.last_activity=start,.progress_window=.25};

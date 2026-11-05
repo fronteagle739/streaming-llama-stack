@@ -1,4 +1,4 @@
-// QFNSTREAM op checks: each new ggml type/op on CUDA against the CPU backend (and an F32 reference where the
+// QFN op checks: each new ggml type/op on CUDA against the CPU backend (and an F32 reference where the
 // two backends quantize activations differently). Exit code 0 only if every case passes.
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -598,11 +598,11 @@ static void test_slot_map_record_only(const backend_pair & bp) {
     ggml_qfn_bell * bell = nullptr;
     void * device = nullptr;
     if (cudaHostAlloc((void **) &bell, sizeof(*bell), cudaHostAllocMapped) != cudaSuccess) {
-        report("QFNV3OPT slot map record-only", false, "mapped allocation failed");
+        report("decode replay slot map record-only", false, "mapped allocation failed");
         return;
     }
     if (cudaHostGetDevicePointer(&device, bell, 0) != cudaSuccess) {
-        report("QFNV3OPT slot map record-only", false, "mapped pointer failed");
+        report("decode replay slot map record-only", false, "mapped pointer failed");
         cudaFreeHost(bell);
         return;
     }
@@ -612,7 +612,7 @@ static void test_slot_map_record_only(const backend_pair & bp) {
     int32_t * latch = nullptr;
     if (cudaMalloc((void **) &latch, sizeof(int32_t)) != cudaSuccess ||
         cudaMemset(latch, 0, sizeof(int32_t)) != cudaSuccess || cudaDeviceSynchronize() != cudaSuccess) {
-        report("QFNV3OPT slot map record-only", false, "device latch allocation/reset failed");
+        report("decode replay slot map record-only", false, "device latch allocation/reset failed");
         if (latch) cudaFree(latch);
         cudaFreeHost(bell);
         return;
@@ -640,7 +640,7 @@ static void test_slot_map_record_only(const backend_pair & bp) {
     const bool second = check(9);
     const bool kept = bell->error == 7 * 64 + 3 && bell->layer == 3 && bell->n == 4 &&
                       std::memcmp(bell->sel, ids, sizeof(ids)) == 0 && bell->req == -1 && bell->ack == -1;
-    report("QFNV3OPT slot map record-only", first && second && kept,
+    report("decode replay slot map record-only", first && second && kept,
            "device atomic latch + mapped record; first layer/selection/error kept; missing -> slot 0; no wait");
     cudaFree(latch);
     cudaFreeHost(bell);

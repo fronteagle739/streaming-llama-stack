@@ -412,6 +412,7 @@ static bool json_raw_value(const char **p, char **out) {
 #include "ds4_native_frontier.inc"
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
 #include "ds4_native_session_transport.inc"
+#include "ds4_qfn_native_session.inc"
 #include "ds4_native_session_memory.inc"
 #include "ds4_native_session_setup.inc"
 #endif
@@ -4616,7 +4617,7 @@ static bool parse_chat_request(ds4_engine *e, server *s, const char *body, int d
             r->min_p = (float)v;
             r->min_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,ds4_paired_vocab_size)) {
                 free(key);
                 goto bad;
             }
@@ -4858,7 +4859,7 @@ static bool parse_anthropic_request(ds4_engine *e, server *s, const char *body, 
             r->top_p = (float)v;
             r->top_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,ds4_paired_vocab_size)) {
                 free(key);
                 goto bad;
             }
@@ -6050,6 +6051,7 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
     r->model_syntax = server_model_syntax_for_engine(e);
     const char *p = body;
     char *prompt = NULL;
+    bool got_prompt=false,token_prompt=false;
     bool got_thinking = false;
     bool thinking_enabled = true;
     ds4_think_mode reasoning_effort = g_default_reasoning_effort;
@@ -6068,6 +6070,20 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
         }
         p++;
         if (!strcmp(key, "prompt")) {
+            if(got_prompt){free(key);goto bad;}got_prompt=true;
+            json_ws(&p);const char *peek=p;
+            if(*peek=='['){peek++;json_ws(&peek);}
+            if(*p=='[' && (*peek=='-' || isdigit((unsigned char)*peek))) {
+                token_prompt=true;p++;json_ws(&p);
+                for(;;) {
+                    double value=0;
+                    if(!json_number(&p,&value)||value<0||value>INT_MAX||floor(value)!=value||
+                       (e&&value>=ds4_engine_vocab_size(e))||r->prompt.len>=ctx_size) {free(key);goto bad;}
+                    ds4_tokens_push(&r->prompt,(int)value);json_ws(&p);
+                    if(*p==']'){p++;break;}if(*p++!=','){free(key);goto bad;}json_ws(&p);
+                }
+                free(key);json_ws(&p);if(*p==',')p++;json_ws(&p);continue;
+            }
             char *tmp = NULL;
             if (!parse_prompt(&p, &tmp)) {
                 free(tmp);
@@ -6114,7 +6130,7 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
             r->min_p = (float)v;
             r->min_p_set = true;
         } else if (!strcmp(key, "top_k")) {
-            if (!ds4_paired_int(&p, &r->top_k,0,1024)) {
+            if (!ds4_paired_int(&p, &r->top_k,0,ds4_paired_vocab_size)) {
                 free(key);
                 goto bad;
             }
@@ -6173,7 +6189,7 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
         json_ws(&p);
     }
     if (*p != '}') goto bad;
-    if (!prompt) {
+    if (!prompt && !token_prompt) {
         snprintf(err, errlen, "missing prompt");
         request_free(r);
         return false;
@@ -6183,6 +6199,14 @@ static bool parse_completion_request(ds4_engine *e, const char *body, int def_to
     if (r->utility) thinking_enabled = false;
     r->think_mode = ds4_think_mode_for_context(
         think_mode_from_enabled(thinking_enabled, reasoning_effort), ctx_size);
+    if(token_prompt) {
+        buf text={0};
+        for(int i=0;i<r->prompt.len;i++) {
+            size_t n=0;char *piece=ds4_token_text(e,r->prompt.v[i],&n);
+            if(piece){buf_append(&text,piece,n);free(piece);}
+        }
+        r->prompt_text=buf_take(&text);return true;
+    }
     chat_msgs msgs = {0};
     chat_msg sys = {0};
     sys.role = xstrdup("system");
@@ -11344,11 +11368,13 @@ typedef struct {
 } server_dspark_cycle;
 
 struct server_slot {
+    int qfn_image_prefill_route; /* 0 local, 1 RTX import, 2 imported-image append */
     server *srv;
     int id;
     ds4_session *session;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
     ds4_ns_session native_session;
+    ds4_qfn_session qfn_session;
     char native_conversation[65];
     char native_notice[DS4_NS_NOTICE_CAP]; /* this turn's visible recovery notice (prefill_progress.notice) */
 #endif
@@ -11557,6 +11583,11 @@ static bool server_encode_image(server *s, const server_image_input *input,
                                 ds4_vision_embedding *out,
                                 char *err, size_t errlen) {
     if (server_image_cached(s, input, out)) return true;
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_enabled()&&ds4_qfn_peer.vision_port) {
+        if(ds4_qfn_remote_image(s->engine,input->encoded,input->encoded_len,out,err,errlen))return false;
+    } else
+#endif
     if (!ds4_engine_vision_encode_memory(s->engine, input->encoded,
                                          input->encoded_len, out, err, errlen))
         return false;
@@ -14077,6 +14108,21 @@ static bool server_native_fallback(server *s, server_slot *slot, const ds4_token
     ds4_session_report_progress(slot->session,"prefill_chunk",ds4_session_pos(slot->session),prompt->len);
     return true;
 }
+static bool server_qfn_fallback(server *s,server_slot *slot,const ds4_tokens *prompt,const char *err) {
+    const bool force=slot->running&&!strncmp(slot->running->req.native_conversation,"slstack-qualification-",21);
+    if(!ds4_ns_should_fallback(server_native_frontier_cancelled(slot),force))return false;
+    char notice[DS4_NS_NOTICE_CAP];ds4_ns_fallback_notice(notice,sizeof(notice),err);
+    pthread_mutex_lock(&s->inference_mu);
+    ds4_qfn_session_forget(&slot->qfn_session);
+    const int live=ds4_session_pos(slot->session),common=ds4_session_common_prefix(slot->session,prompt);
+    slot->qfn_session.request_cached=ds4_session_checkpoint_valid(slot->session)&&common==live?live:0;
+    snprintf(slot->qfn_session.rebuild_reason,sizeof(slot->qfn_session.rebuild_reason),"Rebuilding the lost RTX peer checkpoint after visible Mac fallback.");
+    pthread_mutex_unlock(&s->inference_mu);
+    server_native_notice(slot,notice);
+    server_log(DS4_LOG_PREFILL,"QFN_PEER_FALLBACK route=mac tokens=%d live=%d notice=%s",prompt->len,live,notice);
+    ds4_session_report_progress(slot->session,"prefill_chunk",slot->qfn_session.request_cached,prompt->len);
+    return true;
+}
 #endif
 
 /* Synchronize one resident slot without monopolizing the model executor.  A
@@ -14088,6 +14134,46 @@ static int server_session_sync(server *s, server_slot *slot,
                                char *err, size_t errlen) {
     if (!s || !slot || !prompt) return 1;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    const bool qfn_qualification=ds4_qfn_peer_enabled()&&slot->running&&!strncmp(slot->running->req.native_conversation,"slstack-qualification-",22);
+    if (ds4_qfn_peer_enabled() && (qfn_qualification||prompt->len >= (int)ds4_qfn_peer.minimum_tokens)) {
+        if (!server_prefill_enter(s,slot)) return DS4_SESSION_SYNC_INTERRUPTED;
+        const int live=ds4_session_pos(slot->session);
+        const int common=ds4_session_common_prefix(slot->session,prompt);
+        const bool local_append=!qfn_qualification&&common==live && prompt->len>=live &&
+            (uint32_t)(prompt->len-live)<=ds4_qfn_peer.local_append_max;
+        if (!local_append) {
+            int rc=ds4_qfn_peer_prefill(s->engine,slot->session,&slot->qfn_session,prompt,NULL,0,s->ctx_size,
+                server_native_frontier_cancelled,slot,err,errlen);
+            if(!rc&&slot->qfn_session.rebuild_reason[0]) {
+                server_native_notice(slot,slot->qfn_session.rebuild_reason);
+                ds4_session_report_progress(slot->session,"prefill_chunk",prompt->len,prompt->len);
+            }
+            if(!rc && ds4_qfn_test_trace_rows && ds4_session_qfn_trace_begin(slot->session,ds4_qfn_test_trace_rows)) {
+                snprintf(err,errlen,"QFN test trace allocation failed");server_prefill_leave(s);return -1;
+            }
+            server_prefill_leave(s);
+            if(!rc||!server_qfn_fallback(s,slot,prompt,err))return rc;
+            if(err&&errlen)err[0]=0;
+        } else {
+            server_prefill_leave(s);
+        }
+    }
+    if(ds4_qfn_peer_enabled()&&slot->qfn_session.started) {
+        const int live=ds4_session_pos(slot->session),common=ds4_session_common_prefix(slot->session,prompt);
+        if(common!=live||prompt->len<live||(uint32_t)live<slot->qfn_session.captured_position) {
+            /* A different short conversation takes the local crossover. Its
+             * fresh graph must not inherit the previous paired frontier.
+             * The live-cache miss path may already have invalidated the local
+             * position to zero; its queued immutable peer owners still need a
+             * strict join before that old identity can be retired. */
+            pthread_mutex_lock(&s->inference_mu);
+            int joined=ds4_qfn_join(&slot->qfn_session,err,errlen);
+            ds4_qfn_session_forget(&slot->qfn_session);slot->qfn_session.request_cached=0;
+            pthread_mutex_unlock(&s->inference_mu);
+            if(joined)return -1;
+            server_log(DS4_LOG_PREFILL,"QFN_PEER_NEW_CONVERSATION route=local previous_rows=%d prompt_rows=%d",live,prompt->len);
+        }
+    }
     if (s->native_session && !ds4_ns_local_first(&slot->native_session,slot->session,prompt)) {
         if (!server_prefill_enter(s,slot)) return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,NULL,0,
@@ -14100,6 +14186,11 @@ static int server_session_sync(server *s, server_slot *slot,
     if (!s->batched_mode) {
         if (!server_prefill_enter(s, slot)) return DS4_SESSION_SYNC_INTERRUPTED;
         int rc = ds4_session_sync(slot->session, prompt, err, errlen);
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+        if(!rc&&ds4_qfn_test_trace_rows&&ds4_session_qfn_trace_begin(slot->session,ds4_qfn_test_trace_rows)) {
+            snprintf(err,errlen,"QFN local test trace allocation failed");rc=-1;
+        }
+#endif
         server_prefill_leave(s);
         return rc;
     }
@@ -14126,7 +14217,14 @@ static int server_session_sync(server *s, server_slot *slot,
         server_prefill_leave(s);
         called = true;
         if (rc != 0) return rc;
-        if (done >= prompt->len) return 0;
+        if (done >= prompt->len) {
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+            if(ds4_qfn_test_trace_rows&&ds4_session_qfn_trace_begin(slot->session,ds4_qfn_test_trace_rows)) {
+                snprintf(err,errlen,"QFN local test trace allocation failed");return -1;
+            }
+#endif
+            return 0;
+        }
         if (done < target) {
             if (err && errlen) snprintf(err, errlen, "prefill made no progress");
             return 1;
@@ -14201,18 +14299,42 @@ static int server_session_sync_multimodal(server *s, server_slot *slot,
     const size_t image_count = r ? r->image_count : 0;
     if (!image_count)
         return server_session_sync(s, slot, prompt, err, errlen);
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_enabled()&&!ds4_qfn_peer.vision_port)server_native_notice(slot,"Vision is processed on the Mac with the retained native prefix; this deployment has no RTX image controller configured.");
+#endif
     if (!s || !slot || !prompt || !images) return 1;
     bool native_route = false, remote_projections = false;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    const bool qfn_route=ds4_qfn_peer_enabled()&&ds4_qfn_peer.vision_port;
+    const int live=ds4_session_pos(slot->session);
+    bool qfn_images_in_prefix=true;
+    for(size_t i=0;i<image_count;i++)if((uint64_t)images[i].token_start+images[i].embedding.token_count>(uint64_t)(live>0?live:0))qfn_images_in_prefix=false;
+    const bool qfn_local=qfn_route&&qfn_images_in_prefix&&server_multimodal_resume_pos(slot->session,prompt,images,image_count)==live&&
+        prompt->len>=live&&(uint32_t)(prompt->len-live)<=ds4_qfn_peer.local_append_max;
+    slot->qfn_image_prefill_route=qfn_local?2:0;
     native_route = s->native_session &&
         !ds4_ns_local_first(&slot->native_session, slot->session, prompt);
     remote_projections = native_route && !ds4_ns_local_continuation(
         &slot->native_session, slot->session, prompt, images, image_count);
+    if(qfn_route&&!qfn_local)remote_projections=true;
 #endif
     /* SLVP authenticates the entire image list, including historical images.
      * Local prefill still skips projections already held by its kept prefix. */
     if (!request_fill_images(s, slot, r, prompt, remote_projections, err, errlen)) return 1;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(qfn_route&&!qfn_local) {
+        if(!server_prefill_enter(s,slot))return DS4_SESSION_SYNC_INTERRUPTED;
+        int rc=ds4_qfn_peer_prefill(s->engine,slot->session,&slot->qfn_session,prompt,images,image_count,s->ctx_size,
+            server_native_frontier_cancelled,slot,err,errlen);
+        if(!rc&&slot->qfn_session.rebuild_reason[0]) {
+            server_native_notice(slot,slot->qfn_session.rebuild_reason);
+            ds4_session_report_progress(slot->session,"prefill_chunk",prompt->len,prompt->len);
+        }
+        if(!rc)slot->qfn_image_prefill_route=1;
+        server_prefill_leave(s);
+        if(!rc||!server_qfn_fallback(s,slot,prompt,err))return rc;
+        if(err&&errlen)err[0]=0;
+    }
     if (native_route) {
         if(!server_prefill_enter(s,slot))return DS4_SESSION_SYNC_INTERRUPTED;
         int rc=ds4_ns_prefill(&slot->native_session,slot->session,prompt,images,image_count,
@@ -14398,6 +14520,10 @@ static void log_tool_calls_summary(const char *ctx, const tool_calls *calls,
 static void server_progress_cb(void *ud, const char *event, int current, int total) {
     server_prefill_progress *p = ud;
     if (!p || !event || job_cancelled(p->request_job)) return;
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_enabled()&&p->slot&&p->slot->qfn_session.request_cached>=0)
+        p->cached_tokens=p->slot->qfn_session.request_cached;
+#endif
     const bool is_chunk = strcmp(event, "prefill_chunk") == 0;
     const bool is_display = strcmp(event, "prefill_display") == 0;
     if (!is_chunk && !is_display) return;
@@ -15247,6 +15373,17 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
     slot->native_notice[0]=0;
+    if(ds4_qfn_peer_enabled()) {
+        bool idle=true;char failure[256]={0};ds4_qfn_session *q=&slot->qfn_session;
+        if(q->poisoned||!ds4_ns_q_state(&q->catchup,&idle,failure,sizeof(failure))) {
+            /* The prior request has ended. Stop and join its worker before
+             * retiring identity; do not try to join a poisoned owner as valid. */
+            ds4_qfn_session_forget(q);
+            snprintf(q->rebuild_reason,sizeof(q->rebuild_reason),"Rebuilding the RTX checkpoint after cancellation or failed catch-up; valid Mac state is retained.");
+            server_native_notice(slot,q->rebuild_reason);
+            server_log(DS4_LOG_PREFILL,"QFN_PEER_REBUILD reason=previous_cancel_or_catchup_failure detail=%s",failure);
+        } else if(q->started)q->rebuild_reason[0]=0;
+    }
     if(s->native_session) {
         if(!j->req.native_conversation[0]) {
             http_error(j->fd,s->enable_cors,409,"Native streaming requires an explicit prompt_cache_key");return;
@@ -15691,10 +15828,59 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
         ds4_tokens_free(&prefix);
     }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    slot->qfn_session.request_cached=-1;
+#endif
     int prompt_sync_rc = native_frontier_rc ? native_frontier_rc : native_frontier_loaded ? 0 : multimodal ?
         server_session_sync_multimodal(s, slot, prompt_for_sync, &j->req,
                                        err, sizeof(err)) :
         server_session_sync(s, slot, prompt_for_sync, err, sizeof(err));
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(!prompt_sync_rc&&ds4_qfn_peer_enabled()&&slot->qfn_session.request_cached>=0) {
+        cached=slot->qfn_session.request_cached;progress.cached_tokens=cached;
+        j->req.cache_read_tokens=cached;j->req.cache_write_tokens=prompt_tokens-cached;
+        request_ctx_span(ctx_span,sizeof(ctx_span),cached,prompt_tokens);
+        snprintf(progress.ctx,sizeof(progress.ctx),"%s",ctx_span);
+    }
+    if(!prompt_sync_rc&&!ds4_qfn_peer_enabled()&&ds4_qfn_peer.test_owner_readback&&ds4_qfn_test_trace_rows&&
+       !strncmp(j->req.native_conversation,"slstack-qualification-",22)) {
+        pthread_mutex_lock(&s->inference_mu);
+        if(ds4_qfn_peer.test_local_roundtrip) {
+            char *payload=NULL;size_t extent=0;FILE *output=NULL;
+            const uint64_t expected=ds4_session_payload_bytes(slot->session);
+            if(!expected||expected>(UINT64_C(256)<<20))prompt_sync_rc=-1;
+            else {
+                output=open_memstream(&payload,&extent);
+                if(!output)prompt_sync_rc=-1;
+                else {prompt_sync_rc=ds4_session_save_payload(slot->session,output,err,sizeof(err));
+                    if(fclose(output)||extent!=expected)prompt_sync_rc=-1;}
+            }
+            if(!prompt_sync_rc) {
+                ds4_session_set_progress(slot->session,NULL,NULL);ds4_session_set_display_progress(slot->session,NULL,NULL);
+                ds4_session_invalidate(slot->session);int token=0;ds4_tokens dummy={.v=&token,.len=1,.cap=1};
+                prompt_sync_rc=ds4_session_sync(slot->session,&dummy,err,sizeof(err));
+                FILE *input=prompt_sync_rc?NULL:fmemopen(payload,extent,"rb");
+                if(!input)prompt_sync_rc=-1;
+                else {prompt_sync_rc=ds4_session_load_payload(slot->session,input,extent,err,sizeof(err));fclose(input);}
+                if(!prompt_sync_rc&&ds4_session_qfn_trace_begin(slot->session,ds4_qfn_test_trace_rows))prompt_sync_rc=-1;
+                ds4_session_set_progress(slot->session,server_progress_cb,&progress);
+                ds4_session_set_display_progress(slot->session,server_progress_cb,&progress);
+                server_log(DS4_LOG_PREFILL,"QFN_TEST_LOCAL_ROUNDTRIP rows=%d bytes=%llu dummy_rows=1 result=%d",prompt_tokens,(unsigned long long)extent,prompt_sync_rc);
+            }
+            free(payload);
+            if(prompt_sync_rc&&!err[0])snprintf(err,sizeof(err),"QFN local test payload roundtrip failed within its256MiB bound");
+        }
+        if(!prompt_sync_rc)prompt_sync_rc=ds4_qfn_anchor_save(slot->session,&slot->qfn_session.anchor,ds4_qfn_peer.payload_budget,
+            &slot->qfn_session.anchor_bytes,err,sizeof(err));
+        pthread_mutex_unlock(&s->inference_mu);
+    }
+    if(!prompt_sync_rc&&ds4_qfn_peer_enabled()&&slot->qfn_session.started) {
+        pthread_mutex_lock(&s->inference_mu);
+        prompt_sync_rc=ds4_qfn_save_rewind(&slot->qfn_session,slot->session,
+            server_native_frontier_cancelled,slot,err,sizeof(err));
+        pthread_mutex_unlock(&s->inference_mu);
+    }
+#endif
     if (prompt_sync_rc != 0) {
         ds4_tokens_free(&effective_prompt);
         ds4_session_set_progress(slot->session, NULL, NULL);
@@ -15835,6 +16021,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
 decode_again:
     ;
     const double measured_decode_start=now_sec();
+    uint64_t qfn_mtp_before[4];ds4_session_qfn_mtp_stats(slot->session,qfn_mtp_before);
     buf text = {0};
     size_t plain_stream_pos = 0;
     size_t stop_scan_from = 0;
@@ -15875,7 +16062,11 @@ decode_again:
     void *paired_chain=NULL;
     if(j->req.paired.chain.enabled){
         const ds4_tokens *history=ds4_session_tokens(slot->session);
-        paired_chain=ds4_chain_create(&j->req.paired.chain,s->engine,history->v,history->len,j->req.seed,err,sizeof(err));
+        ds4_chain_config config=j->req.paired.chain;
+        config.repeat=j->req.paired.repeat;config.presence=j->req.paired.presence;
+        config.frequency=j->req.paired.frequency;config.repeat_last_n=j->req.paired.last_n;
+        config.context=ds4_session_ctx(slot->session);
+        paired_chain=ds4_chain_create(&config,s->engine,history->v,history->len,j->req.seed,err,sizeof(err));
         if(!paired_chain)finish="error";
     }
     ds4_session_ds41_dspark_request_begin(slot->session);
@@ -15946,13 +16137,18 @@ decode_again:
             if(!history || ds4_session_copy_logits(slot->session,paired_scores,paired_vocab)!=paired_vocab)token=-1;
             else {
                 const char *qualification_logits=getenv("DS4_NATIVE_QUALIFICATION_LOGITS");
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+                if(ds4_engine_is_qwen4(s->engine)&&ds4_qfn_peer.qualification_logits)
+                    qualification_logits=ds4_qfn_peer.qualification_logits;
+#endif
                 if(qualification_logits && !strncmp(j->req.native_conversation,"slstack-qualification-",22)) {
                     FILE *qf=fopen(qualification_logits,completion?"ab":"wb");
                     bool written=qf && fwrite(paired_scores,sizeof(float),(size_t)paired_vocab,qf)==(size_t)paired_vocab;
                     if(qf && fclose(qf))written=false;
                     if(!written){finish="error";snprintf(err,sizeof(err),"qualification raw logits write failed");break;}
                 }
-                ds4_paired_logits(&j->req.paired,paired_scores,paired_vocab,history->v,history->len,paired_counts);
+                if(paired_chain)ds4_paired_bias_logits(&j->req.paired,paired_scores,paired_vocab);
+                else ds4_paired_logits(&j->req.paired,paired_scores,paired_vocab,history->v,history->len,paired_counts);
                 if(j->req.ignore_eos)paired_scores[eos_token]=-INFINITY;
                 token=paired_chain?ds4_chain_sample(paired_chain,paired_scores,paired_vocab,temperature,top_k,top_p,min_p,&rng):
                     ds4_sample_logits(paired_scores,paired_vocab,temperature,top_k,top_p,min_p,&rng);
@@ -16212,6 +16408,25 @@ decode_again:
                 text.len = stop_pos;
                 text.ptr[text.len] = '\0';
                 pthread_mutex_lock(&s->inference_mu);
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+                if(ds4_qfn_peer_enabled()&&slot->qfn_session.started&&slot->qfn_session.anchor) {
+                    int rewind=ds4_qfn_rewind(&slot->qfn_session,slot->session,
+                        server_native_frontier_cancelled,slot,err,sizeof(err));
+                    if(rewind){finish="error";if(!err[0])snprintf(err,sizeof(err),"QFN stop boundary could not restore its paired anchor");}
+                    else {
+                        /* The stop string can start inside a token. Preserve
+                         * the exact cached prompt, then evaluate the canonical
+                         * visible answer only; never replay the long prompt or
+                         * bind a Responses continuation to missing answer KV. */
+                        ds4_tokens visible={0};const ds4_tokens *prefix=ds4_session_tokens(slot->session);
+                        const int before=ds4_session_pos(slot->session);
+                        build_prompt_from_exact_prefix_and_text_suffix(s->engine,prefix,text.ptr,&visible);
+                        for(int k=before;k<visible.len;k++)if(ds4_session_eval(slot->session,visible.v[k],err,sizeof(err))) {finish="error";break;}
+                        fprintf(stderr,"QFN_STOP_REPAIR prompt_rows=%d visible_rows=%d full_prompt_replay=0\n",before,visible.len-before);
+                        ds4_tokens_free(&visible);
+                    }
+                } else
+#endif
                 ds4_session_invalidate(slot->session);
                 pthread_mutex_unlock(&s->inference_mu);
                 text_stop = true;
@@ -16252,6 +16467,13 @@ decode_again:
         }
 
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+        if(ds4_qfn_peer_enabled()&&slot->qfn_session.started&&strcmp(finish,"error")&&!job_cancelled(j)) {
+            pthread_mutex_lock(&s->inference_mu);
+            int sync_rc=ds4_qfn_decode_capture(&slot->qfn_session,slot->session,false,false,
+                server_native_frontier_cancelled,slot,err,sizeof(err));
+            pthread_mutex_unlock(&s->inference_mu);
+            if(sync_rc){finish="error";stop_decode=true;}
+        }
         if(s->native_session && strcmp(finish,"error") && !job_cancelled(j)) {
             pthread_mutex_lock(&s->inference_mu);
             int sync_rc=ds4_ns_decode_sync(&slot->native_session,slot->session,
@@ -16269,6 +16491,14 @@ decode_again:
         if (stop_decode) break;
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_enabled()&&slot->qfn_session.started) {
+        pthread_mutex_lock(&s->inference_mu);
+        if(job_cancelled(j)||g_stop_requested||!strcmp(finish,"error")) {
+            ds4_qfn_abort(&slot->qfn_session);
+        } else if(ds4_qfn_decode_capture(&slot->qfn_session,slot->session,true,true,
+            server_native_frontier_cancelled,slot,err,sizeof(err)))finish="error";
+        pthread_mutex_unlock(&s->inference_mu);
+    }
     if(s->native_session) {
         pthread_mutex_lock(&s->inference_mu);
         if(job_cancelled(j) || g_stop_requested || !strcmp(finish,"error")) {
@@ -16627,6 +16857,24 @@ decode_again:
         thinking_live_clear(s, slot);
     }
 
+    if(ds4_engine_is_qwen4(s->engine)) {
+        uint64_t stats[4];ds4_session_qfn_mtp_stats(slot->session,stats);
+        for(int i=0;i<4;i++)stats[i]-=qfn_mtp_before[i];
+        const double elapsed=now_sec()-measured_decode_start;
+        fprintf(stderr,"QFN_DECODE_METRICS temperature=%.6g tokens=%d seconds=%.6f tok_s=%.6f mtp_cycles=%llu drafted=%llu accepted=%llu depth2_cycles=%llu depth3_cycles=%llu exact_sampling=%u\n",
+            j->req.temperature,completion,elapsed,elapsed?completion/elapsed:0,
+            (unsigned long long)stats[0],(unsigned long long)stats[1],(unsigned long long)stats[2],
+            (unsigned long long)(stats[0]-stats[3]),(unsigned long long)stats[3],
+            (unsigned)ds4_engine_mtp_exact_sampling(s->engine));
+        if(j->req.stream&&j->req.api==API_OPENAI) {
+            char row[640];int n=snprintf(row,sizeof(row),
+                "data: {\"choices\":[],\"qfn_image_prefill\":\"%s\",\"qfn_mtp\":{\"cycles\":%llu,\"drafted\":%llu,\"accepted\":%llu,\"depth2_cycles\":%llu,\"depth3_cycles\":%llu}}\n\n",
+                j->req.image_count?(slot->qfn_image_prefill_route==1?"rtx":slot->qfn_image_prefill_route==2?"mac-cached":"mac"):"none",
+                (unsigned long long)stats[0],(unsigned long long)stats[1],(unsigned long long)stats[2],
+                (unsigned long long)(stats[0]-stats[3]),(unsigned long long)stats[3]);
+            if(n>0&&(size_t)n<sizeof(row))send_all(j->fd,row,(size_t)n);
+        }
+    }
     bool response_ok = !job_cancelled(j);
     if(response_ok && j->req.stream && j->req.api==API_OPENAI)
         response_ok=sse_native_timings(j->fd,id,prompt_tokens,progress.cached_tokens,measured_prefill_s,
@@ -17397,6 +17645,14 @@ static bool server_debug_levers_enabled(const server *s) {
     return !marker || !marker[0] || access(marker, F_OK) == 0;
 }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+static int server_qfn_payload_test_write(void *ud,const char *bytes,int n) {
+    return n>=0&&send_all(*(int*)ud,bytes,(size_t)n)?n:-1;
+}
+static int server_qfn_trace_write(void *ud,const void *bytes,size_t n) {
+    return send_all(*(int *)ud,bytes,n)?1:0;
+}
+#endif
 static void *client_main(void *arg) {
     client_arg *ca = arg;
     server *s = ca->srv;
@@ -17501,7 +17757,7 @@ static void *client_main(void *arg) {
                                                  "%s", DS41_DSPARK_ROWS_MSG);
                                     else
                                         snprintf(lever_reject, sizeof(lever_reject),
-                                                 "BLOCKED-OWNER: control \"%s\" status=%s rejected value %d",
+                                                 "Unsupported operation: control \"%s\" status=%s rejected value %d",
                                                  lk, ds41_levers_status(lk), lv);
                                 }
                                 free(lk);
@@ -17625,7 +17881,7 @@ static void *client_main(void *arg) {
                                                  "%s", DS41_DSPARK_ROWS_MSG);
                                     else
                                         snprintf(lever_reject, sizeof(lever_reject),
-                                                 "BLOCKED-OWNER: control \"%s\" status=%s rejected value %d",
+                                                 "Unsupported operation: control \"%s\" status=%s rejected value %d",
                                                  lk, ds41_levers_status(lk), lv);
                                 }
                                 free(lk);
@@ -17709,7 +17965,7 @@ static void *client_main(void *arg) {
                     else {
                         unknown++;
                         if(!lever_reject[0])snprintf(lever_reject,sizeof(lever_reject),
-                            "BLOCKED-OWNER: control \"%s\" status=%s rejected value %d",key,ds41_levers_status(key),v);
+                            "Unsupported operation: control \"%s\" status=%s rejected value %d",key,ds41_levers_status(key),v);
                     }
                     free(key);
                     json_ws(&p);
@@ -17732,6 +17988,77 @@ static void *client_main(void *arg) {
         goto done;
     }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_enabled()&&!strcmp(hr.method,"POST")&&!strcmp(hr.path,"/v1/qfn/session/flush")) {
+        pthread_mutex_lock(&s->inference_mu);char error[256]={0};int rc=0;
+        for(int i=0;i<s->slot_count&&!rc;i++)if(s->slots[i].qfn_session.started)
+            rc=ds4_qfn_decode_sync(&s->slots[i].qfn_session,s->slots[i].session,NULL,NULL,error,sizeof(error));
+        if(rc)http_error(fd,s->enable_cors,409,error);
+        else http_response(fd,s->enable_cors,200,"application/json","{\"flushed\":true}");
+        pthread_mutex_unlock(&s->inference_mu);http_request_free(&hr);goto done;
+    }
+    if(ds4_qfn_test_trace_rows&&!strcmp(hr.method,"GET")&&!strcmp(hr.path,"/v1/qfn-test/frontier")) {
+        pthread_mutex_lock(&s->inference_mu);
+        ds4_session *session=s->slots[0].session;ds4_qfn_session *p=&s->slots[0].qfn_session;
+        qfn_native_shape shape;uint32_t mtp;char error[256]={0};buf b={0};
+        if(ds4_qfn_decode_sync(p,session,NULL,NULL,error,sizeof(error))||ds4_qfn_checkpoint_probe(p,error,sizeof(error))||
+           ds4_qfn_session_shape(session,&shape,&mtp,error,sizeof(error)))http_error(fd,s->enable_cors,409,error);
+        else {
+            const ds4_tokens *tokens=ds4_session_tokens(session);
+            buf_printf(&b,"{\"position\":%d,\"mtp_rows\":%u,\"initial_bytes\":%llu,\"forward_bytes\":%llu,\"reverse_bytes\":%llu,\"anchor_position\":%u,\"rewinds\":%llu,\"tokens\":[",
+                tokens->len,mtp,(unsigned long long)p->initial_bytes,(unsigned long long)p->forward_bytes,(unsigned long long)p->reverse_bytes,
+                p->anchor_checkpoint.position,(unsigned long long)p->rewinds);
+            for(int i=0;i<tokens->len;i++)buf_printf(&b,"%s%d",i?",":"",tokens->v[i]);buf_puts(&b,"]");
+            char cp[512];ds4_ns_text checkpoint={cp,sizeof(cp),true};
+            if(p->started)ds4_qfn_checkpoint_text(&checkpoint,&p->synced);else ds4_ns_put(&checkpoint,"null");
+            buf_printf(&b,",\"session_id\":\"%s\",\"next_sequence\":%llu,\"buffered_bytes\":%llu,\"queued_batches\":%llu,\"checkpoint\":%.*s}",
+                p->id,(unsigned long long)p->sequence,(unsigned long long)atomic_load(&p->buffered_bytes),(unsigned long long)p->queued_batches,
+                (int)(checkpoint.p-cp),cp);
+            http_response(fd,s->enable_cors,200,"application/json",b.ptr);
+        }
+        buf_free(&b);pthread_mutex_unlock(&s->inference_mu);http_request_free(&hr);goto done;
+    }
+    if(ds4_qfn_test_trace_rows&&ds4_qfn_peer.test_owner_readback&&!strcmp(hr.method,"GET")&&!strcmp(hr.path,"/v1/qfn-test/payload")) {
+        pthread_mutex_lock(&s->inference_mu);ds4_session *session=s->slots[0].session;
+        uint64_t bytes=ds4_session_payload_bytes(session);char error[256]={0};
+        if(!bytes)http_error(fd,s->enable_cors,409,"No actual QFN test frontier");
+        else {
+            char header[256];int n=snprintf(header,sizeof(header),
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %llu\r\nConnection: close\r\n\r\n",(unsigned long long)bytes);
+            if(n>0&&(size_t)n<sizeof(header)&&send_all(fd,header,(size_t)n)) {
+                FILE *stream=funopen(&fd,NULL,server_qfn_payload_test_write,NULL,NULL);
+                if(stream){int rc=ds4_session_save_payload(session,stream,error,sizeof(error));if(fclose(stream))rc=1;
+                    if(rc)server_log(DS4_LOG_ERROR,"QFN test payload observation failed: %s",error);}
+            }
+        }
+        pthread_mutex_unlock(&s->inference_mu);http_request_free(&hr);goto done;
+    }
+    if(ds4_qfn_test_trace_rows&&ds4_qfn_peer.test_owner_readback&&!strcmp(hr.method,"GET")&&!strcmp(hr.path,"/v1/qfn-test/anchor")) {
+        pthread_mutex_lock(&s->inference_mu);const ds4_qfn_anchor *anchor=s->slots[0].qfn_session.anchor;
+        const uint64_t bytes=ds4_qfn_anchor_test_bytes(anchor);
+        if(!bytes)http_error(fd,s->enable_cors,409,"No actual QFN test prompt anchor captured");
+        else {
+            char header[256];int n=snprintf(header,sizeof(header),
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %llu\r\nConnection: close\r\n\r\n",(unsigned long long)bytes);
+            if(n>0&&(size_t)n<sizeof(header)&&send_all(fd,header,(size_t)n))
+                (void)ds4_qfn_anchor_test_write(anchor,server_qfn_trace_write,&fd);
+        }
+        pthread_mutex_unlock(&s->inference_mu);http_request_free(&hr);goto done;
+    }
+    if(ds4_qfn_test_trace_rows && !strcmp(hr.method,"GET") && !strcmp(hr.path,"/v1/qfn-test/trace")) {
+        pthread_mutex_lock(&s->inference_mu);
+        ds4_session *session=s->slots[0].session;
+        const uint64_t bytes=ds4_session_qfn_trace_bytes(session);
+        if(!bytes)http_error(fd,s->enable_cors,409,"No computed QFN MTP test rows captured");
+        else {
+            char header[256];int n=snprintf(header,sizeof(header),
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %llu\r\nConnection: close\r\n\r\n",(unsigned long long)bytes);
+            if(n>0&&(size_t)n<sizeof(header)&&send_all(fd,header,(size_t)n))
+                (void)ds4_session_qfn_trace_write(session,server_qfn_trace_write,&fd);
+        }
+        pthread_mutex_unlock(&s->inference_mu);http_request_free(&hr);goto done;
+    }
+#endif
     if (!strcmp(hr.method, "GET") && !strcmp(hr.path, "/v1/models")) {
         send_models(s, fd);
         http_request_free(&hr);
@@ -17770,13 +18097,38 @@ static void *client_main(void *arg) {
         goto done;
     }
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if(ok && (s->native_session || (getenv("DS4_NATIVE_QUALIFICATION_LOGITS") &&
+    char qfn_gate_key[65]={0};
+    const bool qfn_gate=ds4_qfn_peer.qualification_logits&&ds4_ns_conversation(hr.body,qfn_gate_key)&&
+        !strncmp(qfn_gate_key,"slstack-qualification-",22);
+    if(ok && (s->native_session || qfn_gate || (getenv("DS4_NATIVE_QUALIFICATION_LOGITS") &&
         strstr(hr.body,"slstack-qualification-"))) && (!ds4_ns_conversation(hr.body,req.native_conversation) ||
         !ds4_ns_history_policy(hr.body,&req.native_include_previous_reasoning))) {
         request_free(&req);ok=false;
         snprintf(err,sizeof(err),"Native streaming requires a unique prompt_cache_key and boolean reasoning-history policy");
     }
+    if(ok&&qfn_gate&&(req.max_tokens!=8||!req.temperature_set||req.temperature!=0||
+        req.paired.bias_count!=1||req.paired.bias_tokens[0]!=42||req.paired.bias_values[0]!=100)) {
+        request_free(&req);ok=false;snprintf(err,sizeof(err),"QFN installation namespace requires the complete eight-row common-prefix qualification request");
+    }
 #endif
+    if(ok && req.paired.chain.order_set) {
+        bool selected[9]={0};
+        for(unsigned i=0;i<req.paired.chain.order_count;i++)selected[req.paired.chain.order[i]]=true;
+        const bool conflict=
+            ((req.paired.presence!=0||req.paired.frequency!=0||req.paired.repeat!=1)&&!selected[DS4_CHAIN_PENALTIES])||
+            (req.paired.chain.dry_multiplier>0&&!selected[DS4_CHAIN_DRY])||
+            (req.paired.chain.typical!=1&&!selected[DS4_CHAIN_TYPICAL])||
+            (req.paired.chain.xtc_probability>0&&!selected[DS4_CHAIN_XTC])||
+            ((req.paired.chain.dyn_range>0||(req.temperature_set&&req.temperature!=1))&&!selected[DS4_CHAIN_TEMP])||
+            (req.paired.chain.top_n_sigma>=0&&!selected[DS4_CHAIN_SIGMA])||
+            (req.top_k_set&&req.top_k>0&&!selected[DS4_CHAIN_TOP_K])||
+            (req.top_p_set&&req.top_p<1&&!selected[DS4_CHAIN_TOP_P])||
+            (req.min_p_set&&req.min_p>0&&!selected[DS4_CHAIN_MIN_P]);
+        if(conflict) {
+            request_free(&req);ok=false;
+            snprintf(err,sizeof(err),"Explicit sampler parameters conflict with the selected sampler order; no requested filter is silently omitted");
+        }
+    }
     if (ok) req.raw_body = xstrndup(hr.body, hr.body_len);
     http_request_free(&hr);
     if (!ok) {
@@ -17874,6 +18226,7 @@ static void set_client_socket_nonblocking(int fd) {
 
 typedef struct {
     ds4_engine_options engine;
+    double host_budget_gib,host_floor_gib;
     const char *gpu_vram_arg;
     const char *gpu_devices_arg;
     const char *host;
@@ -17983,6 +18336,9 @@ static void server_close_resources(server *s) {
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
         if(s->native_session && !ds4_ns_shutdown(&slot->native_session))
             server_log(DS4_LOG_ERROR,"native session shutdown could not confirm RTX cleanup");
+        if(slot->qfn_session.started) {char error[256]={0};if(ds4_qfn_join(&slot->qfn_session,error,sizeof(error)))
+            server_log(DS4_LOG_ERROR,"QFN session shutdown catch-up failed: %s",error);}
+        ds4_qfn_session_forget(&slot->qfn_session);
 #endif
         free(slot->live_text);
         if (slot->session) ds4_session_free(slot->session);
@@ -18123,6 +18479,76 @@ static server_config parse_options(int argc, char **argv) {
             }
         } else if (!strcmp(arg, "--mtp-draft")) {
             c.engine.mtp_draft_tokens = parse_int_arg(need_arg(&i, argc, argv, arg), arg);
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+        } else if (!strcmp(arg, "--qfn-prefill-host")) {
+            ds4_qfn_peer.host=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-state-listen-host")) {
+            ds4_qfn_peer.state_listen_host=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-prefill-port")) {
+            ds4_qfn_peer.port=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--qfn-pair-token-file")) {
+            ds4_qfn_peer.token_file=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-producer-model-sha256")) {
+            ds4_qfn_peer.model_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-compatibility-sha256")) {
+            ds4_qfn_peer.compatibility_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-prefill-min-tokens")) {
+            ds4_qfn_peer.minimum_tokens=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--qfn-async-catchup")) {
+            int value=parse_nonneg_int_arg(need_arg(&i,argc,argv,arg),arg);if(value>1)die("QFN async catch-up must be 0 or 1");ds4_qfn_peer.async_catchup=value;
+        } else if (!strcmp(arg, "--qfn-catchup-defer")) {
+            int value=parse_nonneg_int_arg(need_arg(&i,argc,argv,arg),arg);if(value>1)die("QFN catch-up defer must be 0 or 1");ds4_qfn_peer.catchup_defer=value;
+        } else if (!strcmp(arg, "--qfn-catchup-max-tokens")) {
+            ds4_qfn_peer.catchup_max_tokens=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--qfn-catchup-buffer-bytes")) {
+            const char *value=need_arg(&i,argc,argv,arg);if(!ds4_nf_u64(&value,&ds4_qfn_peer.catchup_buffer_bytes)||*value)die("invalid QFN catch-up buffer budget");
+        } else if (!strcmp(arg, "--qfn-local-append-max")) {
+            ds4_qfn_peer.local_append_max=(uint32_t)parse_nonneg_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--qfn-peer-stall-seconds")) {
+            ds4_qfn_peer.stall_seconds=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--qfn-state-budget-bytes")) {
+            const char *value=need_arg(&i,argc,argv,arg);
+            if(!ds4_nf_u64(&value,&ds4_qfn_peer.payload_budget)||*value||!ds4_qfn_peer.payload_budget)die("invalid QFN state byte budget");
+        } else if (!strcmp(arg, "--qfn-test-trace-rows")) {
+            ds4_qfn_test_trace_rows=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+            if(ds4_qfn_test_trace_rows>4096)die("QFN test trace row budget exceeded");
+        } else if (!strcmp(arg, "--qfn-test-owner-readback")) {
+            ds4_qfn_peer.test_owner_readback=true;
+        } else if (!strcmp(arg, "--qfn-producer-binary-sha256")) {
+            ds4_qfn_peer.producer_binary_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-receiver-model-sha256")) {
+            ds4_qfn_peer.receiver_model_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-renderer-sha256")) {
+            ds4_qfn_peer.renderer_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-qualification-file")) {
+            ds4_qfn_peer.qualification_file=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-qualification-sha256")) {
+            ds4_qfn_peer.qualification_sha=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg, "--qfn-qualification-logits")) {
+            ds4_qfn_peer.qualification_logits=need_arg(&i,argc,argv,arg);
+        } else if (!strcmp(arg,"--qfn-test-local-payload-roundtrip")) {
+            ds4_qfn_peer.test_local_roundtrip=true;
+        } else if (!strcmp(arg, "--qfn-prefill-route")) {
+            const char *value=need_arg(&i,argc,argv,arg);
+            if(!strcmp(value,"local"))ds4_qfn_peer.local_only=true;
+            else if(!strcmp(value,"paired"))ds4_qfn_peer.local_only=false;
+            else die("QFN prefill route must be local or paired");
+        } else if (!strcmp(arg, "--verify-state")) {
+            ds4_qfn_peer.verify_state=true;
+        } else if (!strcmp(arg, "--qfn-test-wide-index")) {
+            ds4_qfn_peer.test_wide_index=true;
+        } else if (!strcmp(arg, "--qfn-vision-port")) {
+            ds4_qfn_peer.vision_port=(uint32_t)parse_int_arg(need_arg(&i,argc,argv,arg),arg);
+        } else if (!strcmp(arg, "--host-budget-gib")) {
+            c.host_budget_gib=parse_float_arg(need_arg(&i,argc,argv,arg),arg,0.125f,1048576.f);
+        } else if (!strcmp(arg, "--host-floor-gib")) {
+            c.host_floor_gib=parse_float_arg(need_arg(&i,argc,argv,arg),arg,0.5f,1048576.f);
+#endif
+        } else if (!strcmp(arg, "--qfn-mtp-depth")) {
+            const char *value = need_arg(&i, argc, argv, arg);
+            if (!strcmp(value,"auto")) c.engine.qwen4_mtp_depth = 0;
+            else if (!strcmp(value,"2") || !strcmp(value,"3")) c.engine.qwen4_mtp_depth = atoi(value);
+            else die("--qfn-mtp-depth must be auto, 2 or 3");
         } else if (!strcmp(arg, "--mtp-margin")) {
             c.engine.mtp_margin = parse_float_arg(need_arg(&i, argc, argv, arg), arg, 0.0f, 1000.0f);
         } else if (!strcmp(arg, "--mtp-timing")) {
@@ -18346,6 +18772,37 @@ static void server_request_decode_stop(server *s) {
     pthread_mutex_unlock(&s->model_mu);
 }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+static int qfn_sampling_check_cli(int argc,char **argv) {
+    uint64_t samples=200000,seed=1;int row=0,top_k=20;float temperature=1,top_p=.95f,min_p=0;
+    for(int i=3;i<argc;i++) {
+        const char *arg=argv[i],*value=need_arg(&i,argc,argv,arg);
+        if(!strcmp(arg,"--row"))row=parse_nonneg_int_arg(value,arg);
+        else if(!strcmp(arg,"--samples")){if(!ds4_nf_u64(&value,&samples)||*value)die("invalid sampling draw count");}
+        else if(!strcmp(arg,"--seed")){if(!ds4_nf_u64(&value,&seed)||*value)die("invalid sampling seed");}
+        else if(!strcmp(arg,"--temperature"))temperature=parse_float_arg(value,arg,.000001f,2.f);
+        else if(!strcmp(arg,"--top-k"))top_k=parse_nonneg_int_arg(value,arg);
+        else if(!strcmp(arg,"--top-p"))top_p=parse_float_arg(value,arg,.000001f,1.f);
+        else if(!strcmp(arg,"--min-p"))min_p=parse_float_arg(value,arg,0.f,1.f);
+        else die("unknown QFN sampling-check flag");
+    }
+    FILE *file=fopen(argv[2],"rb");unsigned char magic[8];uint32_t header[2],prefix[2];
+    if(!file||fread(magic,1,8,file)!=8||memcmp(magic,"QFNTF32\1",8)||fread(header,4,2,file)!=2||
+       !header[0]||header[0]>1000000||!header[1]||header[1]>4096||(uint32_t)row>=header[1]) {
+        if(file)fclose(file);fprintf(stderr,"invalid computed-row trace\n");return 2;
+    }
+    const uint64_t offset=16u+(uint64_t)row*(8u+(uint64_t)header[0]*4u);
+    float *logits=malloc((size_t)header[0]*4u);
+    if(!logits||fseeko(file,(off_t)offset,SEEK_SET)||fread(prefix,4,2,file)!=2||
+       fread(logits,4,header[0],file)!=header[0]) {
+        free(logits);fclose(file);fprintf(stderr,"truncated computed-row trace\n");return 2;
+    }
+    fclose(file);fprintf(stderr,"QFN_SAMPLING_ROW row=%d position=%u committed_token=%u\n",row,prefix[0],prefix[1]);
+    const int rc=ds4_qfn_point_sampling_check(logits,header[0],samples,seed,temperature,top_k,top_p,min_p,stdout);
+    free(logits);return rc<0?2:rc;
+}
+#endif
+
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     struct sigaction sa;
@@ -18355,7 +18812,36 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(argc>=2 && !strcmp(argv[1],"--qfn-vision-dump")) {
+        if(argc!=7){fprintf(stderr,"--qfn-vision-dump PROJECTOR IMAGE OUTPUT MIN_TOKENS MAX_TOKENS\n");return 2;}
+        char *end1,*end2;unsigned long minimum=strtoul(argv[5],&end1,10),maximum=strtoul(argv[6],&end2,10);
+        if(*end1||*end2||!minimum||maximum<minimum||maximum>16383||access(argv[4],F_OK)==0) {
+            fprintf(stderr,"invalid image token budget or output already exists\n");return 2;
+        }
+        return ds4_qwen4_vision_dump(argv[2],argv[3],argv[4],(uint32_t)minimum,(uint32_t)maximum)?0:2;
+    }
+    if(argc>=3 && !strcmp(argv[1],"--qfn-sampling-check"))return qfn_sampling_check_cli(argc,argv);
+    if(argc==2 && !strcmp(argv[1],"--qfn-wire-self-test")) {
+        unsigned count=0;
+        for(unsigned h=0;h<65536;h++) {
+            if((h&0x7c00)==0x7c00 && (h&1023))continue;
+            const uint16_t bits=(uint16_t)h;_Float16 half;memcpy(&half,&bits,2);
+            const float expected=(float)half,actual=ds4_qfn_half(bits);
+            uint32_t a,b;memcpy(&a,&actual,4);memcpy(&b,&expected,4);
+            if(a!=b){fprintf(stderr,"QFN F16 wire widen mismatch h=%u\n",h);return 2;}count++;
+        }
+        printf("QFN F16 wire widening: %u finite/infinite bit patterns PASS, signed zero retained\n",count);return 0;
+    }
+#endif
+    bool validate_options=false;
+    for(int i=1;i<argc;i++)if(!strcmp(argv[i],"--validate-options")) {
+        if(validate_options){fprintf(stderr,"duplicate --validate-options\n");return 2;}
+        validate_options=true;memmove(argv+i,argv+i+1,(size_t)(argc-i)*sizeof(*argv));argc--;i--;
+    }
     server_config cfg = parse_options(argc, argv);
+    if(validate_options){puts("ds4-server option parser PASS; no model or listener started");return 0;}
+
     if (cfg.chdir_path && chdir(cfg.chdir_path) != 0) {
         server_log(DS4_LOG_DEFAULT, "ds4-server: failed to chdir to %s: %s",
                    cfg.chdir_path, strerror(errno));
@@ -18368,7 +18854,13 @@ int main(int argc, char **argv) {
         cfg.batched_sessions > 0 ? cfg.batched_sessions : 1;
     cfg.engine.share_session_prefill_workspace = cfg.batched_sessions > 0;
 #if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
-    if(ds4_ns_memory_start()) return 1;
+    if(cfg.host_budget_gib || cfg.host_floor_gib) {
+        if(!cfg.host_budget_gib || !cfg.host_floor_gib ||
+           !ds4_ns_guard_begin(&ds4_ns_server_memory,(uint64_t)(cfg.host_budget_gib*1073741824.0),
+               (uint64_t)(cfg.host_floor_gib*1073741824.0)) || atexit(ds4_ns_memory_stop)) {
+            fprintf(stderr,"explicit host memory budget/floor refused before startup\n");return 1;
+        }
+    } else if(ds4_ns_memory_start()) return 1;
 #endif
     ds4_engine *engine = NULL;
     if (cfg.gpu_vram_arg || cfg.gpu_devices_arg) {
@@ -18438,7 +18930,23 @@ int main(int argc, char **argv) {
         }
     }
 
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer_validate(engine) || (ds4_qfn_peer_enabled() &&
+        (!cfg.host_budget_gib || !cfg.host_floor_gib || cfg.engine.backend!=DS4_BACKEND_METAL))) {
+        fprintf(stderr,"QFN native peer family/model/settings/host budget validation failed\n");ds4_engine_close(engine);return 1;
+    }
+#endif
+    ds4_paired_vocab_size=ds4_engine_vocab_size(engine);
+    ds4_paired_bias_max=ds4_engine_is_qwen4(engine)?8.0f:1.36125f;
     const int slot_count = cfg.batched_sessions > 0 ? cfg.batched_sessions : 1;
+#if DS4_NATIVE_FRONTIER_ENABLE && defined(__APPLE__)
+    if(ds4_qfn_peer.test_local_roundtrip&&(!ds4_qfn_test_trace_rows||!ds4_qfn_peer.test_owner_readback)) {
+        fprintf(stderr,"QFN local payload roundtrip requires both explicit owner/readback test flags\n");ds4_engine_close(engine);return 1;
+    }
+    if(ds4_qfn_test_trace_rows && (!ds4_engine_is_qwen4(engine)||slot_count!=1)) {
+        fprintf(stderr,"QFN test trace requires the QFN family and exactly one slot\n");ds4_engine_close(engine);return 1;
+    }
+#endif
     log_context_memory(cfg.engine.backend,
                        cfg.ctx_size,
                        ds4_engine_prefill_chunk(engine),

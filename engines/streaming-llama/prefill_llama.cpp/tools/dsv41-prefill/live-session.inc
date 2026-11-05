@@ -3,12 +3,15 @@
 #include "llama-dsv41-artifact.h"
 #include "llama-dsv41-layer-log.h"
 #include "llama-dsv41-resident-append.h"
+#include "../../../../ds4-win/ds4_physical_vram.h"
 #include <thread>
 #include <filesystem>
 #include <optional>
 #include <io.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+
+extern "C" uint64_t ggml_backend_cuda_dsv41_writer_resident_bytes(void);
 
 namespace {
 class session_output_redirect {
@@ -88,28 +91,15 @@ void local_video_memory(uint64_t&budget,uint64_t&usage){
 // Physical device memory from NVML (the driver's own count; WDDM/CUDA free
 // double-counts the imported D3D12 banks). Selected by the job's GPU UUID.
 bool nvml_free_bytes(uint64_t&free_bytes,uint64_t&total_bytes){
-    free_bytes=total_bytes=0;
-    static HMODULE nvml=LoadLibraryExW(L"nvml.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if(!nvml)return false;
-    struct memory{unsigned long long total,free,used;};
-    using init_t=int(*)();using by_uuid_t=int(*)(const char*,void**);using info_t=int(*)(void*,memory*);
-    static auto init=reinterpret_cast<init_t>(GetProcAddress(nvml,"nvmlInit_v2"));
-    static auto by_uuid=reinterpret_cast<by_uuid_t>(GetProcAddress(nvml,"nvmlDeviceGetHandleByUUID"));
-    static auto info=reinterpret_cast<info_t>(GetProcAddress(nvml,"nvmlDeviceGetMemoryInfo"));
-    static const int ready=init?init():-1;
-    const char*uuid=std::getenv("CUDA_VISIBLE_DEVICES");
-    if(ready!=0||!by_uuid||!info||!uuid||std::strncmp(uuid,"GPU-",4))return false;
-    void*device=nullptr;memory m{};
-    if(by_uuid(uuid,&device)!=0||info(device,&m)!=0)return false;
-    free_bytes=m.free;total_bytes=m.total;return true;
+    return ds4_physical_vram::free_bytes(free_bytes,total_bytes);
 }
 // Physical VRAM reserve kept free beside the L2 (LLAMADECODE_VRAM_RESERVE_MIB, default 128 MiB;
-// owner 2026-10-30: 128 MiB reserve + 64 MiB growth margin, 8/8 runs at 50K-200K without a breach).
+// Keep 128 MiB reserve plus 64 MiB growth margin.
 uint64_t decode_vram_reserve(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_RESERVE_MIB");
     const long v=e&&*e?std::strtol(e,nullptr,10):128; /* measured: no transient dip below the post-L2 steady free (5 ms NVML, 43K run) */return uint64_t(std::max<long>(128,std::min<long>(v,8192)))<<20;}();return r;}
 // Decode-graph growth margin beside the reserve (LLAMADECODE_VRAM_MARGIN_MIB, default 64 MiB; the
 // measured post-L2 transient is ~25-30 MiB, and 128+0 breached the reserve in every run).
-// Owner 2026-10-29: the safety margin may be cut but not zeroed; reserve+margin >= 128 MiB.
+// Reserve plus growth margin must remain at least 128 MiB.
 uint64_t decode_vram_margin(){static const uint64_t r=[]{const char*e=std::getenv("LLAMADECODE_VRAM_MARGIN_MIB");
     const long v=e&&*e?std::strtol(e,nullptr,10):64;return uint64_t(std::max<long>(0,std::min<long>(v,8192)))<<20;}();return r;}
 // Headroom measurement: a 5 ms NVML sampler records the minimum free VRAM
@@ -142,14 +132,25 @@ void check_decode_vram_reserve(){
     if(f<decode_vram_reserve()){std::fprintf(stderr,"LLAMADECODE_VRAM_RESERVE_BREACH nvml_free=%llu reserve=%llu\n",(unsigned long long)f,(unsigned long long)decode_vram_reserve());std::fflush(stderr);
         throw std::runtime_error("Physical free VRAM fell below the decode VRAM reserve");}
 }
+static uint64_t(*decode_writer_allocated_bytes)()=nullptr;
 void grow_decode_l2(llama_dsv41_sweep&sweep,const llama_dsv41_fixed_storage*fixed,ggml_backend_t backend){
     static const bool on=[]{const char*e=std::getenv("LLAMADECODE_L2");return !(e&&e[0]=='0'&&!e[1]);}();
     if(!on||!fixed||!fixed->decode_compact)return;
     auto*provider=sweep.provider_for_external_decode();
     if(!provider->decode_layout()||provider->cache_stats().l2_slots)return;
-    // Owner rule: keep a 2 GiB physical reserve (NVML free already excludes
-    // Studio's idle context) plus a decode-graph growth margin.
-    const uint64_t margin=decode_vram_margin(),floor=decode_vram_reserve();
+    // NVML physical free already excludes resident writer allocations. Reserve
+    // only their pending growth, retaining the existing physical floor, decode
+    // growth margin and context next-step admission independently.
+    const auto count=dsv41_writer_bank::current.count;
+    require(!count||decode_writer_allocated_bytes,"Native writer allocation accounting is unavailable");
+    const uint64_t prefill_writer=count?ggml_backend_cuda_dsv41_writer_resident_bytes():0;
+    const uint64_t native_writer=count?decode_writer_allocated_bytes():0;
+    require(native_writer<=UINT64_MAX-prefill_writer,"Writer allocation accounting overflow");
+    const uint64_t writer_pending=dsv41_writer_memory::pending_device_bytes(count,prefill_writer+native_writer);
+    if(count)std::fprintf(stderr,"LLAMADECODE_WRITER_RESIDENCY total=%llu prefill_allocated=%llu native_allocated=%llu pending=%llu\n",
+        (unsigned long long)dsv41_writer_memory::resident_device_bytes(count),(unsigned long long)prefill_writer,
+        (unsigned long long)native_writer,(unsigned long long)writer_pending);
+    const uint64_t margin=decode_vram_margin()+writer_pending,floor=decode_vram_reserve();
     const uint64_t freed=fixed->full_graph_reserve+fixed->full_hidden_bytes;
     const uint64_t now=ggml_gallocr_get_buffer_size(fixed->graph.get(),0)+fixed->hidden_bytes;
     (void)freed;(void)now;uint64_t offer=~0ull;
@@ -213,6 +214,7 @@ void clear_decode_cancel(){const auto&p=decode_cancel_file();if(!p.empty())Delet
 struct ds4_external {
     HMODULE module=nullptr;bool open=false;
     int(*x_open)(const char*,uint32_t,char*,size_t)=nullptr;const void*(*x_map)()=nullptr;
+    int(*x_direction_stack)(const uint8_t*,const float*,uint32_t,uint64_t,char*,size_t)=nullptr;
     int(*x_register)(uint64_t,uint64_t,void*)=nullptr;
     int(*x_bind)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*)=nullptr;
     int(*x_bind_ex)(void*const*,void*const*,void*const*,const uint32_t*,void*const*,void*const*,uint32_t)=nullptr; // bf16 owners (optional export)
@@ -278,6 +280,10 @@ struct ds4_external {
         require(module,"Cannot load ds4-decode.dll beside the producer");
         bind(x_open,"ds4x_open");bind(x_map,"ds4x_model_map");bind(x_register,"ds4x_register_weight");bind(x_bind,"ds4x_bind_state");
         bind(x_hook,"ds4x_set_expert_hook");bind(x_decode,"ds4x_decode");bind(x_close,"ds4x_close");bind(x_affinity,"ds4x_set_affinity");
+        if(dsv41_writer_bank::current.count){
+            bind(x_direction_stack,"ds4x_direction_stack");
+            bind(decode_writer_allocated_bytes,"ds4x_direction_allocated_bytes");
+        }
         x_host_timing=reinterpret_cast<decltype(x_host_timing)>(GetProcAddress(module,"ds4x_host_timing_v1"));
         const char*ram=std::getenv("LLAMADECODE_HOST_CACHE_MB");
         if(ram&&*ram&&std::strcmp(ram,"0")){
@@ -343,6 +349,8 @@ struct ds4_external {
             size_t free_before=0,free_after=0,total=0;ggml_backend_cuda_get_device_memory(0,&free_before,&total);
             t0=clock_type::now();
             char why[512]{};require(x_open(weights.model_path.c_str(),context,why,sizeof(why))==1,why[0]?why:"ds4x_open failed");open=true;
+            if(dsv41_writer_bank::current.count){const auto &bank=dsv41_writer_bank::current;
+                require(x_direction_stack(bank.identity.data(),bank.pack.data(),bank.count,bank.pack.size(),why,sizeof(why))==1,why[0]?why:"External decoder direction bank refused");}
             ggml_backend_cuda_get_device_memory(0,&free_after,&total);
             std::fprintf(stderr,"LLAMADECODE_DS4X_DEVICE_DELTA bytes=%lld free_before=%llu free_after=%llu\n",(long long)free_before-(long long)free_after,
                 (unsigned long long)free_before,(unsigned long long)free_after);std::fflush(stderr);
@@ -502,7 +510,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
     current=inspect();
     send({{"status","ready"},{"session",session},{"model_sha256",model_sha},{"next_sequence",guard.expected()},
         {"checkpoint",current.describe()},{"maximum_prefill_tokens",std::min(capacity,llama_dsv41_prefill::legacy_sweep_tokens)},{"maximum_prefill_sweep_tokens",capacity},{"maximum_decode_tokens",llama_dsv41::decode_delta_chunk_tokens},{"maximum_decode_delta_tokens",llama_dsv41::decode_delta_max_tokens},{"control_host_bytes",64*1024*1024},
-        {"generation_control_version",1},{"local_snapshot_version",1},{"vision_prefill_version",1},{"yoco_keep",options.yoco_keep},{"yoco_state_version",options.yoco_remote_state_version},{"transport",options.yoco_keep&&!llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version)?"local bounded state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
+        {"direction_binding",dsv41_writer_bank::current.sha256},{"generation_control_version",1},{"local_snapshot_version",1},{"vision_prefill_version",1},{"yoco_keep",options.yoco_keep},{"yoco_state_version",options.yoco_remote_state_version},{"transport",options.yoco_keep&&!llama_dsv41_yoco::remote_compatible(options.yoco_keep,options.yoco_remote_state_version)?"local bounded state; remote export disabled":"private owned pipes; existing native payload and artifact v2.1 delta"}});
     for(;;){
         io.renew();auto command=dsv41_live::parse_control(io.line());guard.accept(command);if(owner_epoch)command.erase("owner_epoch");
         const auto operation=command.at("operation").get<std::string>();const auto sequence=dsv41_live::u64(command.at("sequence"));

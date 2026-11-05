@@ -56,11 +56,14 @@ void llama_dsv41_engram_weight_stream(bool active){llama_dsv41_engram_weight_pas
 // https://learn.microsoft.com/windows/win32/api/ioringapi/nf-ioringapi-closeioring
 struct llama_dsv41_engram_prompt_cache::implementation {
     static constexpr uint32_t depth=256,page_size=8192;
-    uint32_t row_bytes=264; // DSV4.1 Engram rows; QFNSTREAM prepare_rows_early sets the model's row size
+    uint32_t row_bytes=264; // DSV4.1 Engram rows; QFN prepare_rows_early sets the model's row size
+    uint32_t submit_low_water=0; // 0 preserves DSV's existing policy
+    uint32_t completion_poll_us=0;
     struct table {std::vector<uint32_t> ids;std::vector<uint8_t> data;};
     std::array<table,2> tables;
     std::array<uint64_t,2> bases{};
-    bool attempted=false,prepared=false,load_attempted=false;
+    bool attempted=false,load_attempted=false;
+    std::atomic<bool> prepared{false};
     // Tables whose rows are complete: 0, 1 (table 0) or 2 (both). Release
     // stores publish the rows; read() and wait_table() acquire them.
     std::atomic<uint32_t> ready_tables{0};
@@ -329,7 +332,7 @@ public:
         prepare(layout,tokens,count,offsets,admitted,initial,text_mask); // host_plan holds the fixed 4 MiB IO reserve
         configure_early(admitted,std::move(prior_cache));
     }
-    // QFNSTREAM: precomputed rows, then the same early-loader configuration as prepare_early.
+    // QFN: precomputed rows, then the same early-loader configuration as prepare_early.
     void prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>& offsets,uint32_t bytes_per_row,
                             const std::array<uint64_t,2>& table_rows,uint64_t admitted){
         require(!attempted&&bytes_per_row>0&&bytes_per_row<=4096&&!ids[0].empty(),"Invalid or repeated precomputed Engram row set");attempted=true;
@@ -573,6 +576,8 @@ public:
             return false;
         };
         UINT_PTR sequence=0;uint64_t read_bytes=0,requests=0,submits=0,useful_rows=0,max_inflight=0,replanned=0;
+        if(submit_low_water)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_SUBMIT_POLICY low_water=%u batch=%u total_slots=%u large_slots=%u\n",
+            submit_low_water,early_batch,slots_per_ring,early_large);
         auto issue=[&](early_ring& r){
             while(fetch()){
                 if(pending.bytes>small_slot&&r.free_large.empty()){
@@ -603,7 +608,8 @@ public:
             if(!r.staged)return;
             // Always batched: submit a full batch, or whatever is staged once
             // the ring's in-flight reads fall to half its slots or the plan ends.
-            if(!drain&&r.staged<early_batch&&r.submitted>slots_per_ring/2)return;
+            const uint32_t low_water=submit_low_water?submit_low_water:slots_per_ring/2;
+            if(!drain&&r.staged<early_batch&&r.submitted>low_water)return;
             UINT32 n=0;const auto hr=api.SubmitIoRing(r.ring,0,0,&n);
             // No wait requested: only a full successful submit is valid.
             if(hr==S_OK){if(n!=r.staged)io_scope::unsafe_cleanup();r.submitted+=n;r.staged=0;++submits;}
@@ -611,6 +617,7 @@ public:
         };
         std::vector<HANDLE> events;for(const auto& r:io.rings)events.push_back(r.event);
         auto last=clock::now();double overlap_ms=0;bool weight_active=weight_at_start;auto last_progress=clock::now();
+        auto completion_at=clock::now();uint64_t completion_polls=0,completion_waits=0;
         while(true){
             const auto now=clock::now();
             if(weight_active)overlap_ms+=std::chrono::duration<double,std::milli>(now-last).count();
@@ -640,7 +647,7 @@ public:
                     (s1-1<early_small?r.free_small:r.free_large).push_back(s1-1);progress=true;
                 }
             }
-            if(progress)last_progress=clock::now();
+            if(progress){last_progress=clock::now();completion_at=last_progress;}
             if(ready_tables.load(std::memory_order_relaxed)==0&&done[0]==need[0]){
                 ready_tables.store(1,std::memory_order_release);table0_ms=since(began);
                 llama_dsv41_layer_log("DS4PERF_ENGRAM_TABLE_LOADED table=0 rows=%zu wall_ms=%llu early=1\n",tables[0].ids.size(),(unsigned long long)table0_ms);
@@ -653,6 +660,10 @@ public:
             bool idle=plan_done;for(const auto& r:io.rings)idle=idle&&!r.staged&&!r.submitted;
             if(idle)break;
             if(!progress&&inflight){
+                if(completion_poll_us&&std::chrono::duration<double,std::micro>(clock::now()-completion_at).count()<completion_poll_us){
+                    ++completion_polls;YieldProcessor();continue;
+                }
+                ++completion_waits;
                 const auto wait=WaitForMultipleObjects(DWORD(events.size()),events.data(),FALSE,100);
                 require(wait<WAIT_OBJECT_0+events.size()||wait==WAIT_TIMEOUT,"Engram IoRing completion wait failed");
             }
@@ -661,6 +672,8 @@ public:
         ready_tables.store(2,std::memory_order_release);
         const double wall=since(began);
         const uint64_t rows=tables[0].ids.size()+tables[1].ids.size();
+        if(completion_poll_us)llama_dsv41_layer_log("LLAMADECODE_ENGRAM_COMPLETION_POLICY poll_us=%u polls=%llu waits=%llu\n",
+            completion_poll_us,(unsigned long long)completion_polls,(unsigned long long)completion_waits);
         llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_LOAD table0_rows=%zu table1_rows=%zu hit_rows=%llu reuse=%d extents=%llu merged_rows=%llu requests=%llu submits=%llu "
             "read_bytes=%llu useful_bytes=%llu rings=%u slots=%u large_slots=%u batch=%u replanned=%llu arena_bytes=%llu host_plan_bytes=%llu max_inflight=%llu "
             "setup_ms=%.3f table0_ms=%.3f wall_ms=%.3f weight_pass_at_start=%d weight_pass_overlap_ms=%.3f overlap_frac=%.3f geometry=%s slot_bytes=%u\n",
@@ -699,7 +712,11 @@ public:
         std::memcpy(destination,t.data.data()+size_t(found-t.ids.begin())*row_bytes,row_bytes);return true;
     }
     void wait_table(uint32_t table,const std::function<bool()>& stopped)const{
-        require(table<2&&prepared,"Engram table wait requires a prepared cache");
+        // An adopted early cache can still be planning on its worker. Wait
+        // for the release-published table, including that preparation time;
+        // reading the worker's plain preparation flag here raced the planner
+        // and poisoned the provider while layer zero held its weight lease.
+        require(table<2,"Engram table wait requires a valid table");
         while(ready_tables.load(std::memory_order_acquire)<=table){
             require(!failed.load(std::memory_order_acquire),"Whole-prompt Engram preload failed before this table was ready");
             require(!stopped||!stopped(),"Engram table wait cancelled");
@@ -757,7 +774,8 @@ uint64_t llama_dsv41_engram_prompt_cache::planned_requests()const{
 void llama_dsv41_engram_prompt_cache::prepare_early(const llama_dsv41::engram_layout &l,const int32_t*t,uint32_t n,const std::array<uint64_t,2>&o,uint64_t b,llama_dsv41::engram_history initial,
         std::shared_ptr<const llama_dsv41_engram_prompt_cache> prior,const uint8_t* text_mask){
 #ifdef _WIN32
- p->prepare_early(l,t,n,o,b,initial,std::move(prior),text_mask);
+ try{p->prepare_early(l,t,n,o,b,initial,std::move(prior),text_mask);}
+ catch(...){p->failed.store(true,std::memory_order_release);throw;}
 #else
  (void)l;(void)t;(void)n;(void)o;(void)b;(void)initial;(void)prior;(void)text_mask;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
@@ -765,7 +783,8 @@ void llama_dsv41_engram_prompt_cache::prepare_early(const llama_dsv41::engram_la
 void llama_dsv41_engram_prompt_cache::prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>&o,uint32_t row_bytes,
         const std::array<uint64_t,2>& table_rows,uint64_t b){
 #ifdef _WIN32
- p->prepare_rows_early(std::move(ids),o,row_bytes,table_rows,b);
+ try{p->prepare_rows_early(std::move(ids),o,row_bytes,table_rows,b);}
+ catch(...){p->failed.store(true,std::memory_order_release);throw;}
 #else
  (void)ids;(void)o;(void)row_bytes;(void)table_rows;(void)b;throw std::runtime_error("Engram IoRing requires Windows");
 #endif
@@ -790,6 +809,24 @@ void llama_dsv41_engram_prompt_cache::load_early(const wchar_t*path,void*file,ui
  catch(...){p->failed.store(true,std::memory_order_release);throw;}
 #else
  (void)path;(void)file;(void)n;(void)stop;throw std::runtime_error("Engram IoRing requires Windows");
+#endif
+}
+void llama_dsv41_engram_prompt_cache::set_submit_low_water(uint32_t value){
+    if(value>256)throw std::invalid_argument("Engram submit low watermark must be 0..256");
+#ifdef _WIN32
+    if(p->load_attempted)throw std::logic_error("Engram submission policy cannot change during a load");
+    p->submit_low_water=value;
+#else
+    if(value)throw std::runtime_error("Engram IoRing requires Windows");
+#endif
+}
+void llama_dsv41_engram_prompt_cache::set_completion_poll_us(uint32_t value){
+    if(value>5000)throw std::invalid_argument("Engram completion polling must be 0..5000 microseconds");
+#ifdef _WIN32
+    if(p->load_attempted)throw std::logic_error("Engram completion policy cannot change during a load");
+    p->completion_poll_us=value;
+#else
+    if(value)throw std::runtime_error("Engram IoRing requires Windows");
 #endif
 }
 void llama_dsv41_engram_prompt_cache::load(const wchar_t*path,void*file,uint64_t n,const std::function<bool()>&stop){

@@ -55,8 +55,12 @@ public:
     // LLAMADECODE_ENGRAM_CACHE_MB: set before prepare_early; load_early copies
     // the cached rows, reads only the missing ones, then inserts them.
     void set_row_cache(std::shared_ptr<llama_dsv41_engram_row_cache>);
+    // Caller-controlled refill batching, 0 preserves the existing DSV policy.
+    // All row, extent, nonce and completion checks remain unchanged.
+    void set_submit_low_water(uint32_t);
+    void set_completion_poll_us(uint32_t); // 0 retains the event-only completion wait
     void load_early(const wchar_t*,void *verified_file,uint64_t,const std::function<bool()>&);
-    // QFNSTREAM: a precomputed row set (any model's own hash) through the same early multi-IoRing loader and
+    // QFN: a precomputed row set (any model's own hash) through the same early multi-IoRing loader and
     // scan/random geometry choice. ids[t] are row indices of table t (any order, duplicates allowed; table 1 may be
     // empty), offsets[t] the table's file offset, row_bytes the fixed row size of both tables.
     void prepare_rows_early(std::array<std::vector<uint32_t>,2> ids,const std::array<uint64_t,2>& offsets,uint32_t row_bytes,

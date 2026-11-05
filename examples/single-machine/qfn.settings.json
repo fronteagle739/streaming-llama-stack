@@ -1,17 +1,48 @@
 {
   "version": 1,
   "model_key": "qfn-native-nvfp4",
-  "bias": {"min": 0, "max": 8, "max_quality": 0, "balanced": 0, "max_speed": 0.68},
-  "router_spreads": {"file": "presets/qfn-affinity-spreads.txt", "reference_mean": 0.6327, "reference_bias": 0, "reference_only": true, "arithmetic": "Use the qualified engine's embedded per-layer constants; the reference file retains the original higher-precision observations."},
-  "cache": {"seed_lfu_max": 1, "half_life": 64},
-  "engine": {"tile": 2048, "read_parts": 8, "mtp": 0, "prefill": "dsv-native", "decode": "dsv-native", "indexer": "basalt-tc-refine-prefill"},
+  "bias": {
+    "min": 0,
+    "max": 8,
+    "max_quality": 0,
+    "balanced": 0,
+    "max_speed": 0.68
+  },
+  "router_spreads": {
+    "file": "presets/qfn-affinity-spreads.txt",
+    "reference_mean": 0.6327,
+    "reference_bias": 0,
+    "reference_only": true,
+    "arithmetic": "Use the qualified engine's embedded per-layer constants; the reference file retains the original higher-precision observations."
+  },
+  "cache": {
+    "seed_lfu_max": 1,
+    "half_life": 64
+  },
+  "engine": {
+    "tile": 2048,
+    "read_parts": 8,
+    "mtp": 0,
+    "prefill": "dsv-native",
+    "decode": "dsv-native",
+    "indexer": "basalt-tc-refine-prefill"
+  },
   "calibration": {
     "status": "reference-settings",
     "context": 100000,
     "selection": {
-      "max_quality": {"bias": 0, "why": "Unbiased routing; byte-identical full-vocabulary reference at 100K."},
-      "balanced": {"bias": 0, "why": "Conservative initial value shared with Max quality until this machine is calibrated; no intermediate bias is claimed qualified."},
-      "max_speed": {"bias": 0.68, "why": "Owner-selected on 2026-11-03 15:52 from historical bias-0.68 100K measurements: 50.12 tok/s, top-1 88.3%, KL 0.137. These receipts predate the installed build; no new bias-0.68 GUI or timing was run at owner request. Bias 0.35 remains available numerically and its prior natural-stop/performance evidence remains historical."}
+      "max_quality": {
+        "bias": 0,
+        "why": "Unbiased routing; byte-identical full-vocabulary reference at 100K."
+      },
+      "balanced": {
+        "bias": 0,
+        "why": "Conservative initial value shared with Max quality until this machine is calibrated; no intermediate bias is claimed qualified."
+      },
+      "max_speed": {
+        "bias": 0.68,
+        "why": "Router bias 0.68: 50.12 tokens/s at 100K, KL 0.137 and top-1 agreement 88.3% against unbiased routing. Bias 0.35 is also available as a numeric setting."
+      }
     }
   }
 }

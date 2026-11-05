@@ -1,4 +1,4 @@
-// QFNSTREAM: QSA selection kernel. One 256-thread block per token.
+// QFN: QSA selection kernel. One 256-thread block per token.
 // Keys are the rectified scores as bit patterns (non-negative floats order like their bits; -0 and negatives map
 // to 0). An exact 4-pass radix descent finds the n_top-th largest key; pools above it are kept, and pools equal to
 // it are kept in ascending index order until n_top are taken (ds4 idx_select semantics). The kept pools are then

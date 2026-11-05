@@ -32,7 +32,7 @@ static inline int best_index_int8(int n, const int8_t * val, float x) {
     return x - val[mu-1] < val[mu] - x ? mu-1 : mu;
 }
 
-// QFNSTREAM: upstream ggml-org Q2_0 reference quantizer (scale = absmax, codes round(w/d) clamped to [-1, 2])
+// QFN: upstream ggml-org Q2_0 reference quantizer (scale = absmax, codes round(w/d) clamped to [-1, 2])
 void quantize_row_q2_0_ref(const float * GGML_RESTRICT x, block_q2_0 * GGML_RESTRICT y, int64_t k) {
     static const int qk = QK2_0;
     assert(k % qk == 0);

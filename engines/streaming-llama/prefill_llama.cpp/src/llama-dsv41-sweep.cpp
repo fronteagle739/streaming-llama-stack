@@ -1,4 +1,7 @@
 #include "llama-dsv41-layer-log.h"
+#include "llama-dsv41-writer-capture.h"
+#include "llama-dsv41-writer-memory.h"
+#include "ggml-dsv41-writer-bank.h"
 #include "llama-dsv41-test-fault.h"
 #include "llama-dsv41-sweep.h"
 #include "llama-dsv41-flashinfer-budget.h"
@@ -132,7 +135,7 @@ struct llama_dsv41_sweep::implementation {
         out.residual=read_f32(values.residual,size_t(width)*copies*count);
         out.previous_pre=read_f32(values.pre,size_t(copies)*count);return out;
     }
-    void head(ggml_tensor*norm,ggml_tensor*weight,const llama_dsv41_carry_store::tile *resident_last=nullptr){
+    void head(ggml_tensor*norm,ggml_tensor*weight,const llama_dsv41_carry_store::tile *resident_last=nullptr,std::vector<float>*features=nullptr){
 #ifdef GGML_USE_CUDA
         // The bounded one-row Q8/F32 head selects cuBLAS SGEMM, whose first
         // invocation fails under capture on this backend. Keep only the head
@@ -171,10 +174,15 @@ struct llama_dsv41_sweep::implementation {
             auto*residual=ggml_new_tensor_3d(ctx.get(),GGML_TYPE_F32,width,copies,1);
             auto*pre=ggml_new_tensor_2d(ctx.get(),GGML_TYPE_F32,copies,1);
             auto*slice=ggml_view_2d(ctx.get(),weight,width,count,weight->nb[1],size_t(first)*weight->nb[1]);
-            llama_dsv41_graph_ops ops(ctx.get(),1e-20f,1e-6f,20);
+            ggml_tensor *normalized=nullptr;
+            llama_dsv41_graph_ops::observer observe;
+            if(features&&first==0)observe=[&](ggml_tensor*t,const char*name){
+                ggml_set_name(t,name);if(!std::strcmp(name,"dsv41_weighted_norm_bf16"))normalized=t;};
+            llama_dsv41_graph_ops ops(ctx.get(),1e-20f,1e-6f,20,observe);
             auto*out=ops.logits(residual,pre,norm,slice);
             auto*graph=ggml_new_graph_custom(ctx.get(),8192,false);
             ggml_build_forward_expand(graph,out);
+            if(features&&first==0){require(normalized,"Evaluation lost actual normalized head input");ggml_set_output(normalized);ggml_build_forward_expand(graph,normalized);}
             auto buffer=allocate_graph(ctx.get(),graph,backend,options.admitted_graph_bytes-temporary_bytes);
             llama_dsv41_layer_log("[dsv41-sweep] head slice first=%u rows=%u graph_bytes=%llu temporary_bytes=%llu\n",
                 first,count,(unsigned long long)ggml_backend_buffer_get_size(buffer.get()),
@@ -183,6 +191,7 @@ struct llama_dsv41_sweep::implementation {
             upload(residual,last.residual);upload(pre,last.previous_pre);
             require(ggml_backend_graph_compute(backend,graph)==GGML_STATUS_SUCCESS,"V4.1 actual output head slice graph failed");
             const auto values=read_f32(out,count);
+            if(features&&first==0)*features=read_f32(normalized,width);
             logits.insert(logits.end(),values.begin(),values.end());
         }
         require(logits.size()==vocabulary,"V4.1 sliced output head vocabulary order/size changed");
@@ -434,7 +443,9 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
         // The context cache is charged at what it can hold for its context (<= --cache-bytes).
         const uint64_t cache_charge=llama_dsv41_device_admission::cache_charge(options.admitted_cache_bytes,
             llama_dsv41_cache_storage::required_bytes(options.context,options.compressed_cache_bf16,options.capture_dspark));
-        const uint64_t device=add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,cache_charge),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes))));
+        const uint64_t writer_device=dsv41_writer_memory::prefill_device_bytes(dsv41_writer_bank::current.count);
+        const uint64_t device=add(writer_device,add(options.admitted_prefetch_device_bytes,add(add(add(add(add(provider.device_bytes,cache_charge),options.admitted_graph_bytes),options.admitted_hidden_bytes),options.admitted_pinned_device_bytes),add(llama_dsv41_expert_profile::extra_device(options.expert),add(options.admitted_cast_device_bytes,options.admitted_index_device_bytes)))));
+        if(writer_device)llama_dsv41_layer_log("DS4PERF_WRITER_PREFILL_ADMISSION persistent_device_bytes=%llu provider_heaps_unchanged=1 kernel_workspace_unchanged=1\n",(unsigned long long)writer_device);
         // Deliberately conservative: includes both input/output tile vectors,
         // lease copy, graph metadata, bounded Engram and serialization scratch.
         const uint64_t tile_host=options.carry.direct_ram_tiles?
@@ -549,7 +560,12 @@ bool llama_dsv41_sweep::open(const llama_dsv41_weight_provider::config &input_we
                 const uint64_t dense_reserve=dense_fp8&&!std::strcmp(dense_fp8,"1")?576ull<<20:0;
                 require(f.backend_temporary_reserve_bytes>=dense_reserve,"FP8 reserve exceeds fixed backend admission");
                 const uint64_t base_reserve=f.backend_temporary_reserve_bytes-dense_reserve;
-                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&options.pair_ffn&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
+                // The one-token warm request allocates the real prompt's fixed
+                // bank before its first stage lease. It runs the narrow FFN,
+                // while retaining the complete large-prompt FlashInfer reserve.
+                const bool flashinfer_plan=options.pair_ffn||
+                    (!f.unpaired_resident&&!options.pair_ffn&&options.carry.tokens==1&&options.carry.max_tile_tokens<=f.tile);
+                const bool flashinfer_reserve=llama_dsv41_flashinfer::requested()&&flashinfer_plan&&f.tile==ggml_dsv41_flashinfer::batch_tokens()&&
                     base_reserve==llama_dsv41_flashinfer::reserve_bytes();
                 require((base_reserve==1024ull*1024*1024||base_reserve==768ull*1024*1024||flashinfer_reserve)&&f.backend_temporary_reserve_bytes<options.admitted_graph_bytes,"Unsupported fixed backend temporary reserve");
                 require(flashinfer_reserve||base_reserve==1024ull*1024*1024||(options.expert.attention_kv_f16_table&&options.expert.index_key_windows&&options.expert.token_tile_attention&&f.tile<=8192),"Reduced backend reserve requires direct-F16/window profile and<=8K groups");
@@ -964,6 +980,22 @@ bool llama_dsv41_sweep::run(const std::vector<int32_t>&tokens,const cancelled&st
         }else p->executor.reset();
         p->check_stop(stop);ggml_tensor*norm=nullptr,*weight=nullptr;
         success(p->provider.acquire_head(norm,weight,error),error);p->head(norm,weight,resident_last?&*resident_last:nullptr);
+        if(dsv41_writer_capture::current.active&&dsv41_writer_capture::current.evaluate){
+            auto &capture=dsv41_writer_capture::current;const auto frontier_logits=p->logits;
+            constexpr size_t writers=40*6*5120,stride=writers+5120+129280;
+            for(uint32_t group=0;group<capture.groups;++group){
+                require(capture.final_seen[group*2]&&capture.final_seen[group*2+1],"Evaluation head requires captured final residual and pre");
+                llama_dsv41_carry_store::tile selected;selected.count=1;selected.start=capture.positions[group];
+                selected.residual.assign(capture.final_residual.begin()+size_t(group)*4*width,capture.final_residual.begin()+size_t(group+1)*4*width);
+                selected.previous_pre.assign(capture.final_pre.begin()+size_t(group)*4,capture.final_pre.begin()+size_t(group+1)*4);
+                std::vector<float> features;p->head(norm,weight,&selected,&features);
+                require(features.size()==width,"Evaluation feature width differs");
+                auto out=capture.evaluated.begin()+size_t(group)*stride;
+                std::copy(capture.output.begin()+size_t(group)*writers,capture.output.begin()+size_t(group+1)*writers,out);
+                std::copy(features.begin(),features.end(),out+writers);std::copy(p->logits.begin(),p->logits.end(),out+writers+width);
+            }
+            p->logits=frontier_logits;
+        }
         success(p->provider.release(error),error);p->check_stop(stop);ggml_backend_synchronize(p->backend);
         const auto head_complete=std::chrono::steady_clock::now();
         p->measured.prompt_processing_ms=std::chrono::duration<double,std::milli>(head_complete-run_started).count();

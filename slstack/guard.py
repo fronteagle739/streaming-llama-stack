@@ -36,6 +36,7 @@ class GPUWindowReader:
         self.reads = 0
         self.blocked_since = None
         self.permission_errors = 0
+        self.transition_retries = 0
 
     def read(self):
         try:
@@ -55,6 +56,55 @@ class GPUWindowReader:
         if isinstance(window.get('deadline'), (int, float)):
             self.progress.rising(window['deadline'])  # the publisher's advancing heartbeat
         return window
+
+
+class WindowPublisherExited(Exception):
+    """Normal owned exit raced a final cached request-window observation."""
+
+
+def gpu_window_observation(reader, spec, child):
+    """Read one consistent window/ledger pair without weakening lease checks.
+
+    A producer retirement can publish a new window between the first metadata
+    read and the ledger read. Re-read ownership after the ledger; retry only
+    when that exact identity changed. A stable missing or foreign hold remains
+    visible to the ordinary admission checks below.
+    """
+    from .lease import active_holds
+    def validate(window):
+        if not window or not window.get('active'):return
+        owner=window.get('owner_pid');target=None
+        try:
+            candidate=psutil.Process(owner) if owner else None
+            if candidate is not None and (owner==child.pid or candidate.ppid()==child.pid):target=candidate
+        except psutil.Error:target=None
+        if target is None and child.poll() is not None:raise WindowPublisherExited()
+        if (window.get('run_id')!=spec['gpu_run_id'] or target is None or
+                abs(window.get('owner_created',0)-target.create_time())>.01):
+            raise ValueError('GPU window process/run identity differs')
+    def identity(window):
+        return tuple((window or {}).get(key)for key in ('active','run_id','owner_pid','owner_created','lease_id'))
+    window=reader.read()
+    for _ in range(4):
+        validate(window)
+        if not window or not window.get('active') or not window.get('lease_id'):return window,None
+        holds=active_holds(Path(spec['gpu_hold_file']).read_text(encoding='utf-8-sig'))
+        after=reader.read();validate(after)
+        if identity(window)==identity(after):return after,holds
+        reader.transition_retries+=1
+        window=after
+    raise ValueError('GPU request window ownership did not stabilize across four ledger observations')
+
+
+def gpu_lease_observation(holds, identity, gpu, budget, floor, free, rss):
+    """Keep both the foreign-reservation rule and the exact own-hold gate."""
+    from .lease import reservation_admission
+    own=lambda line:len(line.split())>=3 and line.split()[2].rstrip(';')==identity
+    foreign=[line for line in holds if not own(line)]
+    blockers,reservation=reservation_admission(foreign,gpu.get('host_budget_gib',budget+.25),floor,available=free,owned_rss=rss)
+    if blockers:return 'preempted by foreign ACTIVE hold or RAM reservation: '+repr(blockers),reservation
+    if not any(own(line)for line in holds):return 'own ACTIVE hold is no longer present',reservation
+    return None,reservation
 
 
 def admit(budget_gib, floor_gib):
@@ -119,6 +169,10 @@ def windows_job(proc, commit_gib, *, kill_on_close=True):
 
 
 def _supervise(spec):
+    from .paging_limits import owned_paging_limit_bytes
+    paging_limit = owned_paging_limit_bytes(spec)
+    if paging_limit is not None and not spec.get('paging_telemetry'):
+        raise ValueError('An explicit owned-paging limit requires paging telemetry')
     # Engine/GPU jobs use the pinned shared Studio guard. A server that opens its own
     # per-request GPU windows (combo_proxy) or a job bound to a named lease stays on
     # the owned loop below, which checks the window and ledger identity every poll.
@@ -131,7 +185,7 @@ def _supervise(spec):
         return _supervise_plain(spec)
     admit(spec['host_budget_gib'],spec['min_available_gib'])
     warnings=[]
-    watcher=PagingWatch(paging_bytes,warning=warnings.append)
+    watcher=PagingWatch(paging_bytes,warning=warnings.append,owned_paging_limit=paging_limit)
     receipt=Path(spec['receipt'])
     try:
         return _supervise_owned(spec,watcher,warnings)
@@ -223,7 +277,7 @@ def _supervise_plain(spec):
                 if pressure and time.monotonic() >= next_pressure_check:
                     reason = reason or pressure.check()
                     next_pressure_check = time.monotonic() + .5
-                if time.monotonic() >= next_progress_check:   # owner rule: timeout_s is a NO-PROGRESS window
+                if time.monotonic() >= next_progress_check:   # Runtime contract: timeout_s is a NO-PROGRESS window
                     progress.observe(activity(child.pid, spec['log']));next_progress_check = time.monotonic() + min(1, progress.seconds / 4)
                 if progress.expired():
                     reason = 'deadline exceeded: no progress for %.1fs (log, I/O, CPU and members unchanged; %.0fs since start)' % (progress.idle(), progress.elapsed())
@@ -344,7 +398,7 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                 if pressure and time.monotonic() >= next_pressure_check:
                     reason = reason or pressure.check()
                     next_pressure_check = time.monotonic() + .5
-                if progress is not None and time.monotonic() >= next_progress_check:   # owner rule: timeout_s is a NO-PROGRESS window
+                if progress is not None and time.monotonic() >= next_progress_check:   # Runtime contract: timeout_s is a NO-PROGRESS window
                     progress.observe(activity(child.pid, spec['log']));next_progress_check = time.monotonic() + min(1, progress.seconds / 4)
                 if progress is not None and progress.expired():
                     reason = 'deadline exceeded: no progress for %.1fs (log, I/O, CPU and members unchanged; %.0fs since start)' % (progress.idle(), progress.elapsed())
@@ -357,24 +411,12 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                             reason = 'Yielding to shared hold: ' + foreign
                     except OSError as exc:
                         reason = 'Shared hold observation failed: ' + str(exc)
-                identity=spec.get('gpu_lease_identity')
+                identity=spec.get('gpu_lease_identity');window_holds=None
                 hold_file=(spec.get('gpu') or {}).get('hold_file')
                 if window_reader is not None:
                     try:
-                        window=window_reader.read()
+                        window,window_holds=gpu_window_observation(window_reader,spec,child)
                         if window is not None and window.get('active'):
-                            # The owner is the guarded child, or the interpreter a venv launcher stub
-                            # (Scripts/python.exe) re-spawned as its direct child.
-                            owner=window.get('owner_pid');target=None
-                            try:
-                                candidate=psutil.Process(owner) if owner else None
-                                if candidate is not None and (owner==child.pid or candidate.ppid()==child.pid):target=candidate
-                            except psutil.Error:target=None
-                            if target is None and child.poll() is not None:
-                                break  # normal owned exit can race the final cached-window poll
-                            if (window.get('run_id')!=spec['gpu_run_id'] or target is None or
-                                abs(window.get('owner_created',0)-target.create_time())>.01):
-                                raise ValueError('GPU window process/run identity differs')
                             identity=window['lease_id'];hold_file=spec['gpu_hold_file']
                             if active_window!=identity or window_started is None:active_window=identity;window_started=time.monotonic()   # lease_id is null until the producer's lease is taken
                             # During a read denial the old heartbeat cannot prove a stall.
@@ -383,25 +425,22 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                             if window_reader.blocked_since is None and time.time()>=window['deadline']:
                                 reason='GPU request window made no progress before its renewed deadline'
                         elif window is not None:active_window=None;window_started=None
+                    except WindowPublisherExited:
+                        break
                     except FileNotFoundError:
                         if active_window:reason='Active GPU window metadata disappeared'
                     except (ValueError,KeyError,TypeError,OSError) as exc:
                         reason='GPU request window metadata refused: '+str(exc)
                 if identity:
-                    from .lease import active_holds, reservation_admission
+                    from .lease import active_holds
                     try:
-                        holds = active_holds(Path(hold_file).read_text(encoding='utf-8-sig'))
-                        foreign = [line for line in holds if len(line.split()) < 3 or
-                                   line.split()[2].rstrip(';') != identity]
+                        holds = window_holds if window_holds is not None else active_holds(Path(hold_file).read_text(encoding='utf-8-sig'))
                         ledger_blocked_since = None
                         gpu=spec.get('gpu') or {}
-                        blockers,reservation=reservation_admission(foreign,gpu.get('host_budget_gib',budget+.25),floor,available=free,owned_rss=rss)
+                        lease_error,reservation=gpu_lease_observation(holds,identity,gpu,budget,floor,free,rss)
                         if time.monotonic()-last_reservation_sample>=50:
                             reservation_samples.append(reservation);last_reservation_sample=time.monotonic()
-                        if blockers:
-                            reason = 'preempted by foreign ACTIVE hold or RAM reservation: ' + repr(blockers)
-                        elif not holds:
-                            reason = 'own ACTIVE hold is no longer present'
+                        if lease_error:reason=lease_error
                     except OSError as exc:
                         if ledger_blocked_since is None:ledger_blocked_since=time.monotonic()
                         if time.monotonic()-ledger_blocked_since>=1:
@@ -430,6 +469,8 @@ def _supervise_owned(spec,paging_watch,paging_warnings):
                'min_available': minimum, 'elapsed_s': time.monotonic() - start,
                'started_monotonic': start, 'no_progress_window_s': spec['timeout_s'],
                'gpu_window_permission_errors': window_reader.permission_errors if window_reader else 0,
+               'gpu_window_transition_retries': window_reader.transition_retries if window_reader else 0,
+               'gpu_last_observed_window': {key:(window_reader.window or {}).get(key)for key in ('active','run_id','owner_pid','owner_created','lease_id','deadline')} if window_reader else None,
                'gpu_window_stall_seconds': window_reader.progress.seconds if window_reader else None,
                'host_budget_gib': budget, 'floor_gib': floor,
                'job_commit_gib': spec['job_commit_gib'], 'child_pid': child.pid}

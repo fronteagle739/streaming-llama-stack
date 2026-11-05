@@ -4,6 +4,7 @@
 #include "ggml-ds4-native-half.h"
 #include "llama-dsv41-flashinfer-budget.h"
 #include "ggml-dsv41-native-ffn.h"
+#include "ggml-dsv41-writer-bank.h"
 #include <cmath>
 
 llama_dsv41_ffn_graph::llama_dsv41_ffn_graph(ggml_context * ctx,llama_dsv41_graph_ops & ops,float limit,float route_scale) :
@@ -72,12 +73,20 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
     dsv41_boundary::stage(selected,"route_ids");
     dsv41_boundary::stage(weights,"route_weights");
     router_stage.finish();
+    ggml_tensor * product_ids=selected;
+    if(w.expert_slots){
+        GGML_ASSERT(w.expert_slots->type==GGML_TYPE_I32&&w.expert_slots->ne[0]==used&&w.expert_slots->ne[1]==count);
+        product_ids=ggml_cpy(ctx,selected,w.expert_slots);ggml_set_name(product_ids,"dsv41_expert_slot_copy");
+    }
     if(w.native_fp4_layout){
-        GGML_ASSERT(!native_half&&!w.expert_slots);
+        std::fprintf(stderr,"DSVAPPEND_PACKED_FFN rows=%lld native_half=%d expert_slots=%d weight_slots=%lld layout=%s\n",
+            (long long)count,int(native_half),int(w.expert_slots!=nullptr),(long long)w.gate->ne[2],w.expert_slots?"slot-interleaved":"full-planes");
+        GGML_ASSERT(!native_half);
         auto *routed=ggml_new_tensor_2d(ctx,GGML_TYPE_F32,width,count);
-        routed->op=GGML_OP_CUSTOM;routed->op_params[0]=0x46494e31;routed->op_params[1]=1;
+        routed->op=GGML_OP_CUSTOM;routed->op_params[0]=0x46494e31;routed->op_params[1]=w.expert_slots?2:1;
         std::memcpy(routed->op_params+2,&limit,sizeof(limit));
-        routed->src[0]=input;routed->src[1]=weights;routed->src[2]=selected;
+        routed->op_params[3]=int32_t(ops.writer_layer);
+        routed->src[0]=input;routed->src[1]=weights;routed->src[2]=product_ids;
         routed->src[3]=w.gate;routed->src[4]=w.up;routed->src[5]=w.down;
         GGML_ASSERT(ggml_dsv41_native_ffn_valid(routed));
         ggml_set_name(routed,"dsv41_native_fp4_fused_ffn");
@@ -85,11 +94,6 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
         return {routed,selected,weights};
     }
     auto * x=ggml_reshape_3d(ctx,input,width,1,count);
-    ggml_tensor * product_ids=selected;
-    if(w.expert_slots){
-        GGML_ASSERT(w.expert_slots->type==GGML_TYPE_I32&&w.expert_slots->ne[0]==used&&w.expert_slots->ne[1]==count);
-        product_ids=ggml_cpy(ctx,selected,w.expert_slots);ggml_set_name(product_ids,"dsv41_expert_slot_copy");
-    }
     auto * gate=ggml_mul_mat_id(ctx,w.gate,x,product_ids);
     auto * up=ggml_mul_mat_id(ctx,w.up,x,product_ids);
     if(native_half){
@@ -118,7 +122,7 @@ ggml_tensor *llama_dsv41_ffn_graph::build_shared(const weights &w,ggml_tensor *i
     auto * shared_gate=mm(w.shared_gate,input,true);
     auto * shared_up=mm(w.shared_up,input,true);
     auto * shared_mid=ops.bf16(swiglu(shared_gate,shared_up));
-    auto * shared=mm(w.shared_down,shared_mid,true);
+    auto * shared=ops.bf16(ops.writer(mm(w.shared_down,shared_mid,false),w.shared_down,shared_mid,1));
     dsv41_boundary::stage(shared,"shared_ffn_bf16");return shared;
 }
 

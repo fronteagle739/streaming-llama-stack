@@ -40,7 +40,7 @@
  * Charge the requested bytes before entering CUDA, including pinned/managed
  * allocations. Refuse here, rather than letting CUDA OOM retries hide a host
  * admission failure. The process Job limit also covers allocator internals. */
-/* Owner rule: never force-kill this process while it may hold VRAM/DirectStorage.
+/* Runtime contract: never force-kill this process while it may hold VRAM/DirectStorage.
  * Refusing by exit is kept only before the first GPU allocation (nothing held yet);
  * after it a refusal requests the graceful abort and fails this allocation. */
 static bool cuda_host_admit(size_t bytes, const char *kind, int line, bool host_physical = false) {
@@ -22649,6 +22649,30 @@ __global__ static void directional_steering_project_kernel(
     }
 }
 
+/* Simultaneous rank-one output projections, never sequentially rotated. */
+__global__ static void direction_stack_kernel(float *x,const float *pack,
+        uint32_t layer,uint32_t site,uint32_t width,uint32_t count) {
+    __shared__ float partial[256],coeff[8];
+    const float *base=pack+((uint64_t)layer*2+site)*count*(width+1u);
+    for(uint32_t k=0;k<count;k++) {
+        const float *r=base+(uint64_t)k*(width+1u)+1;
+        float sum=0.0f;
+        for(uint32_t i=threadIdx.x;i<width;i+=blockDim.x)sum+=x[i]*r[i];
+        partial[threadIdx.x]=sum;__syncthreads();
+        for(uint32_t stride=blockDim.x/2;stride;stride/=2) {
+            if(threadIdx.x<stride)partial[threadIdx.x]+=partial[threadIdx.x+stride];
+            __syncthreads();
+        }
+        if(!threadIdx.x)coeff[k]=base[(uint64_t)k*(width+1u)]*partial[0];
+        __syncthreads();
+    }
+    for(uint32_t i=threadIdx.x;i<width;i+=blockDim.x) {
+        float delta=0.0f;
+        for(uint32_t k=0;k<count;k++)delta+=coeff[k]*base[(uint64_t)k*(width+1u)+1+i];
+        x[i]-=delta;
+    }
+}
+
 __global__ static void zero_kernel(float *out, uint64_t n) {
     uint64_t i = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) out[i] = 0.0f;
@@ -26182,7 +26206,8 @@ static int cuda_matmul_q8_0_hc_expand_tensor_labeled(
 
 
 /* Once-per-load dense output fusion. The mapped Q8_0 source is never modified. */
-__global__ static void output_lora_fuse_kernel(__half *weight, const float *a,
+template <typename Weight>
+__global__ static void output_lora_fuse_kernel(Weight *weight, const float *a,
         const float *b, uint64_t hidden, uint64_t vocab, uint32_t rank,
         float scale, int *invalid) {
     const uint64_t index = uint64_t(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -26191,10 +26216,11 @@ __global__ static void output_lora_fuse_kernel(__half *weight, const float *a,
     float delta = 0.0f;
     for (uint32_t r = 0; r < rank; ++r)
         delta += b[row * rank + r] * a[uint64_t(r) * hidden + col];
-    const float fused = __half2float(weight[index]) + scale * delta;
-    if (!isfinite(fused) || fabsf(fused) > 65504.0f) atomicExch(invalid, 1);
-    weight[index] = __float2half_rn(fused);
+    const float fused = float(weight[index]) + scale * delta;
+    if (!isfinite(fused) || (sizeof(Weight) == sizeof(__half) && fabsf(fused) > 65504.0f)) atomicExch(invalid, 1);
+    weight[index] = Weight(fused);
 }
+
 
 extern "C" int ds4_gpu_fuse_output_q8_lora(ds4_gpu_tensor *out,
         const void *model_map, uint64_t model_size, uint64_t offset,
@@ -30297,6 +30323,17 @@ extern "C" int ds4_gpu_add_xdev_tensor(ds4_gpu_tensor *out,
     }
     return ok;
 }
+extern "C" int ds4_gpu_direction_stack_tensor(ds4_gpu_tensor *x,const ds4_gpu_tensor *pack,
+        uint32_t layer,uint32_t site,uint32_t width,uint32_t count) {
+    if(!x || !pack || !width || !count || count>8 || site>1 ||
+        x->bytes<(uint64_t)width*sizeof(float) ||
+        pack->bytes<((uint64_t)layer*2+site+1)*count*(width+1u)*sizeof(float) ||
+        ds4_tensor_device_idx(x)!=ds4_tensor_device_idx(pack))return 0;
+    direction_stack_kernel<<<1,256,0,cuda_decode_stream()>>>((float *)x->ptr,
+        (const float *)pack->ptr,layer,site,width,count);
+    return cuda_ok(cudaGetLastError(),"direction stack writer projection");
+}
+
 extern "C" int ds4_gpu_directional_steering_project_tensor(
         ds4_gpu_tensor       *x,
         const ds4_gpu_tensor *directions,
@@ -35748,9 +35785,152 @@ static const void *g_fp4_pre_ids_src = nullptr;
 static int32_t g_fp4_pre_ids[6];
 static bool g_fp4_cpu_active = false;
 static float *g_fp4_cpu_acc_dev = nullptr;
+static const unsigned char *g_fp4_cpu_down_source[6] = {};
+static float *g_fp4_direction_mid = nullptr;
 static int external_fp4_cpu_join(void *ctx, cudaStream_t stream);
 static double g_last_hook_ms = 0.0;
 #endif
+/* All quant helpers are defined before the direction fusion implementation. */
+#include "ds4_direction_fusion_cuda.cuh"
+
+/* Preserve the routed gate/up and Q8_K activation boundaries, then use each
+ * selected expert's own target weights for its rank-one down update. */
+__global__ static void direction_mid_dequant_kernel(float *out,const cuda_block_q8_K *blocks,uint64_t n) {
+    const uint64_t i=(uint64_t)blockIdx.x*blockDim.x+threadIdx.x;
+    if(i<n)out[i]=blocks[i/CUDA_QK_K].d*(float)blocks[i/CUDA_QK_K].qs[i%CUDA_QK_K];
+}
+
+static int direction_routed_fused(ds4_gpu_tensor *out,ds4_gpu_tensor *gate,ds4_gpu_tensor *up,
+        ds4_gpu_tensor *mid,ds4_gpu_tensor *down,const void *model_map,uint64_t down_offset,
+        const char *gate_w,const char *up_w,const char *down_w,uint32_t gate_type,uint32_t down_type,
+        uint64_t gate_expert_bytes,uint64_t gate_row_bytes,uint64_t down_expert_bytes,
+        uint32_t input,uint32_t middle,uint32_t output,const ds4_gpu_tensor *selected,
+        const ds4_gpu_tensor *weights,uint32_t total,uint32_t used,float clamp,const ds4_gpu_tensor *x) {
+    if(!g_direction_routed.pack || !used || used>8 || output!=5120u || input!=5120u ||
+        !direction_quant_supported(down_type,middle) ||
+        !((gate_type==16u && down_type==10u) || (gate_type==12u && down_type==12u)))return 0;
+    int32_t ids[8],original_ids[8];
+    if(!ds4_gpu_tensor_read(selected,0,ids,used*sizeof(int32_t)) ||
+        !ds4_gpu_tensor_read(g_direction_routed.original_selected,0,original_ids,used*sizeof(int32_t)))return 0;
+    for(uint32_t k=0;k<used;k++)if(ids[k]<0 || (uint32_t)ids[k]>=total || original_ids[k]<0)return 0;
+    auto *xq=(cuda_block_q8_K *)down->ptr;
+    auto *midq=(cuda_block_q8_K *)gate->ptr;
+    q8_K_quantize_kernel<<<dim3(input/CUDA_QK_K,1),256,0,cuda_decode_stream()>>>(xq,(const float *)x->ptr,input,1);
+    const dim3 grid((middle+MOE_DECODE_ROWS_PER_BLOCK-1u)/MOE_DECODE_ROWS_PER_BLOCK,used,1);
+    if(gate_type==12u)moe_gate_up_mid_decode_q4K_qwarp32_kernel<<<grid,256,0,cuda_decode_stream()>>>(
+        (float *)gate->ptr,(float *)up->ptr,(float *)mid->ptr,gate_w,up_w,xq,
+        (const int32_t *)selected->ptr,(const float *)weights->ptr,gate_expert_bytes,gate_row_bytes,
+        input/CUDA_QK_K,middle,used,0,clamp);
+    else moe_gate_up_mid_decode_lut_qwarp32_kernel<<<grid,256,0,cuda_decode_stream()>>>(
+        (float *)gate->ptr,(float *)up->ptr,(float *)mid->ptr,gate_w,up_w,xq,
+        (const int32_t *)selected->ptr,(const float *)weights->ptr,gate_expert_bytes,gate_row_bytes,
+        input/CUDA_QK_K,middle,used,0,clamp);
+    if(!cuda_ok(cudaGetLastError(),"direction routed gate/up"))return 0;
+    q8_K_quantize_kernel<<<dim3(middle/CUDA_QK_K,used),256,0,cuda_decode_stream()>>>(
+        midq,(const float *)mid->ptr,middle,used);
+    const uint64_t n=(uint64_t)used*middle;
+    direction_mid_dequant_kernel<<<(unsigned)((n+255u)/256u),256,0,cuda_decode_stream()>>>(
+        (float *)mid->ptr,midq,n);
+    if(!cuda_ok(cudaGetLastError(),"direction routed activation dequantization"))return 0;
+    for(uint32_t k=0;k<used;k++) {
+        ds4_gpu_tensor xi=*mid,yi=*down;
+        xi.ptr=(char *)mid->ptr+(uint64_t)k*middle*sizeof(float);xi.bytes=(uint64_t)middle*sizeof(float);xi.owner=0;
+        yi.ptr=(char *)down->ptr+(uint64_t)k*output*sizeof(float);yi.bytes=(uint64_t)output*sizeof(float);yi.owner=0;
+        if(!direction_fused_from_device(&yi,(const unsigned char *)down_w+(uint64_t)ids[k]*down_expert_bytes,
+            model_map,down_offset+(uint64_t)original_ids[k]*down_expert_bytes,down_type,middle,output,&xi,
+            g_direction_routed.pack,g_direction_routed.layer,1,g_direction_routed.count))return 0;
+    }
+    moe_sum_kernel<<<(output+255u)/256u,256,0,cuda_decode_stream()>>>(
+        (float *)out->ptr,(const float *)down->ptr,output,used,1);
+    return cuda_ok(cudaGetLastError(),"direction routed sum");
+}
+
+/* MXFP4 experts: the caller already computed mid with its normal kernels. The down
+ * writer then uses the same Q8 activation round trip as the unsteered MMQ path. */
+static int direction_routed_mxfp4_down(ds4_gpu_tensor *out,ds4_gpu_tensor *gate,ds4_gpu_tensor *mid,
+        ds4_gpu_tensor *down,const void *model_map,uint64_t down_offset,const char *down_w,
+        uint64_t down_expert_bytes,uint32_t middle,uint32_t output,const ds4_gpu_tensor *selected,uint32_t used) {
+    if(!used || used>8 || output!=5120u || !direction_quant_supported(39u,middle))return 0;
+    int32_t ids[8],original_ids[8];
+    if(!ds4_gpu_tensor_read(selected,0,ids,used*sizeof(int32_t)) ||
+        !ds4_gpu_tensor_read(g_direction_routed.original_selected,0,original_ids,used*sizeof(int32_t)))return 0;
+    for(uint32_t k=0;k<used;k++)if(ids[k]<0 || original_ids[k]<0)return 0;
+    auto *midq=(cuda_block_q8_K *)gate->ptr;
+    q8_K_quantize_kernel<<<dim3(middle/CUDA_QK_K,used),256,0,cuda_decode_stream()>>>(
+        midq,(const float *)mid->ptr,middle,used);
+    const uint64_t n=(uint64_t)used*middle;
+    direction_mid_dequant_kernel<<<(unsigned)((n+255u)/256u),256,0,cuda_decode_stream()>>>(
+        (float *)mid->ptr,midq,n);
+    if(!cuda_ok(cudaGetLastError(),"direction mxfp4 activation dequantization"))return 0;
+    for(uint32_t k=0;k<used;k++) {
+        ds4_gpu_tensor xi=*mid,yi=*down;
+        xi.ptr=(char *)mid->ptr+(uint64_t)k*middle*sizeof(float);xi.bytes=(uint64_t)middle*sizeof(float);xi.owner=0;
+        yi.ptr=(char *)down->ptr+(uint64_t)k*output*sizeof(float);yi.bytes=(uint64_t)output*sizeof(float);yi.owner=0;
+        if(!direction_fused_from_device(&yi,(const unsigned char *)down_w+(uint64_t)ids[k]*down_expert_bytes,
+            model_map,down_offset+(uint64_t)original_ids[k]*down_expert_bytes,39u,middle,output,&xi,
+            g_direction_routed.pack,g_direction_routed.layer,1,g_direction_routed.count))return 0;
+    }
+    moe_sum_kernel<<<(output+255u)/256u,256,0,cuda_decode_stream()>>>(
+        (float *)out->ptr,(const float *)down->ptr,output,used,1);
+    return cuda_ok(cudaGetLastError(),"direction mxfp4 routed sum");
+}
+
+/* Derive/cache A=r^T W from the ORIGINAL packed device slots supplied by the
+ * fast provider. Reuse its L1/L2 slot addresses; never read/repack host weights.
+ * The down kernel consumes its own Q8_1 activation and fuses B*(A*xq) before
+ * summing experts. Base packed kernels and DirectStorage fetch stay intact. */
+static int direction_packed_factors(ds4_mmq_writer_delta *delta,const void *model_map,
+        uint64_t original_offset,const char *l1,const char *l2,uint64_t stride,
+        uint64_t l2_stride,uint32_t l1_slots,uint32_t slots,const ds4_gpu_tensor *selected,
+        uint32_t middle,uint32_t output) {
+    if(!delta || !g_direction_routed.pack || !g_direction_routed.original_selected ||
+        !l1 || output!=5120u || middle!=2304u || !l1_slots || l1_slots>slots)return 0;
+    const uint32_t count=g_direction_routed.count,layer=g_direction_routed.layer;
+    if(!count || count>8u || layer>=64u)return 0;
+    int32_t ids[6],original[6];
+    if(!ds4_gpu_tensor_read(selected,0,ids,sizeof(ids)) ||
+        !ds4_gpu_tensor_read(g_direction_routed.original_selected,0,original,sizeof(original)))return 0;
+    // Clear/switch the common bank before allocating its per-call factor pack.
+    if(g_direction_fused.pack!=g_direction_routed.pack) {
+        ds4_gpu_direction_fused_clear();g_direction_fused.pack=g_direction_routed.pack;
+    }
+    if(!g_direction_fused.packed_a)g_direction_fused.packed_a=ds4_gpu_tensor_alloc(6u*8u*2304u*sizeof(float));
+    if(!g_direction_fused.packed_dots)g_direction_fused.packed_dots=ds4_gpu_tensor_alloc(6u*8u*sizeof(float));
+    if(!g_direction_fused.b)g_direction_fused.b=ds4_gpu_tensor_alloc(5120u*8u*sizeof(float));
+    if(!g_direction_fused.packed_a || !g_direction_fused.packed_dots || !g_direction_fused.b)return 0;
+    for(unsigned a=0;a<6u;a++) {
+        if(original[a]<0 || original[a]>=384)return 0;
+        const bool cpu=ids[a]==-2;
+        const unsigned char *source=nullptr;
+        if(cpu) {
+#ifdef DS4_EXTERNAL_DECODE
+            if(!g_fp4_cpu_active || !g_fp4_cpu_down_source[a])return 0;
+            source=g_fp4_cpu_down_source[a];
+#else
+            return 0;
+#endif
+        } else {
+            if(ids[a]<0 || (uint32_t)ids[a]>=slots)return 0;
+            const bool second=(uint32_t)ids[a]>=l1_slots;
+            if(second && (!l2 || l2_stride<stride))return 0;
+            source=(const unsigned char *)(second?l2:l1)+
+                (second?(uint64_t)((uint32_t)ids[a]-l1_slots)*l2_stride:(uint64_t)ids[a]*stride);
+        }
+        direction_a_entry *entry=direction_target_entry(source,model_map,
+            original_offset+(uint64_t)original[a]*stride,DIRECTION_PACKED_MXFP4,middle,output,
+            g_direction_routed.pack,layer,1u,count,ds4_tensor_device_idx(selected),cpu);
+        if(!entry || !cuda_ok(cudaMemcpyAsync((float *)g_direction_fused.packed_a->ptr+(uint64_t)a*count*middle,
+                entry->a->ptr,(size_t)count*middle*sizeof(float),cudaMemcpyDeviceToDevice,cuda_decode_stream()),
+                "direction packed target factors"))return 0;
+    }
+    direction_target_b_kernel<<<(output+255u)/256u,256,0,cuda_decode_stream()>>>(
+        (float *)g_direction_fused.b->ptr,(const float *)g_direction_routed.pack->ptr,layer,1u,output,count);
+    if(!cuda_ok(cudaGetLastError(),"direction packed B factors"))return 0;
+    delta->a=(const float *)g_direction_fused.packed_a->ptr;
+    delta->b=(const float *)g_direction_fused.b->ptr;
+    delta->dots=(float *)g_direction_fused.packed_dots->ptr;delta->rank=count;
+    return 1;
+}
 
 static int routed_moe_launch(
         ds4_gpu_tensor *out,
@@ -35973,7 +36153,7 @@ static int routed_moe_launch_impl(
     /* The aligned artifacts replace the raw expert tensors on integrated
      * CUDA systems.  Route both prefill and decode before resolving a raw
      * pointer, otherwise the fallback cache would duplicate tens of GiB. */
-    if (iq2_path && !external_gate && !g_ssd_streaming_mode &&
+    if (iq2_path && !external_gate && !g_direction_routed.pack && !g_ssd_streaming_mode &&
         cuda_aligned_iq2_enabled() && cuda_aligned_q2k_enabled()) {
         const uint64_t gate_total = (uint64_t)n_total_expert * gate_expert_bytes;
         const uint64_t down_total = (uint64_t)n_total_expert * down_expert_bytes;
@@ -36159,16 +36339,28 @@ static int routed_moe_launch_impl(
         const cudaStream_t stream = n_tokens == 1u ? cuda_decode_stream() : (cudaStream_t)0;
         const auto launch_t0 = std::chrono::steady_clock::now();
         const uint32_t l1_slots = external_l1_slots ? external_l1_slots : n_total_expert;
-        const int rc = ds4_mmq_mxfp4_packed_moe(
+        ds4_mmq_writer_delta delta={};
+        if(g_direction_routed.pack &&
+            (n_tokens!=1u || layer_index!=g_direction_routed.layer ||
+             !direction_packed_factors(&delta,model_map,down_offset,external_down,external_l2[2],
+                down_expert_bytes,external_l2_stride[2],l1_slots,n_total_expert,selected,expert_mid_dim,out_dim)))return 0;
+#ifdef DS4_EXTERNAL_DECODE
+        g_fp4_direction_mid=g_direction_routed.pack && g_fp4_cpu_active?(float*)mid->ptr:nullptr;
+#endif
+        const int rc = ds4_mmq_mxfp4_packed_moe_rank(
             external_gate, external_up, external_down, gate_expert_bytes, down_expert_bytes,
             external_l2[0], external_l2[1], external_l2[2], external_l2_stride[0], external_l2_stride[2], (int)l1_slots,
             (const float *)x->ptr, (const int32_t *)selected->ptr, (const float *)weights->ptr,
             (float *)mid->ptr, (float *)out->ptr, (int)expert_mid_dim, (int)expert_in_dim, (int)out_dim,
             (int)n_tokens, (int)n_total_expert, clamp, reference && n_tokens == 1u, stream,
 #ifdef DS4_EXTERNAL_DECODE
-            g_fp4_cpu_active ? g_fp4_cpu_acc_dev : nullptr, g_fp4_cpu_active ? external_fp4_cpu_join : nullptr, nullptr);
+            g_fp4_cpu_active ? g_fp4_cpu_acc_dev : nullptr, g_fp4_cpu_active ? external_fp4_cpu_join : nullptr, nullptr,
+            g_direction_routed.pack?&delta:nullptr);
 #else
-            nullptr, nullptr, nullptr);
+            nullptr, nullptr, nullptr,g_direction_routed.pack?&delta:nullptr);
+#endif
+#ifdef DS4_EXTERNAL_DECODE
+        g_fp4_direction_mid=nullptr;
 #endif
         if (n_tokens == 1u) g_stage_launch_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - launch_t0).count();
         static bool witnessed[40] = {};
@@ -36265,6 +36457,19 @@ static int routed_moe_launch_impl(
             return 0;
         }
         const uint64_t fp4_before = decode_mma ? ds4_mmq_native_fp4_queued() : 0;
+        if (g_direction_routed.pack) {
+            /* Never fall through to the unsteered MMQ down writer while a direction is attached. */
+            if (n_tokens != 1u || n_expert != 6u || layer_index != g_direction_routed.layer) return 0;
+            if (ds4_mmq_mxfp4_moe_gate_up_mid_vec(
+                    gate_w, up_w, (const float *)x->ptr,
+                    (const int32_t *)mx_selected->ptr,
+                    (const float *)weights->ptr, (float *)mid->ptr,
+                    (int)expert_mid_dim, (int)expert_in_dim,
+                    (int)n_tokens, (int)weight_experts, (int)n_expert,
+                    clamp, stream) != 0) return 0;
+            return direction_routed_mxfp4_down(out, gate, mid, down, model_map, down_offset, down_w,
+                down_expert_bytes, expert_mid_dim, out_dim, mx_selected, n_expert);
+        }
         int rc = -1;
         if (n_tokens == 1u && n_expert == 6u && !decode_mma) {
             rc = ds4_mmq_mxfp4_moe_gate_up_mid_vec(
@@ -36478,6 +36683,13 @@ static int routed_moe_launch_impl(
         cuda_resolve_weight_ptr(model_map, down_offset, down_bytes,
                                 logical_tier, "moe_down");
     if (!gate_w || !up_w || !down_w) return 0;
+
+    if(g_direction_routed.pack) {
+        if(n_tokens!=1 || owned_filtered || layer_index!=g_direction_routed.layer)return 0;
+        return direction_routed_fused(out,gate,up,mid,down,model_map,down_offset,
+            gate_w,up_w,down_w,gate_type,down_type,gate_expert_bytes,gate_row_bytes,down_expert_bytes,
+            expert_in_dim,expert_mid_dim,out_dim,selected,weights,n_total_expert,n_expert,clamp,x);
+    }
 
     /* V4.1's short TP prefills need scalar-row arithmetic. Keep existing
      * multi-GPU batching dispatch unchanged for other model geometries. */
@@ -38186,6 +38398,26 @@ extern "C" int ds4_gpu_routed_moe_one_tensor(ds4_gpu_tensor *out, ds4_gpu_tensor
                              selected, weights, n_total_expert, n_expert, clamp, x,
                              layer_index, 1, force_resident ? 0 : 1, 0);
 }
+extern "C" int ds4_gpu_direction_routed_moe_one_tensor(ds4_gpu_tensor *out,ds4_gpu_tensor *gate,
+        ds4_gpu_tensor *up,ds4_gpu_tensor *mid,ds4_gpu_tensor *down,const void *model_map,
+        uint64_t model_size,uint64_t gate_offset,uint64_t up_offset,uint64_t down_offset,
+        uint32_t gate_type,uint32_t down_type,uint64_t gate_expert_bytes,uint64_t gate_row_bytes,
+        uint64_t down_expert_bytes,uint64_t down_row_bytes,uint32_t input,uint32_t middle,uint32_t output,
+        const ds4_gpu_tensor *selected,const ds4_gpu_tensor *weights,uint32_t experts,uint32_t used,
+        float clamp,const ds4_gpu_tensor *x,uint32_t layer,bool force_resident,
+        const ds4_gpu_tensor *pack,uint32_t count) {
+    if(!pack || !count || count>8 || g_direction_routed.pack ||
+        !((gate_type==16u && down_type==10u) || (gate_type==12u && down_type==12u) ||
+          (gate_type==39u && down_type==39u)))return 0;
+    g_direction_routed.pack=pack;g_direction_routed.original_selected=selected;
+    g_direction_routed.layer=layer;g_direction_routed.count=count;
+    const int ok=routed_moe_launch(out,gate,up,mid,down,model_map,model_size,gate_offset,up_offset,down_offset,
+        gate_type,down_type,gate_expert_bytes,gate_row_bytes,down_expert_bytes,down_row_bytes,
+        input,middle,output,selected,weights,experts,used,clamp,x,layer,1,force_resident?0:1,0);
+    memset(&g_direction_routed,0,sizeof(g_direction_routed));
+    return ok;
+}
+
 extern "C" int ds4_gpu_routed_moe_batch_tensor(ds4_gpu_tensor *out, ds4_gpu_tensor *gate, ds4_gpu_tensor *up, ds4_gpu_tensor *mid, ds4_gpu_tensor *down, const void *model_map, uint64_t model_size, uint64_t gate_offset, uint64_t up_offset, uint64_t down_offset, uint32_t gate_type, uint32_t down_type, uint64_t gate_expert_bytes, uint64_t gate_row_bytes, uint64_t down_expert_bytes, uint64_t down_row_bytes, uint32_t expert_in_dim, uint32_t expert_mid_dim, uint32_t out_dim, const ds4_gpu_tensor *selected, const ds4_gpu_tensor *weights, uint32_t n_total_expert, uint32_t n_expert, float clamp, const ds4_gpu_tensor *x, uint32_t layer_index, uint32_t n_tokens, bool *mid_is_f16, bool force_resident) {
     /* [2026-08-16] force_resident was DISCARDED here (`(void)force_resident;`) with
      * allow_streaming hardcoded to 1 below, while the single-token sibling

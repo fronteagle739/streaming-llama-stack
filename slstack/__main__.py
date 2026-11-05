@@ -101,6 +101,11 @@ def main():
     qfn.add_argument('--model-settings', help='Per-machine model router settings JSON')
     qfn.add_argument('--dry-run', action='store_true', help='Show resolved QFN configuration; start nothing and write nothing')
     qfn.add_argument('--preload', action='store_true', help='Load the engine at start instead of on the first request')
+    qfn.add_argument('--qfn-host-budget-gib', type=float)
+    qfn.add_argument('--qfn-engram-scan-rings', type=int, choices=range(1,9))
+    qfn.add_argument('--qfn-tile', type=int)
+    qfn.add_argument('--qfn-max-speed-bias', type=float)
+    qfn.add_argument('--job-commit-gib', type=float)
     guarded = sub.add_parser('guarded')
     guarded.add_argument('--cwd', default=str(ROOT))
     guarded.add_argument('argv', nargs=argparse.REMAINDER)
@@ -124,10 +129,17 @@ def main():
     cfg.setdefault('env_overrides', {}).update({k[4:]: v for k, v in vars(args).items()
                                               if k.startswith('env_') and v is not None})
     if args.command == 'qfn':
+        for key,value in dict(qfn_host_budget_gib=6,qfn_engram_scan_rings=1,qfn_tile=2048,qfn_max_speed_bias=.68).items():
+            cfg.setdefault(key,value)
+        for key in ('qfn_host_budget_gib', 'qfn_engram_scan_rings', 'qfn_tile', 'qfn_max_speed_bias', 'job_commit_gib'):
+            if getattr(args, key, None) is not None:cfg[key] = getattr(args, key)
         for key in ('port', 'context', 'quality_speed', 'model_settings'):
             if getattr(args, key, None) is not None:cfg[key if key != 'quality_speed' else 'qfn_quality_speed'] = getattr(args, key)
         if args.preload:cfg['qfn_preload'] = True
-        cfg['task'] = cfg.get('qfn_task', 'QFNSINGLE')
+        cfg['task'] = cfg.get('qfn_task', 'QfnSingle')
+        from .model_settings import apply
+        from .performance_contract import seal
+        cfg = seal(apply(cfg, 'qfn'), 'qfn')
         if args.dry_run:
             from .model_settings import apply
             from .envvars import redact_cfg

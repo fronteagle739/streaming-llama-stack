@@ -1,4 +1,4 @@
-"""No-progress windows (owner rule: no fixed timeouts).
+"""No-progress windows (Runtime contract: no fixed timeouts).
 
 A wait lives while the thing it waits on shows progress; it fails only when nothing has
 changed for a whole window, and then it says what stopped. Used by the VRAM release barriers,

@@ -7,6 +7,8 @@
 #include "llama-dsv41-engram-prefetch.h"
 #include <windows.h>
 #include <cstdint>
+#include <chrono>
+#include <exception>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -160,6 +162,32 @@ int main(int argc, char **argv) {
         c.prepare_early(layout, next.data(), uint32_t(next.size()), offsets, admitted - first->budget(), {}, first);
         c.load_early(path.c_str(), verified, file_bytes, [] { return false; });
         expect(check(c, nullptr, next, {}), "previous-request reuse: copied + read rows exact (see hit_rows in log)");
+    }
+    {   // The consumer can arrive before the asynchronous planner finishes.
+        llama_dsv41_engram_prompt_cache c;
+        std::exception_ptr worker_error;
+        std::thread worker([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            try {
+                c.prepare_early(layout, tokens.data(), uint32_t(tokens.size()), offsets, admitted, {}, nullptr);
+                c.load_early(path.c_str(), verified, file_bytes, [] { return false; });
+            } catch (...) { worker_error = std::current_exception(); }
+        });
+        bool ready = true;
+        try { c.wait_table(0, [] { return false; }); c.wait_table(1, [] { return false; }); }
+        catch (...) { ready = false; }
+        worker.join();
+        expect(ready && !worker_error && check(c, reference.get(), tokens, {}),
+               "consumer before prepare: waits for publication and reads exact rows");
+    }
+    {   // A failed asynchronous planner must wake its consumer loudly.
+        llama_dsv41_engram_prompt_cache c;
+        bool prepare_threw = false, wait_threw = false;
+        try { c.prepare_early(layout, tokens.data(), uint32_t(tokens.size()), offsets, 1, {}, nullptr); }
+        catch (...) { prepare_threw = true; }
+        try { c.wait_table(0, [] { return false; }); }
+        catch (...) { wait_threw = true; }
+        expect(prepare_threw && wait_threw, "failed prepare: consumer receives failure instead of hanging");
     }
     {   // Cancellation drains every submitted read and fails wait_table.
         llama_dsv41_engram_prompt_cache c;

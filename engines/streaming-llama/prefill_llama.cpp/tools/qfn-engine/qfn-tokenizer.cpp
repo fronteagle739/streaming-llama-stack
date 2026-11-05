@@ -1,4 +1,4 @@
-// QFNSTREAM: tokenizer via llama_vocab (see qfn-tokenizer.h).
+// QFN: tokenizer via llama_vocab (see qfn-tokenizer.h).
 #include "qfn-tokenizer.h"
 
 #include "gguf.h"

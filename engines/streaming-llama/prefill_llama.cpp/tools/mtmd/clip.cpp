@@ -156,6 +156,7 @@ struct clip_ctx {
     int max_nodes = 8192;
     ggml_backend_sched_ptr sched;
     clip_flash_attn_type flash_attn_type = CLIP_FLASH_ATTN_TYPE_AUTO;
+    bool qfn_reference_geometry = false;
     bool is_allocated = false;
 
     clip_ctx(clip_context_params & ctx_params) {
@@ -246,7 +247,7 @@ clip_graph::clip_graph(clip_ctx * ctx, const clip_image_f32 & img) :
         n_mmproj_embd(clip_n_mmproj_embd(ctx)),
         eps(hparams.eps),
         kq_scale(1.0f / sqrtf((float)d_head)),
-        flash_attn_type(ctx->flash_attn_type) {
+        flash_attn_type(ctx->flash_attn_type),qfn_reference_geometry(ctx->qfn_reference_geometry) {
     struct ggml_init_params params = {
         /*.mem_size   =*/ ctx->buf_compute_meta.size(),
         /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
@@ -4086,6 +4087,12 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     return true;
 }
 
+bool clip_use_qfn_reference_geometry(struct clip_ctx *ctx) {
+    const auto &h=ctx->model.hparams;
+    if(ctx->proj_type()!=PROJECTOR_TYPE_QWEN3VL||h.n_embd!=1152||h.n_head!=16||h.n_layer!=27||h.patch_size!=16||h.projection_dim!=2560)
+        return false;
+    ctx->qfn_reference_geometry=true;return true;
+}
 int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     switch (ctx->model.proj_type) {
         case PROJECTOR_TYPE_LDP:
@@ -4196,8 +4203,7 @@ bool clip_encode_float_image (struct clip_ctx * ctx, int n_threads, float * img,
     }
     clip_img.nx = w;
     clip_img.ny = h;
-    clip_image_encode(ctx, n_threads, &clip_img, vec);
-    return true;
+    return clip_image_encode(ctx, n_threads, &clip_img, vec);
 }
 
 //

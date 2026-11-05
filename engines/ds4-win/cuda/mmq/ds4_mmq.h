@@ -725,6 +725,36 @@ int ds4_mmq_mxfp4_packed_moe(
      * runs before the down projection is queued (it makes cpu_acc ready). */
     const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx);
 
+/* A target-derived FP32 low-rank weight delta. Packed base bytes and the
+ * original Q8_1 activation quantizer/kernels remain in use. No requantization.
+ * a:[rows*6,rank,K], b:[N,rank], dots:[rows*6,rank] are device resident.
+ * The caller derives/caches A from each original packed target on arrival.
+ * The packed down kernel fuses B*(A*xq) into its existing expert sum. */
+typedef struct {
+    const float *a, *b;
+    float *dots;
+    uint32_t rank;
+} ds4_mmq_writer_delta;
+/* The same packed down kernel, for bounded target-writer qualification and
+ * callers that already produced the six weighted middle rows. */
+int ds4_mmq_mxfp4_packed_down_rank(const void *weight,uint64_t stride,
+    const float *mid,const int32_t *ids,float *out,uint32_t slots,
+    const ds4_mmq_writer_delta *delta,cudaStream_t stream);
+int ds4_mmq_mxfp4_packed_down_rank_mixed(const void *weight,uint64_t stride,
+    const float *mid,const int32_t *ids,float *out,uint32_t slots,
+    const float *cpu_acc,const ds4_mmq_writer_delta *delta,cudaStream_t stream);
+int ds4_mmq_mxfp4_packed_moe_rank(
+    const void * W_gate, const void * W_up, const void * W_down,
+    uint64_t gate_slot_bytes, uint64_t down_slot_bytes,
+    const void * W_gate2, const void * W_up2, const void * W_down2,
+    uint64_t gate2_slot_bytes, uint64_t down2_slot_bytes, int l1_slots,
+    const float * X_f32, const int32_t * ids, const float * weights,
+    float * mid_f32, float * out_f32,
+    int mid_dim, int in_dim, int out_dim, int n_tokens, int n_slots,
+    float clamp, int reference, cudaStream_t stream,
+    const float * cpu_acc, int (*cpu_join)(void *, cudaStream_t), void * cpu_join_ctx,
+    const ds4_mmq_writer_delta *delta);
+
 int ds4_mmq_mxfp4_moe_down_sum6_vec(
     const void    * W,
     const float   * X_f32,

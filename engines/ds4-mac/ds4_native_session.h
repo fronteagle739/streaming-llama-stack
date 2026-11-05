@@ -2,6 +2,7 @@
 #define DS4_NATIVE_SESSION_H
 #include "ds4.h"
 #include "dsv41-native-c-layout.h"
+#include "qfn-native-layout.h"
 
 /* A synchronous lease over the existing complete mode3 frontier. The caller
  * holds the session's generation owner throughout the callback. Views and
@@ -17,6 +18,22 @@ typedef struct {
 } ds4_native_view;
 typedef int (*ds4_native_visit_fn)(void*,const ds4_native_view*,char*,size_t);
 typedef int (*ds4_native_read_fn)(void*,void*,size_t);
+typedef int (*ds4_native_write_fn)(void*,const void*,size_t);
+typedef struct ds4_qfn_anchor ds4_qfn_anchor;
+int ds4_qfn_anchor_save(ds4_session*,ds4_qfn_anchor**,uint64_t,uint64_t*,char*,size_t);
+int ds4_qfn_anchor_check(ds4_session*,const ds4_qfn_anchor*,uint64_t*,char*,size_t);
+int ds4_qfn_anchor_restore(ds4_session*,const ds4_qfn_anchor*,char*,size_t);
+void ds4_qfn_anchor_free(ds4_qfn_anchor*);
+uint64_t ds4_qfn_anchor_test_bytes(const ds4_qfn_anchor*);
+int ds4_qfn_anchor_test_write(const ds4_qfn_anchor*,ds4_native_write_fn,void*);
+/* QFN adapter over the same bounded stream callbacks. Layout and MTP frontier
+ * are family-specific; the DSV APIs and owner hashes below are unchanged. */
+int ds4_qfn_session_pair(ds4_session*,char*,size_t);
+int ds4_qfn_session_shape(ds4_session*,qfn_native_shape*,uint32_t *mtp,char*,size_t);
+int ds4_qfn_session_delta_write(ds4_session*,uint32_t,uint32_t,uint64_t,
+    ds4_native_write_fn,void*,uint64_t*,char*,size_t);
+int ds4_qfn_session_delta_apply(ds4_session*,uint32_t,uint32_t,uint32_t,uint32_t,
+    uint64_t,uint64_t,ds4_native_read_fn,void*,char*,size_t);
 
 /* Engine convention: zero means success. Unsupported backends fail; these
  * APIs never rebuild tokens, run prefill or use a second cache. */

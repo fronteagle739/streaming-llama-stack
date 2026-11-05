@@ -22,6 +22,11 @@ typedef struct ds4_ns_batch {
     uint64_t ring_offset[55],tail_offset[55],base_bytes[55];
     char tokens_sha256[65],append_sha256[55][65];
     double queued_at;
+    /* Per-family owner snapshots use this same ordered worker, backpressure,
+     * join and poison lifecycle. NULL retains the existing DSV wire path. */
+    bool (*family_send)(void*,void*,char*,size_t);
+    void (*family_free)(void*);
+    void *family_owner,*family_payload;
 } ds4_ns_batch;
 #define DS4_NS_QUEUE_MAX 64u
 #define DS4_NS_STEP_MAX 17u /* ds4_server.c decode loop: int toks[17] */
@@ -153,7 +158,7 @@ static bool ds4_ns_simple(ds4_ns_session*s,ds4_nf_io*io,const char*op,const ds4_
  * unchanged apply_decode_delta protocol. A failure stops the worker, keeps the
  * error and poisons the session at the next boundary, join or shutdown; it is
  * never retried or refilled. */
-static void ds4_ns_batch_free(ds4_ns_batch*b){if(!b)return;free(b->tokens);free(b->logits);free(b->ring);free(b->tail);free(b);}
+static void ds4_ns_batch_free(ds4_ns_batch*b){if(!b)return;if(b->family_free)b->family_free(b->family_payload);free(b->tokens);free(b->logits);free(b->ring);free(b->tail);free(b);}
 static bool ds4_ns_q_cancelled(void*ud){ds4_ns_session*s=ud;return atomic_load(&s->q_stop);}
 static bool ds4_ns_send_batch(ds4_ns_session*s,ds4_ns_batch*b,char*err,size_t cap);
 static void*ds4_ns_q_worker(void*ud){
@@ -163,7 +168,8 @@ static void*ds4_ns_q_worker(void*ud){
         if(atomic_load(&s->q_stop))break;
         ds4_ns_batch*b=s->q_head;s->q_head=b->next;if(!s->q_head)s->q_tail=NULL;s->q_count--;s->q_busy=true;
         pthread_mutex_unlock(&s->q_mu);
-        char err[256]={0};const bool ok=ds4_ns_send_batch(s,b,err,sizeof(err));
+        char err[256]={0};const bool ok=b->family_send?
+            b->family_send(b->family_owner,b->family_payload,err,sizeof(err)):ds4_ns_send_batch(s,b,err,sizeof(err));
         const uint32_t base=b->base,target=b->target;ds4_ns_batch_free(b);
         pthread_mutex_lock(&s->q_mu);s->q_busy=false;
         if(!ok){

@@ -8,6 +8,8 @@
 #include "ggml-dsv41-hc-half.h"
 #include "llama-dsv41-graph-digest.h"
 #include "llama-dsv41-graph-bindings.h"
+#include "llama-dsv41-writer-capture.h"
+#include "ggml-dsv41-writer-bank.h"
 #include <array>
 #include "llama-dsv41-executor.h"
 #include "llama-dsv41-flashinfer-budget.h"
@@ -172,7 +174,8 @@ void weights_present(const llama_dsv41_layer_graph::weights&w,uint32_t layer){
     for(auto*t:{a.q_a,a.q_norm,a.q_b,a.kv,a.kv_norm,a.out_a,a.out_b,a.attn_sinks,
                 w.attn_fn,w.attn_scale,w.attn_base,w.attn_norm,w.ffn_fn,w.ffn_scale,w.ffn_base,w.ffn_norm,
                 f.router,f.text_bias,f.image_bias,f.gate,f.up,f.down,f.shared_gate,f.shared_up,f.shared_down})
-        require(t&&t->data&&t->buffer,"Missing required staged V4.1 layer weight");
+        if(!(t&&t->data&&t->buffer))throw std::runtime_error("Missing required staged V4.1 layer weight: layer="+std::to_string(layer)+
+            " tensor="+(t?std::string(t->name):std::string("<null>"))+" data="+std::to_string(bool(t&&t->data))+" buffer="+std::to_string(bool(t&&t->buffer)));
     if(kv_source(layer))for(auto*t:{a.compressor,a.compressor_norm,a.index_k,a.index_norm})
         require(t&&t->data&&t->buffer,"Missing staged V4.1 shared-cache producer weight");
     if(layer==2||layer==8||layer==14)require(a.gate&&a.gate->data&&a.gate->buffer,"Missing V4.1 pool2 gate weight");
@@ -632,7 +635,8 @@ struct llama_dsv41_tile_executor::pinned_storage {
 struct llama_dsv41_tile_executor::graph_storage {
     ggml_gallocr_t value=nullptr;ggml_backend_t backend=nullptr;void *pending_copies=nullptr;
     struct variant {
-        std::array<uint32_t,13> key{};
+        std::array<uint32_t,14> key{};
+        dsv41_writer_capture::graph_capture writer_capture;
         ggml_context_ptr ctx;
         llama_dsv41_layer_graph::inputs input{};
         llama_dsv41_layer_graph::cache state{};
@@ -1218,9 +1222,9 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                 workspace->variants.clear();workspace->layer=in.layer;
                 std::memcpy(workspace->weight_identity.data(),&w,sizeof(w));
             }else require(std::memcmp(workspace->weight_identity.data(),&w,sizeof(w))==0,"Staged weight identity changed within layer");
-            const std::array<uint32_t,13> key{{in.count,p.context,p.ratio,p.history_rows,p.raw_rows,p.published_count,
+            const std::array<uint32_t,14> key{{in.count,p.context,p.ratio,p.history_rows,p.raw_rows,p.published_count,
                 uint32_t(p.previous_pool_tail),uint32_t(p.next_pool_tail),in.compressed_rows,uint32_t(expert.profile),uint32_t(row_width),uint32_t(reuse),
-                uint32_t(expert.dense_inputs_f16)|(uint32_t(expert.index_bf16)<<1)|(uint32_t(expert.token_tile_attention)<<2)|(uint32_t(expert.expert_f16_cublas)<<3)|(uint32_t(expert.expert_mxfp4)<<4)|(uint32_t(expert.dense_activation_q8_1)<<5)}};
+                uint32_t(expert.dense_inputs_f16)|(uint32_t(expert.index_bf16)<<1)|(uint32_t(expert.token_tile_attention)<<2)|(uint32_t(expert.expert_f16_cublas)<<3)|(uint32_t(expert.expert_mxfp4)<<4)|(uint32_t(expert.dense_activation_q8_1)<<5),dsv41_writer_capture::current.active?dsv41_writer_capture::current.groups:0}};
             for(auto &v:workspace->variants)if(v->key==key){compiled=v.get();graph_cache_hit=true;break;}
             if(!graph_cache_hit){
                 require(workspace->variants.size()<8,"Layer graph variant metadata limit exceeded before allocation");
@@ -1322,8 +1326,10 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         const bool attribution=llama_dsv41_attribution_active(in.position_offset+in.start,in.count);
         unsigned attribution_expands=0;
         llama_dsv41_graph_ops::observer boundary_observer;
-        if(boundary.active()||attribution)boundary_observer=[&](ggml_tensor*t,const char*name){
-            ggml_set_name(t,name);if(boundary.active())boundary.observe(t,name);
+        if(boundary.active()||attribution||dsv41_writer_capture::current.active)boundary_observer=[&](ggml_tensor*t,const char*name){
+            compiled->writer_capture.observe(ctx.get(),graph,t,name);
+            if(std::strcmp(name,"dsv41_writer_attention")&&std::strcmp(name,"dsv41_writer_ffn"))ggml_set_name(t,name);
+            if(boundary.active())boundary.observe(t,name);
             if(!attribution)return;
             if(!std::strcmp(name,"dsv41_weighted_norm_bf16")&&t->src[0]&&t->src[0]->op==GGML_OP_MUL){
                 const auto *weight=t->src[0]->src[1];
@@ -1368,7 +1374,12 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             llama_dsv41_layer_log("SINGLEPASS_INDEX_FRONTIER layer=%u start=%u count=%u pass_end=%u frontier=%u keys=%u full_keys=%u\n",
                 in.layer,absolute_start,in.count,end,frontier,graph_compressed_rows,in.compressed_rows);
         }
+        compiled->writer_capture.add(ctx.get(),graph,input.residual,0,0,in.count,false);
         values=pair_ffn?factory.build_pair(in.layer,p,graph_compressed_rows,routed_weights,input,state,expert):factory.build(in.layer,p,graph_compressed_rows,routed_weights,input,state,expert);
+        if(in.layer==39&&dsv41_writer_capture::current.active&&dsv41_writer_capture::current.evaluate){
+            compiled->writer_capture.add(ctx.get(),graph,values.residual,6,0,in.count,false);
+            compiled->writer_capture.add(ctx.get(),graph,values.next_pre,10,0,in.count,false);
+        }
         if(attribution){
             require((!pair_ffn||in.count<=attention_rows)&&(!workspace||!workspace->cache_layouts),"E2c attribution requires fresh, single-attention layer graphs");
             require(std::count_if(attribution_stages.begin(),attribution_stages.end(),[](const auto&s){return s.first<=2;})==3,"E2c attribution lost attention/FFN stage coverage");
@@ -1500,6 +1511,14 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
                     "Native FP8 weight cannot enter a canonical, sliced or unsupported projection");
                 node->op_params[5]=ggml_dsv41_dense_fp8_magic;
             }}
+        for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*node=ggml_graph_node(graph,i);
+            if(!dsv41_writer_bank::requested(node))continue;
+            auto*base=node->src[0];require(base&&base->op==GGML_OP_MUL_MAT,"Direction writer lost its original dense GPU product");
+            node->src[2]=base->src[1];
+            node->op_params[3]=base->op_params[6]==0x51384131?1:ggml_dsv41_dense_half_requested(base)?2:0;
+            require(dsv41_writer_bank::valid(node),"Direction writer input changed geometry after production graph transforms");
+            backend_temporary+=uint64_t(64)*node->src[1]->ne[0]*4+uint64_t(in.count)*(node->src[1]->ne[0]*36/32+dsv41_writer_bank::current.count*4);
+        }
         if(rope_inplace){
             unsigned tagged=0;for(int i=0;i<ggml_graph_n_nodes(graph);++i)tagged+=ggml_dsv41_tag_rope_inplace(ggml_graph_node(graph,i))?1:0;
             require(tagged>0,"No bounded exact tail RoPE reuse candidates");
@@ -1560,7 +1579,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             int copy=-1,first_product=-1;
             for(int i=0;i<ggml_graph_n_nodes(graph);++i){auto*n=ggml_graph_node(graph,i);
                 if(!std::strcmp(ggml_get_name(n),"dsv41_expert_slot_copy")){require(copy<0,"Routed decode split found two slot copies");copy=i;}
-                if(n->op==GGML_OP_MUL_MAT_ID&&first_product<0)first_product=i;}
+                if((n->op==GGML_OP_MUL_MAT_ID||ggml_dsv41_native_ffn_valid(n))&&first_product<0)first_product=i;}
             require(copy>=0&&first_product>copy,"Routed decode slot copy must precede every expert product");
             routed_split=copy+1;
         }
@@ -1771,6 +1790,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
             in.layer,in.start,in.count,(unsigned long long)async_copies,(unsigned long long)async_bytes);
         if(resident_metadata)llama_dsv41_layer_log("DS4PERF_RESIDENT_METADATA_COMPLETE layer=%u start=%u count=%u raw_template=%u zero_kinds=%u all_text=%u avoided_H2D_bytes=%llu exact_initialized_templates=1\n",in.layer,in.start,in.count,unsigned(raw_template),unsigned(zero_kinds),unsigned(all_text),
             (unsigned long long)(256+(raw_template?uint64_t(in.count)*128*8+127*4:0)+(zero_kinds?uint64_t(in.count)*4:0)+(all_text?in.count:0)));
+        compiled->writer_capture.upload(in.position_offset+in.start);
         pending.upload_ms=elapsed(upload_start);
         // An error after entering the graph can leave partial aliased writes.
         // Poison first, and certify this tile only after all bounded readbacks.
@@ -2052,6 +2072,7 @@ bool llama_dsv41_tile_executor::run(const request&in,const llama_dsv41_layer_gra
         if(probe.enabled)probe.post_checks_ms=elapsed(post_started);
         if(workspace&&workspace->casts)workspace->casts->complete();
         pending.weight_cache_ms=elapsed(cache_started);
+        compiled->writer_capture.collect(in.layer,in.position_offset+in.start);
         const auto boundary_started=clock_type::now();boundary.write(backend,w.attention.kv,w.attn_norm,w.attention.kv_norm);
         if(probe.enabled)probe.boundary_ms=elapsed(boundary_started);
         const auto readback_start=clock_type::now();

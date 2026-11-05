@@ -1,6 +1,6 @@
 """Minimal packed NVFP4 GPU qualification; invoke through existing gpurun.py.
 
-Requires --allow-gpu, an ACTIVE QFNLEAD coordinator marker, and --receipt under
+Requires --allow-gpu, an ACTIVE QfnRuntime coordinator marker, and --receipt under
 the explicit workspace. Uses the original parity.py CUDA ctypes helper (12GiB GPU
 allocation ceiling), bounded pinned staging, and the original calibrated CPU
 oracle. Synthetic arithmetic qualification does not qualify model KL/recall.
@@ -563,8 +563,8 @@ def main():
     if residual_flag!=('1' if args.residual_self_test else '0'):
         raise ValueError('--residual-self-test requires QFN_NATIVE_NVFP4_DECODE_RESIDUAL=1; original full suite requires0')
     if not receipt.is_relative_to(ROOT):raise ValueError('Receipt must remain under '+str(ROOT))
-    if not lease.is_relative_to(ROOT) or not lease.is_file() or not lease.read_text().startswith(('ACTIVE QFNLEAD','ACTIVE QFNBASALT')):
-        raise RuntimeError('Existing coordinator ACTIVE QFNLEAD exclusive GPU lease marker required')
+    if not lease.is_relative_to(ROOT) or not lease.is_file() or not lease.read_text().startswith(('ACTIVE QfnRuntime','ACTIVE QFNBASALT')):
+        raise RuntimeError('Existing coordinator ACTIVE QfnRuntime exclusive GPU lease marker required')
     sources=[Path(__file__),HERE/'qfn_native_nvfp4_bridge.cu',HERE/'qfn_native_nvfp4_bridge.h',HERE/'qfn_packed_vector.cuh',
              HERE/'qfn-native-nvfp4-kernel.py',HERE/'export_qfn_nvfp4.py',
              BASE/'parity.py',BASE/'calibrated-parity.py',STACK/'scripts/dsv41_fp4_layout.py',

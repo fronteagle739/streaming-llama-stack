@@ -870,7 +870,7 @@ bool ggml_cuda_can_use_mmq_id(enum ggml_type type, int cc, int64_t ne11) {
 
     bool mmq_supported;
 
-    // QFNSTREAM: the grouped Q2_0 path is opt-in (QFN_MMQID_Q2_0=1) until it is qualified against the CPU reference
+    // QFN: the grouped Q2_0 path is opt-in (QFN_MMQID_Q2_0=1) until it is qualified against the CPU reference
     if (type == GGML_TYPE_Q2_0) {
         static const bool q2_0_on = [] { const char * e = getenv("QFN_MMQID_Q2_0"); return e && e[0] == '1'; }();
         if (!q2_0_on) return false;

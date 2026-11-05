@@ -177,7 +177,7 @@ def main():
     ap.add_argument('--sampler-json',help='Additional generation options forwarded unchanged; reserved protocol fields fail loudly')
     ap.add_argument('--commit-budget-gib',type=float,default=40,help='Explicit job commit cap including WDDM; physical RAM also protected by RSS/floor guardian')
     ap.add_argument('--min-available-gib',type=float,default=6)
-    ap.add_argument('--task',default='QFN100K')
+    ap.add_argument('--task',default='QfnBenchmark')
     ap.add_argument('--engine',required=True,help='Exact installed executable for integration qualification')
     ap.add_argument('--vocab-gguf',required=True,help='Model-specific complete tokenizer cache; incompatible existing caches fail loudly')
     ap.add_argument('--nvfp4-mode',choices=('native-q8','auto','w4a4','mmq','calibrated-w4a4','dsv-native'))

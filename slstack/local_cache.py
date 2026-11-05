@@ -34,8 +34,12 @@ def options(cfg):
 def validate_contract(row):
     standard = dict(row);local = standard.pop('local_state')
     validate(standard, local=True)
-    if not isinstance(local, dict) or set(local) != {'version', 'yoco_keep', 'cache_precision', 'producer_sha256'}:
+    if not isinstance(local, dict) or set(local) not in ({'version', 'yoco_keep', 'cache_precision', 'producer_sha256'},
+            {'version', 'yoco_keep', 'cache_precision', 'producer_sha256', 'direction_binding'}):
         raise ValueError('Malformed local snapshot provenance')
+    if 'direction_binding' in local and (not isinstance(local['direction_binding'],str) or
+            len(local['direction_binding']) != 64 or any(c not in '0123456789abcdef' for c in local['direction_binding'])):
+        raise ValueError('Malformed local snapshot writer direction binding')
     if local['version'] != VERSION or type(local['yoco_keep']) is not int or local['yoco_keep'] not in (0, 140, 2541):
         raise ValueError('Unsupported local snapshot/YOCO version')
     if local['cache_precision'] not in ('f32', 'bf16') or not isinstance(local['producer_sha256'], str) or len(local['producer_sha256']) != 64:
@@ -86,8 +90,10 @@ class Cache:
         return dict(self._identity)
 
     def provenance(self):
-        return dict(version=VERSION, yoco_keep=self.cfg.get('yoco_keep', 0),
+        result = dict(version=VERSION, yoco_keep=self.cfg.get('yoco_keep', 0),
                     cache_precision=self.cfg.get('ctx_cache_precision', 'f32'), producer_sha256=self.cfg['producer_sha256'])
+        if self.cfg.get('direction_bank_sha256'): result['direction_binding']=self.cfg['direction_bank_sha256']
+        return result
 
     def compatible(self, manifest):
         row = validate_contract(manifest['contract'])

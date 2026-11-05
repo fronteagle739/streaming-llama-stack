@@ -2,7 +2,7 @@
 
 scripts/start-dsv41-single-262k.ps1 and -1m.ps1 call this file. It writes one config file that
 `slstack start --config` loads on top of config.example.json: your own local config (paths, ports,
-budgets), then the gated single-engine settings below. A local key replaces the example's key
+budgets), the selected profile and the full-performance defaults below. A local key replaces the example's key
 rather than merging, so env_overrides is merged here.
 
     python -B scripts/dsv41_single.py --preset 262k [--config my.local.json] [--model M.gguf] --write runtime/x.local.json
@@ -10,9 +10,10 @@ rather than merging, so env_overrides is merged here.
 
 Both presets: serving single_engine (ULTRA exact-cone prefill + ds4-decode.dll decode in one
 producer), DirectStorage read parts 8, 512 MiB VRAM reserve beside the L2 expert tier, the default
-quality/speed setting, the fold sweep plan (49152-token primary sweeps, the remainder folded into the
-last sweep up to 61,440 tokens, else its own sweep),
-producer_host_reserve_gib 0.5, Engram early load auto with no Engram row cache.
+quality/speed setting, automatic RAM-admitted sweeps (one sweep for 100K with
+the default 10.25 GiB host cap / 7.75 GiB producer maximum), 4 GiB physical reserve,
+and whole-prompt Engram admission at 200K. Needs 14.25 GiB available RAM;
+larger explicit budgets retain their own admission requirement.
   262k: context 262144, f32 context cache, growable; the L2 tier takes its full NVML offer.
   1m:   context 999424, bf16 context cache, growable (the largest growable bf16 context that fits
         the producer's admitted cache: 2 MiB rounding on 8 ranges refuses 1,000,001).
@@ -45,19 +46,13 @@ DEFAULT_ENV = {
 PRESETS = {
     '262k': dict(context=262144, ctx_cache_precision='f32', ctx_cache_growable=True,
                  preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 262K)'),
-    # producer_graph_floor_gib 3.0 (PAIRFIX): measured planned graph peak 3.244 GiB at 200K;
+    # Graph floor 3.0 GiB: measured planned graph peak 3.244 GiB at 200K;
     # the hidden bank then holds every 102,400-row sweep at 1M context (no spill).
     '1m': dict(context=999424, ctx_cache_precision='bf16', ctx_cache_growable=True, producer_graph_floor_gib=3.0,
                preset_name='DSV4.1 1017 (RTX: streaming-llama ULTRA prefill + ds4 decode, single engine, 1M)'),
 }
-# Keys that would change the gated configuration; a local config may not set them for these presets.
-REMOVED = ('producer_host_max_gib', 'producer_keep_alive', 'producer_prefill_sweep_tokens', 'producer_prefill_fold_cap_tokens')
-# The gated fold sweep plan (a qualified reference measurement, 2026-10-25): primary sweep S* tokens, the
-# remainder folded into the last sweep while it stays <= the fold cap, else its own sweep. The host max
-# is only the ceiling for the largest sweep's bank (capacity <= the fold cap).
-# OPUS22 round 6 (owner: single stream by default): 'auto' = one sweep up to the host-capped capacity
-# (100K fits 7.75 GiB with the compact carry record), else near-equal sweeps under that cap.
-FOLD = dict(producer_prefill_sweep_tokens='auto', producer_prefill_fold_cap_tokens=61440, producer_host_max_gib=7.75)
+# Automatic sweep defaults live in dsv41_100k_ram_profile.PERFORMANCE_DEFAULTS.
+# Explicit local fold/sweep/cap settings retain their normal planner semantics.
 
 
 def read(path):
@@ -65,20 +60,18 @@ def read(path):
 
 
 def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile=None):
-    """The config file for `slstack start --config`: the local keys, then the preset."""
+    """Local settings and full RAM defaults, followed by the selected profile."""
     if preset not in PRESETS:
         raise ValueError('preset must be one of ' + ', '.join(PRESETS))
-    result = {k: v for k, v in dict(local or {}).items() if k not in REMOVED}
+    from scripts.dsv41_100k_ram_profile import performance_defaults
+    result = performance_defaults(local or {})
     if model:
         result['model'] = model
     env = dict(result.get('env_overrides') or {})
-    env.update(COMMON_ENV)
-    for key,value in DEFAULT_ENV.items():env.setdefault(key,value)
-    result.update(PRESETS[preset], serving='single_engine', producer_host_reserve_gib=.5, env_overrides=env, **FOLD)
+    for key,value in {**COMMON_ENV, **DEFAULT_ENV}.items():env.setdefault(key,value)
+    result.update(PRESETS[preset], serving='single_engine', env_overrides=env)
     from slstack.multichunk import selection
-    chunks=selection(result.get('producer_chunks_per_pass',1))
-    if chunks!=1 and local and 'producer_host_max_gib' in local:
-        result['producer_host_max_gib']=local['producer_host_max_gib']
+    selection(result.get('producer_chunks_per_pass',1))
     if profile is None and yoco_keep is None:
         profile='ultra-cone'
     if profile is not None:
@@ -100,14 +93,19 @@ def overlay(preset, local=None, model=None, yoco_keep=None, vision=None, profile
             result.get('producer_fixed_direct_open',True) and
             env.get('LLAMADECODE_DECODE_COMPACT','1')!='0'):
         env.setdefault('LLAMADECODE_SINGLEPASS_VRAM','1')
-    return result
+    from slstack.performance_contract import seal
+    from scripts.dsv41_100k_ram_profile import enforce_release_budgets
+    generic = json.loads((ROOT/'config.example.json').read_text(encoding='utf-8'))
+    result = {**generic, **result}
+    enforce_release_budgets(result)
+    return seal(result, 'dsv41')
 
 
 def resolved(cfg):
     """What the single engine will run with, without model files or a built producer."""
     from slstack import config as stack_config
     from slstack.single_runtime import serving_config, context
-    from slstack.combo_producer import ctx_cache, prefill_plan
+    from slstack.combo_producer import ctx_cache, prefill_plan, engram_scan_rings
     from slstack.envvars import apply
     merged = json.loads((ROOT / 'config.example.json').read_text(encoding='utf-8'))
     merged.update(cfg)
@@ -132,14 +130,18 @@ def resolved(cfg):
     keep_yoco=yoco_keep(single)
     if keep_yoco:flags['--yoco-keep']=str(keep_yoco)
     env = apply({}, single, 'rtx-producer')
-    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS')
+    rings=engram_scan_rings(single,plan)
+    if rings is not None:env['LLAMADECODE_ENGRAM_SCAN_RINGS']=rings
+    keep = ('LLAMADECODE_', 'DS4_DS_READ_PARTS', 'LLAMA_DSV41_', 'DS4_CUDA_SINGLE_GPU_HC_GRAPHS',
+            'OPENBLAS_NUM_THREADS', 'GGML_', 'CUDA_MODULE_LOADING')
     return dict(
         serving=merged.get('serving'), model=merged.get('model') or '(set "model" in your config or pass -Model)',
         router=f"http://{merged['host']}:{merged['port']}", engine=merged['ds4_url'],
         llama_producer=str(stack_config.path(merged['llama_producer'])),
         single_engine={k: single.get(k) for k in ('context', 'ctx_cache_precision', 'ctx_cache_growable',
                        'producer_profile', 'producer_host_budget_gib', 'producer_host_reserve_gib',
-                       'host_budget_gib', 'combo_worker_host_budget_gib', 'cache_affinity_spread_file')},
+                       'host_budget_gib', 'combo_worker_host_budget_gib', 'cache_affinity_spread_file',
+                       'producer_engram_scan_rings')},
         sweep_plan=dict(policy=plan.get('policy') or 'split', primary_sweep_tokens=plan.get('sweep_tokens'),
                         fold_cap_tokens=plan.get('fold_cap'), capacity_tokens=plan['capacity'],
                         max_host_bytes=plan['max_host_bytes'], base_host_bytes=plan['base_host_bytes']),
@@ -149,6 +151,8 @@ def resolved(cfg):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    from scripts.dsv41_100k_ram_profile import add_performance_flags, apply_performance_flags
+    add_performance_flags(parser)
     parser.add_argument('--preset', required=True, choices=sorted(PRESETS))
     parser.add_argument('--profile',choices=('accurate','fast','ultra','ultra-yoco','ultra-cone'))
     parser.add_argument('--chunks-per-pass', choices=('auto','1','2','3','4'), help='Chunks sharing each layer weight lease; explicit RAM budget required')
@@ -159,7 +163,7 @@ def main(argv=None):
     parser.add_argument('--write', help='Write the start config here')
     parser.add_argument('--dry-run', action='store_true', help='Print the resolved settings')
     args = parser.parse_args(argv)
-    local=read(args.config)
+    local=apply_performance_flags(read(args.config), args)
     if args.chunks_per_pass is not None:
         local['producer_chunks_per_pass'] = 'auto' if args.chunks_per_pass == 'auto' else int(args.chunks_per_pass)
     cfg = overlay(args.preset, local, args.model, args.yoco_keep, args.vision,args.profile)

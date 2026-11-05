@@ -2526,11 +2526,27 @@ static bool model_get_string(const ds4_model *m, const char *key, ds4_str *out) 
     return cursor_string(&c, out);
 }
 
+static bool cursor_integer_u32(ds4_cursor *c, uint32_t type, uint32_t *out) {
+    uint64_t value = 0;
+    if (type == GGUF_VALUE_UINT32) {
+        uint32_t v; if (!cursor_u32(c, &v)) return false; value = v;
+    } else if (type == GGUF_VALUE_INT32) {
+        int32_t v; if (!cursor_read(c, &v, sizeof(v)) || v < 0) return false; value = (uint32_t)v;
+    } else if (type == GGUF_VALUE_UINT64) {
+        if (!cursor_u64(c, &value)) return false;
+    } else if (type == GGUF_VALUE_INT64) {
+        int64_t v; if (!cursor_read(c, &v, sizeof(v)) || v < 0) return false; value = (uint64_t)v;
+    } else return false;
+    if (value > UINT32_MAX) return false;
+    *out = (uint32_t)value;
+    return true;
+}
+
 static bool model_get_u32(const ds4_model *m, const char *key, uint32_t *out) {
     ds4_kv *kv = model_find_kv(m, key);
-    if (!kv || kv->type != GGUF_VALUE_UINT32) return false;
+    if (!kv) return false;
     ds4_cursor c = cursor_at(m, kv->value_pos);
-    return cursor_u32(&c, out);
+    return cursor_integer_u32(&c, kv->type, out);
 }
 
 static bool model_get_token_id(const ds4_model *m, const char *key, int *out) {
@@ -2695,14 +2711,13 @@ static void parse_metadata(ds4_model *m, ds4_cursor *c) {
 
         kv->value_pos = c->pos;
 
-        if (ds4_streq(kv->key, "general.alignment") &&
-            kv->type == GGUF_VALUE_UINT32)
+        if (ds4_streq(kv->key, "general.alignment"))
         {
             ds4_cursor tmp = cursor_at(m, kv->value_pos);
             uint32_t alignment;
-            if (cursor_u32(&tmp, &alignment) && alignment != 0) {
-                m->alignment = alignment;
-            }
+            if (!cursor_integer_u32(&tmp, kv->type, &alignment) || !alignment ||
+                (alignment & (alignment - 1u))) ds4_die("invalid GGUF integer alignment");
+            m->alignment = alignment;
         }
 
         if (!skip_value(c, kv->type, 0)) ds4_die(c->error);
@@ -2819,9 +2834,10 @@ static void model_unmap_qwen_ngrams(ds4_model *m, const char *path) {
     for (uint64_t i = 0; i < m->n_tensors; i++) {
         const ds4_tensor *t = &m->tensors[i];
         if (ds4_streq(t->name, "per_layer_token_embd.weight")) {
-            if (table || t->type != DS4_TENSOR_BF16 || t->ndim != 2 ||
+            if (table || (t->type != DS4_TENSOR_BF16 && t->type != DS4_TENSOR_Q8_0) || t->ndim != 2 ||
+                (t->type == DS4_TENSOR_Q8_0 && t->dim[0] % 32u) ||
                 !t->dim[0] || t->dim[0] > 160 || !t->dim[1] || t->dim[1] > UINT32_MAX)
-                ds4_die("Qwen requires original BF16 n-grams; repack with gguf-tools/qwen4_native_ngrams.py");
+                ds4_die("Qwen requires complete BF16 or block-aligned Q8_0 n-grams");
             table = t;
         } else {
             if (!t->bytes) ds4_die("unsupported Qwen resident tensor type");
@@ -2989,24 +3005,49 @@ static bool model_get_u32_array_any(const ds4_model *m, const char *const *keys,
     for (size_t ik = 0; ik < nkeys; ik++) {
         ds4_array_ref arr = {0};
         if (!model_get_array(m, keys[ik], &arr)) continue;
-        if (arr.type != GGUF_VALUE_UINT32 && arr.type != GGUF_VALUE_INT32) continue;
+        if (arr.type != GGUF_VALUE_UINT32 && arr.type != GGUF_VALUE_INT32 &&
+            arr.type != GGUF_VALUE_UINT64 && arr.type != GGUF_VALUE_INT64) continue;
 
         ds4_cursor c = cursor_at(m, arr.data_pos);
         uint32_t n = arr.len < cap ? (uint32_t)arr.len : cap;
         for (uint32_t i = 0; i < n; i++) {
-            if (arr.type == GGUF_VALUE_UINT32) {
-                if (!cursor_u32(&c, &out[i])) return false;
-            } else {
-                int32_t v = 0;
-                if (!cursor_read(&c, &v, sizeof(v))) return false;
-                if (v < 0) return false;
-                out[i] = (uint32_t)v;
-            }
+            if (!cursor_integer_u32(&c, arr.type, &out[i])) return false;
         }
         *n_out = n;
         return true;
     }
     return false;
+}
+
+int ds4_qfn_metadata_self_test(void) {
+    unsigned checks = 0;
+    const uint32_t types[] = {GGUF_VALUE_UINT32,GGUF_VALUE_INT32,GGUF_VALUE_UINT64,GGUF_VALUE_INT64};
+    const uint64_t values[] = {0,16384,UINT32_MAX,UINT64_MAX};
+    for (unsigned t=0;t<4;t++) for (unsigned v=0;v<4;v++) {
+        const uint64_t raw=values[v]; const size_t bytes=t<2?4:8;
+        ds4_cursor c={.base=(const uint8_t *)&raw,.size=bytes,.pos=0}; uint32_t out=123;
+        const bool expected=t==0 || (t==1?((uint32_t)raw<=INT32_MAX):
+            (t==2?raw<=UINT32_MAX:(raw<=UINT32_MAX && raw<=INT64_MAX)));
+        const bool ok=cursor_integer_u32(&c,types[t],&out);
+        if(ok!=expected || (ok&&out!=(uint32_t)raw)) return 1;
+        checks++;
+    }
+    uint8_t buffer[256]={0}; size_t at=0;
+    const char *names[]={"general.alignment","qwen4exp.attention.compress_ratios"};
+    for(unsigned k=0;k<2;k++) {
+        uint64_t len=strlen(names[k]);memcpy(buffer+at,&len,8);at+=8;memcpy(buffer+at,names[k],len);at+=len;
+        uint32_t type=k?GGUF_VALUE_ARRAY:GGUF_VALUE_UINT64;memcpy(buffer+at,&type,4);at+=4;
+        if(k) {type=GGUF_VALUE_UINT64;memcpy(buffer+at,&type,4);at+=4;len=3;memcpy(buffer+at,&len,8);at+=8;}
+        for(unsigned j=0;j<(k?3u:1u);j++){uint64_t val=k?(1u<<j):16384;memcpy(buffer+at,&val,8);at+=8;}
+    }
+    ds4_model model={0};model.map=buffer;model.size=at;model.n_kv=2;
+    ds4_cursor c=cursor_at(&model,0);parse_metadata(&model,&c);
+    uint32_t align=0,ratios[3]={0},n=0;const char *keys[]={names[1]};
+    const bool ok=model.alignment==16384 && model_get_u32(&model,names[0],&align) && align==16384 &&
+        model_get_u32_array_any(&model,keys,1,ratios,3,&n) && n==3 && ratios[0]==1 && ratios[1]==2 && ratios[2]==4;
+    free(model.kv);if(!ok)return 1;checks+=2;
+    printf("QFN native integer metadata: %u checks PASS (32/64-bit bounds, alignment and arrays)\n",checks);
+    return 0;
 }
 
 static bool ds4_tensor_mtp_stage(ds4_str name, uint32_t *stage) {
@@ -5565,8 +5606,8 @@ static void weights_validate_qwen4_layout(
         ds4_die("Qwen GGUF lacks its n-grams; repack with gguf-tools/qwen4_native_ngrams.py");
     if (w->ple_embd) {
         const uint32_t t = w->ple_embd->type;
-        if (t != DS4_TENSOR_BF16) {
-            fprintf(stderr, "ds4: n-gram embeddings must use original BF16, got type %u\n", t);
+        if (t != DS4_TENSOR_BF16 && t != DS4_TENSOR_Q8_0) {
+            fprintf(stderr, "ds4: n-gram embeddings need BF16 or Q8_0, got type %u\n", t);
             exit(1);
         }
         if (w->ple_embd->ndim != 2 || w->ple_embd->dim[0] != DS4_N_PLE_HEAD_DIM ||
@@ -5635,7 +5676,11 @@ static void weights_validate_qwen4_layout(
             tensor_expect_layout(l->ple_conv, l->ple_conv->type == DS4_TENSOR_F16 ? DS4_TENSOR_F16 : DS4_TENSOR_F32,
                                  2, DS4_N_PLE_CONV, hc_dim, 0);
         }
-        tensor_expect_layout(l->ffn_gate_inp, DS4_TENSOR_F32, 2, DS4_N_EMBD, DS4_N_EXPERT, 0);
+        /* Router and shared-gate projections use the same typed GEMV/row-dot
+         * kernels as the other dense projections (including native F16).
+         * Keep all geometry checks; source BF16 routers need not be expanded
+         * to F32 merely to satisfy the loader. */
+        tensor_expect_qwen4_dense_layout(l->ffn_gate_inp, 2, DS4_N_EMBD, DS4_N_EXPERT, 0);
         tensor_expect_qwen4_expert_layout(l->ffn_gate_exps, DS4_N_EMBD, DS4_N_FF_EXP, DS4_N_EXPERT);
         tensor_expect_qwen4_expert_layout(l->ffn_up_exps,   DS4_N_EMBD, DS4_N_FF_EXP, DS4_N_EXPERT);
         /* Q2_K down rows store 640 logical inputs in three 256-value blocks.
@@ -5649,9 +5694,9 @@ static void weights_validate_qwen4_layout(
         }
         /* llama.cpp writes the shared-expert gate as a 1-D [n_embd] tensor */
         if (l->ffn_gate_inp_shexp->ndim == 1) {
-            tensor_expect_layout(l->ffn_gate_inp_shexp, DS4_TENSOR_F32, 1, DS4_N_EMBD, 0, 0);
+            tensor_expect_qwen4_dense_layout(l->ffn_gate_inp_shexp, 1, DS4_N_EMBD, 0, 0);
         } else {
-            tensor_expect_layout(l->ffn_gate_inp_shexp, DS4_TENSOR_F32, 2, DS4_N_EMBD, 1, 0);
+            tensor_expect_qwen4_dense_layout(l->ffn_gate_inp_shexp, 2, DS4_N_EMBD, 1, 0);
         }
         tensor_expect_qwen4_dense_layout(l->ffn_gate_shexp, 2, DS4_N_EMBD, DS4_N_FF_EXP, 0);
         tensor_expect_qwen4_dense_layout(l->ffn_up_shexp,   2, DS4_N_EMBD, DS4_N_FF_EXP, 0);
@@ -8893,6 +8938,28 @@ static void dspark_weights_bind_optional(
 
 static void weights_free(ds4_weights *w) {
     memset(w, 0, sizeof(*w));
+}
+
+/* Inspection uses the actual config and tensor bind/validation path, without
+ * acquiring an inference instance or creating any accelerator buffers. */
+int ds4_qfn_validate_model(const char *path) {
+    ds4_model model; model_open(&model,path,false,false);
+    config_validate_model(&model);
+    if(!ds4_model_is_qwen4())ds4_die("QFN inspection requires its own architecture");
+    ds4_weights weights;weights_bind(&weights,&model,false,0,0,true,false);
+    printf("QFN native model layout PASS: %u layers, %u vocabulary, %llu tensors\n",
+        DS4_N_LAYER,DS4_N_VOCAB,(unsigned long long)model.n_tensors);
+    weights_free(&weights);model_close(&model);return 0;
+}
+
+int ds4_qfn_validate_vision(const char *path,const char *vision_path) {
+    ds4_model model,vision;model_open(&model,path,false,false);config_validate_model(&model);
+    if(!ds4_model_is_qwen4())ds4_die("QFN vision inspection requires its own architecture");
+    model_open(&vision,vision_path,false,false);ds4_qwen4_vision_weights weights;
+    qwen4_vision_weights_bind(&weights,&vision);
+    config_expect_u32("vision projection_dim",weights.n_out,DS4_N_EMBD);
+    printf("QFN native vision layout PASS: %llu tensors, %u output dimensions\n",(unsigned long long)vision.n_tensors,weights.n_out);
+    model_close(&vision);model_close(&model);return 0;
 }
 
 /* Load one token embedding row and expand it to float activations. */
@@ -44891,6 +44958,7 @@ struct ds4_engine {
     int dspark_exec_tier;
     uint32_t support_stages;
     int mtp_draft_tokens;
+    int qwen4_mtp_depth;
     float mtp_margin;
     float dspark_confidence_threshold;
     bool dspark_confidence_threshold_set;
@@ -46856,12 +46924,11 @@ static bool sample_build_probabilities(
     }
     if (top_p <= 0.0f || top_p > 1.0f) top_p = 1.0f;
     if (min_p < 0.0f) min_p = 0.0f;
-    if (top_k > 1024) top_k = 1024;
     if (top_k < 0) top_k = 0;
     if ((uint32_t)top_k > n_vocab) top_k = (int)n_vocab;
 
     enum { SAMPLE_PROB_FAST_CAP = 512 };
-    sample_candidate heap[1024];
+    sample_candidate local_heap[1024];
     const uint32_t heap_cap = top_k > 0 ? (uint32_t)top_k :
         (uint32_t)SAMPLE_PROB_FAST_CAP;
     uint32_t finite = 0;
@@ -46896,6 +46963,7 @@ static bool sample_build_probabilities(
         return true;
     }
 
+    sample_candidate *heap=heap_cap<=1024?local_heap:xmalloc((size_t)heap_cap*sizeof(*heap));
     float full_sum = 0.0f;
     float heap_sum = 0.0f;
     for (uint32_t i = 0; i < n_vocab; i++) {
@@ -46918,6 +46986,7 @@ static bool sample_build_probabilities(
     }
     if (full_sum <= 0.0f || !isfinite(full_sum) || heap_n == 0) {
         probs[sample_argmax(logits, n_vocab)] = 1.0f;
+        if(heap!=local_heap)free(heap);
         return true;
     }
 
@@ -46985,6 +47054,7 @@ static bool sample_build_probabilities(
         }
     }
     if (owned) free(cand);
+    if(heap!=local_heap)free(heap);
     return true;
 }
 
@@ -47384,7 +47454,14 @@ static int sample_top_p_min_p(
         if (owned_scratch) free(prob_scratch);
         return token;
     }
-    if (top_k > 1024) top_k = 1024;
+    if(top_k>1024) {
+        const bool owned_scratch=prob_scratch==NULL;
+        if(owned_scratch)prob_scratch=xmalloc((size_t)n_vocab*sizeof(*prob_scratch));
+        const bool ok=sample_build_probabilities(logits,n_vocab,temperature,top_k,top_p,min_p,prob_scratch);
+        const int token=ok?sample_probabilities(prob_scratch,n_vocab,rng):sample_argmax(logits,n_vocab);
+        if(owned_scratch)free(prob_scratch);
+        return token;
+    }
     if ((uint32_t)top_k > n_vocab) top_k = (int)n_vocab;
 
     int ids[1024];
@@ -60308,12 +60385,13 @@ static void qwen4_ple_step(int token, int *prev, uint32_t *rows);
 static bool qwen4_ngram_row(const ds4_model *m, uint32_t row, float *out) {
     const ds4_tensor *t = m->ngram_tensor;
     if (!t || m->ngram_fd < 0 || !out || row >= t->dim[1] ||
-        t->type != DS4_TENSOR_BF16 || !t->dim[0] || t->dim[0] > 160) {
+        (t->type != DS4_TENSOR_BF16 && t->type != DS4_TENSOR_Q8_0) ||
+        (t->type == DS4_TENSOR_Q8_0 && t->dim[0] % 32u) || !t->dim[0] || t->dim[0] > 160) {
         errno = EINVAL;
         return false;
     }
     uint8_t raw[320];
-    const uint32_t bytes = (uint32_t)t->dim[0] * 2u;
+    const uint32_t bytes = t->type == DS4_TENSOR_Q8_0 ? (uint32_t)t->dim[0] / 32u * 34u : (uint32_t)t->dim[0] * 2u;
     const uint64_t offset = t->abs_offset + (uint64_t)row * bytes;
     uint32_t done = 0;
     while (done < bytes) {
@@ -60324,6 +60402,15 @@ static bool qwen4_ngram_row(const ds4_model *m, uint32_t row, float *out) {
             return false;
         }
         done += (uint32_t)n;
+    }
+    if (t->type == DS4_TENSOR_Q8_0) {
+        for (uint32_t b = 0; b < t->dim[0] / 32u; b++) {
+            const uint8_t *block = raw + b * 34u;
+            const float scale = f16_to_f32((uint16_t)block[0] | ((uint16_t)block[1] << 8));
+            if (!isfinite(scale)) { errno = EDOM; return false; }
+            for (uint32_t j = 0; j < 32u; j++) out[b * 32u + j] = scale * (float)(int8_t)block[2u + j];
+        }
+        return true;
     }
     for (size_t i = 0; i < t->dim[0]; i++) {
         uint32_t bits = ((uint32_t)raw[2*i] | ((uint32_t)raw[2*i+1] << 8)) << 16;
@@ -60443,6 +60530,37 @@ static bool qwen4_ngram_read(const ds4_model *m, const uint32_t *rows, size_t co
  * counter; an image's tokens take (t, t+row, t+col) from the counter at the
  * image start, which then advances by max(rows, cols).  *delta tracks
  * counter - token index across calls made in token order. */
+int ds4_qfn_ngram_self_test(const char *path) {
+    uint8_t fixture[3*170+320]={0};
+    for(uint32_t r=0;r<2;r++) for(uint32_t b=0;b<5;b++) {
+        uint8_t *p=fixture+r*170+b*34;p[0]=0;p[1]=r?0x38:0x2c;
+        for(uint32_t j=0;j<32;j++)p[2+j]=(uint8_t)((b*32+j)*3u+128u);
+    }
+    fixture[340]=0;fixture[341]=0x7e; // NaN scale must fail loudly
+    for(uint32_t i=0;i<160;i++){fixture[510+2*i]=0x80;fixture[511+2*i]=0x3f;}
+    int fd=open(path,O_CREAT|O_EXCL|O_RDWR,0600);
+    if(fd<0||write(fd,fixture,sizeof(fixture))!=(ssize_t)sizeof(fixture)){if(fd>=0)close(fd);return 1;}
+    ds4_tensor t={0};t.type=DS4_TENSOR_Q8_0;t.ndim=2;t.dim[0]=160;t.dim[1]=3;
+    ds4_model m={0};m.ngram_fd=fd;m.ngram_tensor=&t;
+    float out[32*160];uint32_t ids[32];int checks=0,rc=1;
+    for(uint32_t i=0;i<32;i++)ids[i]=i%2;
+    if(!qwen4_ngram_read(&m,ids,32,out))goto done;
+    for(uint32_t r=0;r<32;r++)for(uint32_t j=0;j<160;j++) {
+        const float expected=(ids[r]?.5f:.0625f)*(float)(int8_t)(uint8_t)(j*3u+128u);
+        if(out[r*160+j]!=expected)goto done;checks++;
+    }
+    if(qwen4_ngram_row(&m,2,out)||errno!=EDOM)goto done;checks++;
+    if(qwen4_ngram_row(&m,3,out)||errno!=EINVAL)goto done;checks++;
+    t.dim[0]=159;if(qwen4_ngram_row(&m,0,out)||errno!=EINVAL)goto done;checks++;t.dim[0]=160;
+    t.dim[1]=5;if(qwen4_ngram_row(&m,4,out)||errno!=EIO)goto done;checks++;
+    t.type=DS4_TENSOR_BF16;t.dim[1]=1;t.abs_offset=510;
+    if(!qwen4_ngram_row(&m,0,out))goto done;
+    for(uint32_t j=0;j<160;j++){if(out[j]!=1.0f)goto done;checks++;}
+    fprintf(stderr,"QFN PLE native Q8/BF16 disk reader PASS: %d exact values/refusals; no model/GPU\n",checks);rc=0;
+done:
+    close(fd);return rc;
+}
+
 static void qwen4_mrope_pos(const ds4_vision_span *spans, size_t n_spans, uint32_t p,
                             int32_t *delta, uint32_t out[3]) {
     for (size_t i = 0; i < n_spans; i++) {
@@ -60534,6 +60652,9 @@ static const ds4_vision_span *qwen4_fake_spans(size_t *count) {
     X(hc_u) X(hc_lo_act)
 
 typedef struct ds4_qwen4_gpu_graph {
+    ds4_gpu_tensor *paired_carry; /* admitted only for a persistent QFN pair */
+    uint32_t paired_carry_from;
+    uint64_t paired_cache_epoch;
     uint32_t ctx_cap;
     uint32_t pos;
     uint32_t cap_tokens;
@@ -60647,8 +60768,8 @@ static bool qwen4_graph_weights_supported(const ds4_weights *w) {
         fprintf(stderr, "ds4: Qwen3.8 GPU graph needs Q8_0/Q4_0/F16/BF16/F32 dense weights\n");
         return false;
     }
-    if (!w->ple_embd || w->ple_embd->type != DS4_TENSOR_BF16) {
-        fprintf(stderr, "ds4: Qwen3.8 requires original BF16 n-grams in the model GGUF\n");
+    if (!w->ple_embd || (w->ple_embd->type != DS4_TENSOR_BF16 && w->ple_embd->type != DS4_TENSOR_Q8_0)) {
+        fprintf(stderr, "ds4: Qwen3.8 requires complete BF16 or Q8_0 n-grams in the model GGUF\n");
         return false;
     }
     if (DS4_N_NEXTN_PREDICT != 0) {
@@ -60755,6 +60876,7 @@ static void qwen4_graph_free(ds4_qwen4_gpu_graph *g) {
         ds4_gpu_tensor_free(g->snap0_lin_hist[il]);
     }
     free(g->host_logits);
+    ds4_gpu_tensor_free(g->paired_carry);
     memset(g, 0, sizeof(*g));
 }
 
@@ -61686,6 +61808,7 @@ static bool qwen4_graph_forward_tokens(ds4_qwen4_gpu_graph *g, const ds4_model *
         }
     }
     const uint32_t pos0 = g->pos;
+    if(!pos0)g->paired_cache_epoch++;
     const uint32_t n_trunk = DS4_N_LAYER - DS4_N_NEXTN_PREDICT;
     const uint32_t hc_dim = DS4_N_EMBD * DS4_N_HC;
     static int timing = -1;
@@ -61805,6 +61928,9 @@ static bool qwen4_graph_forward_tokens(ds4_qwen4_gpu_graph *g, const ds4_model *
             ds4_gpu_tensor_free(last);
         }
         if (ok) ok = qwen4_gemv(g->logits, m, w->output, g->mixed, 1);
+    }
+    if(ok&&g->paired_carry) {
+        ok=ds4_gpu_tensor_copy(g->paired_carry,(uint64_t)pos0*hc_dim*4,g->R,0,(uint64_t)T*hc_dim*4)!=0;
     }
     const double t2 = timing ? now_sec() : 0.0;
     if (!ds4_gpu_end_commands()) ok = false;
@@ -63211,7 +63337,10 @@ struct ds4_session {
     int qwen4_slot;   /* -1 when the session holds private recurrent state */
     bool qwen4_rewound;
     float *qwen4_verify_logits;
+    float *qfn_test_logits;uint32_t *qfn_test_positions;int32_t *qfn_test_tokens;
+    uint32_t qfn_test_capacity,qfn_test_count;
     uint64_t qwen4_spec_cycles;
+    uint64_t qwen4_mtp_proposed,qwen4_mtp_kept,qwen4_mtp_depth3;
     uint64_t qwen4_spec_accepted;
 #endif
     uint32_t glm_dense_cache_len;
@@ -65227,6 +65356,8 @@ bool ds4_engine_mtp_exact_sampling(ds4_engine *e) {
     return e && e->dspark_exact_sampling;
 }
 
+int ds4_engine_qfn_mtp_depth(ds4_engine *e){return e?e->qwen4_mtp_depth:0;}
+
 int ds4_engine_mtp_draft_tokens(ds4_engine *e) {
     if (e && ds4_model_is_qwen4()) {
         return e->glm_mtp && DS4_N_NEXTN_PREDICT != 0 && e->backend != DS4_BACKEND_CPU ? 2 : 0;
@@ -65876,6 +66007,27 @@ static uint64_t qwen4_payload_tensor_bytes(uint32_t rows, uint32_t mtp_rows) {
     return bytes;
 }
 
+int ds4_qfn_native_layout(ds4_engine *e,uint32_t rows,uint32_t mtp_rows,
+    uint64_t *canonical_bytes,uint64_t *begin,uint64_t *end,uint32_t capacity) {
+    if(!ds4_engine_is_qwen4(e)||!rows||mtp_rows>rows||!canonical_bytes||!begin||!end)return -1;
+    uint64_t at=52u+(uint64_t)rows*4u+(uint64_t)DS4_N_VOCAB*4u+4u;
+    uint32_t count=0;
+    for(uint32_t il=0;il<DS4_N_LAYER;il++) {
+        if(ds4_qwen4_layer_is_linear(il))at+=qwen4_payload_lin_state_bytes()+qwen4_payload_lin_hist_bytes();
+        else {
+            const uint32_t n=ds4_qwen4_layer_is_nextn(il)?mtp_rows:rows;
+            at+=2u*qwen4_payload_kv_bytes(n);
+            if(n) {
+                if(count>=capacity)return -1;
+                begin[count]=at;end[count++]=at+qwen4_payload_ik_bytes(n);
+            }
+            at+=qwen4_payload_ik_bytes(n)+qwen4_payload_block_key_bytes(n);
+        }
+    }
+    at+=qwen4_payload_ple_hist_bytes()+(uint64_t)DS4_MAX_PLE_NGRAM*4u+4u+(uint64_t)rows*16u;
+    *canonical_bytes=at;return (int)count;
+}
+
 static int qwen4_session_save_payload(ds4_session *s, FILE *fp, char *err, size_t errlen) {
     if (!s->qwen4_graph_ready || s->qwen4_rewound ||
         s->qwen4_graph.pos != (uint32_t)s->checkpoint.len) {
@@ -65987,6 +66139,7 @@ static int qwen4_session_load_payload(ds4_session *s, FILE *fp, const uint32_t *
     }
     /* From the first write onward, failure must leave no reusable checkpoint.
      * Verifier snapshots belong to the old transcript, even at the same row. */
+    g->paired_cache_epoch++;
     s->checkpoint_valid = false;
     s->mtp_draft_valid = false;
     s->glm_mtp_have = 0;
@@ -66066,6 +66219,8 @@ static int qwen4_session_load_payload(ds4_session *s, FILE *fp, const uint32_t *
     return 0;
 }
 #endif
+
+#include "ds4_qfn_owners.inc"
 
 int ds4_session_save_payload(ds4_session *s, FILE *fp, char *err, size_t errlen) {
     DS4_POOL_SCOPE();
@@ -66416,6 +66571,149 @@ int ds4_session_save_payload(ds4_session *s, FILE *fp, char *err, size_t errlen)
     }
     free(buf);
     return rc;
+#endif
+}
+
+#ifndef DS4_HAS_QWEN4_GPU
+int ds4_qfn_native_layout(ds4_engine *e,uint32_t rows,uint32_t mtp_rows,uint64_t *bytes,uint64_t *begin,uint64_t *end,uint32_t cap) {
+    (void)e;(void)rows;(void)mtp_rows;(void)bytes;(void)begin;(void)end;(void)cap;return -1;
+}
+#endif
+
+/* Explicit test capture: computed predictive rows only, never the imported
+ * frontier. A bounded RAM buffer avoids test payload files on the Mac. */
+int ds4_session_qfn_trace_begin(ds4_session *s,uint32_t rows) {
+#ifdef DS4_HAS_QWEN4_GPU
+    if(!s||!ds4_session_is_qwen4(s)||!rows||rows>4096)return -1;
+    if(rows!=s->qfn_test_capacity) {
+        float *logits=malloc((size_t)rows*DS4_N_VOCAB*sizeof(float));
+        uint32_t *positions=malloc((size_t)rows*sizeof(uint32_t));
+        int32_t *tokens=malloc((size_t)rows*sizeof(int32_t));
+        if(!logits||!positions||!tokens){free(logits);free(positions);free(tokens);return -1;}
+        free(s->qfn_test_logits);free(s->qfn_test_positions);free(s->qfn_test_tokens);
+        s->qfn_test_logits=logits;s->qfn_test_positions=positions;s->qfn_test_tokens=tokens;s->qfn_test_capacity=rows;
+    }
+    s->qfn_test_count=0;return 0;
+#else
+    (void)s;(void)rows;return -1;
+#endif
+}
+#ifdef DS4_HAS_QWEN4_GPU
+static void qfn_test_trace(ds4_session *s,uint32_t position,int token,const float *logits) {
+    if(!s->qfn_test_capacity||s->qfn_test_count>=s->qfn_test_capacity)return;
+    const uint32_t row=s->qfn_test_count;
+    if(row && position!=s->qfn_test_positions[row-1]+1u)return;
+    memcpy(s->qfn_test_logits+(size_t)row*DS4_N_VOCAB,logits,(size_t)DS4_N_VOCAB*sizeof(float));
+    s->qfn_test_positions[row]=position;s->qfn_test_tokens[row]=token;s->qfn_test_count++;
+}
+#endif
+uint64_t ds4_session_qfn_trace_bytes(ds4_session *s) {
+#ifdef DS4_HAS_QWEN4_GPU
+    if(s&&ds4_session_is_qwen4(s)&&s->qfn_test_count)
+        return 16u+(uint64_t)s->qfn_test_count*(8u+(uint64_t)DS4_N_VOCAB*4u);
+#else
+    (void)s;
+#endif
+    return 0;
+}
+int ds4_session_qfn_trace_write(ds4_session *s,int (*write)(void *,const void *,size_t),void *ud) {
+#ifdef DS4_HAS_QWEN4_GPU
+    if(!ds4_session_qfn_trace_bytes(s)||!write)return -1;
+    const unsigned char magic[8]={'Q','F','N','T','F','3','2',1};uint32_t header[2]={DS4_N_VOCAB,s->qfn_test_count};
+    if(!write(ud,magic,8)||!write(ud,header,8))return -1;
+    for(uint32_t i=0;i<s->qfn_test_count;i++) {
+        uint32_t prefix[2]={s->qfn_test_positions[i],(uint32_t)s->qfn_test_tokens[i]};
+        if(!write(ud,prefix,8)||!write(ud,s->qfn_test_logits+(size_t)i*DS4_N_VOCAB,(size_t)DS4_N_VOCAB*4))return -1;
+    }
+    return 0;
+#else
+    (void)s;(void)write;(void)ud;return -1;
+#endif
+}
+
+static bool speculative_point_accept(float target_p, float draft_p,
+                                     uint64_t *rng) {
+    if (!rng || !(draft_p > 0.0f) || !isfinite(draft_p)) return false;
+    if (target_p >= draft_p) return true;
+    if (!(target_p > 0.0f) || !isfinite(target_p)) return false;
+    return sample_rng_f32(rng) * draft_p <= target_p;
+}
+
+static int speculative_point_replacement_probs(float *probs,uint32_t vocab,int draft_token,uint64_t *rng) {
+    if(!probs||!rng||draft_token<0||(uint32_t)draft_token>=vocab)return -1;
+    probs[draft_token]=0.0f;return sample_probabilities(probs,vocab,rng);
+}
+static int speculative_point_replacement(ds4_session *s,int draft_token,uint64_t *rng) {
+    return s?speculative_point_replacement_probs(s->sample_probs,DS4_N_VOCAB,draft_token,rng):-1;
+}
+/* Native point-mass MTP and ordinary categorical draws, evaluated on a live
+ * full-vocabulary logit row. Compress only zero-probability entries after the
+ * real target filters; all nonzero masses and original token IDs survive. */
+int ds4_qfn_point_sampling_check(const float *logits,uint32_t vocab,uint64_t samples,uint64_t seed,
+    float temperature,int top_k,float top_p,float min_p,FILE *report) {
+    if(!logits||!vocab||vocab>1000000||samples<1000||samples>10000000||!seed||!report)return -1;
+    float *full=calloc(vocab,sizeof(float)),*prob=calloc(vocab+1u,sizeof(float));
+    uint32_t *ids=calloc(vocab+1u,sizeof(uint32_t));
+    uint64_t *plain=calloc(vocab+1u,sizeof(uint64_t)),*mtp=calloc(vocab+1u,sizeof(uint64_t));
+    if(!full||!prob||!ids||!plain||!mtp){free(full);free(prob);free(ids);free(plain);free(mtp);return -1;}
+    int rc=-1;
+    if(!sample_build_probabilities(logits,vocab,temperature,top_k,top_p,min_p,full))goto done;
+    uint32_t count=0,outside=UINT32_MAX;
+    for(uint32_t i=0;i<vocab;i++) {
+        if(full[i]>0){prob[count]=full[i];ids[count++]=i;}
+        else if(outside==UINT32_MAX)outside=i;
+    }
+    if(!count)goto done;
+    // Include a filtered-out proposal as well as large/small in-support masses.
+    ids[count]=outside;uint32_t largest=0,smallest=0;
+    for(uint32_t i=1;i<count;i++){if(prob[i]>prob[largest])largest=i;if(prob[i]<prob[smallest])smallest=i;}
+    uint32_t proposals[4]={largest,count/2,smallest,count};
+    fprintf(report,"{\"vocab\":%u,\"support\":%u,\"samples_per_arm\":%llu,\"temperature\":%.9g,\"top_k\":%d,\"top_p\":%.9g,\"min_p\":%.9g,\"cases\":[",
+        vocab,count,(unsigned long long)samples,temperature,top_k,top_p,min_p);
+    bool passed=true;
+    for(unsigned arm=0;arm<4;arm++) {
+        memset(plain,0,(count+1u)*sizeof(uint64_t));memset(mtp,0,(count+1u)*sizeof(uint64_t));
+        uint64_t left_seed=seed+arm*104729u,right_seed=seed+arm*104729u+1000000007u;
+        uint32_t proposal=proposals[arm];const float mass=prob[proposal];
+        for(uint64_t draw=0;draw<samples;draw++) {
+            int a=sample_probabilities(prob,count+1u,&left_seed);
+            int b=(int)proposal;
+            if(!speculative_point_accept(mass,1.0f,&right_seed)) {
+                b=speculative_point_replacement_probs(prob,count+1u,(int)proposal,&right_seed);
+                prob[proposal]=mass;
+            }
+            if(a<0||b<0){passed=false;break;}plain[a]++;mtp[b]++;
+        }
+        double max_plain_z=0,max_mtp_z=0,max_pair_z=0;
+        fprintf(report,"%s{\"proposal_token\":%lld,\"proposal_probability\":%.9g,\"frequency\":[",arm?",":"",
+            ids[proposal]==UINT32_MAX?-1LL:(long long)ids[proposal],mass);
+        for(uint32_t i=0;i<=count;i++) {
+            const double expected=prob[i],a=(double)plain[i]/samples,b=(double)mtp[i]/samples;
+            const double sigma=sqrt(expected*(1.0-expected)/(double)samples)+1.0/(double)samples;
+            const double za=fabs(a-expected)/sigma,zb=fabs(b-expected)/sigma,zp=fabs(a-b)/(sigma*sqrt(2.0));
+            if(za>max_plain_z)max_plain_z=za;if(zb>max_mtp_z)max_mtp_z=zb;if(zp>max_pair_z)max_pair_z=zp;
+            if(za>6||zb>6||zp>6)passed=false;
+            fprintf(report,"%s{\"token\":%lld,\"expected\":%.9g,\"plain\":%.9g,\"mtp\":%.9g}",i?",":"",
+                ids[i]==UINT32_MAX?-1LL:(long long)ids[i],expected,a,b);
+        }
+        fprintf(report,"],\"max_plain_z\":%.9g,\"max_mtp_z\":%.9g,\"max_pair_z\":%.9g}",max_plain_z,max_mtp_z,max_pair_z);
+    }
+    fprintf(report,"],\"sigma_limit\":6,\"passed\":%s}\n",passed?"true":"false");
+    rc=passed?0:1;
+done:
+    free(full);free(prob);free(ids);free(plain);free(mtp);return rc;
+}
+
+
+void ds4_session_qfn_mtp_stats(ds4_session *s,uint64_t out[4]) {
+    memset(out,0,4*sizeof(uint64_t));
+#ifdef DS4_HAS_QWEN4_GPU
+    if(s && ds4_session_is_qwen4(s)) {
+        out[0]=s->qwen4_spec_cycles;out[1]=s->qwen4_mtp_proposed;
+        out[2]=s->qwen4_mtp_kept;out[3]=s->qwen4_mtp_depth3;
+    }
+#else
+    (void)s;
 #endif
 }
 
@@ -74222,6 +74520,10 @@ static int ds4_engine_open_internal(ds4_engine **out,
     e->ssd_streaming_full_layers = opt->ssd_streaming_full_layers;
     e->ssd_streaming_preload_experts = opt->ssd_streaming_preload_experts;
     if (e->power_percent > 100) e->power_percent = 100;
+    if (opt->qwen4_mtp_depth != 0 && opt->qwen4_mtp_depth != 2 && opt->qwen4_mtp_depth != 3) {
+        fprintf(stderr,"ds4: QFN MTP depth must be auto, 2 or 3\n"); return 1;
+    }
+    e->qwen4_mtp_depth = opt->qwen4_mtp_depth;
     e->mtp_draft_tokens = opt->mtp_draft_tokens > 0 ? opt->mtp_draft_tokens : 1;
     if (e->mtp_draft_tokens > 16) e->mtp_draft_tokens = 16;
     e->mtp_margin = opt->mtp_margin >= 0.0f ? opt->mtp_margin : 3.0f;
@@ -75607,7 +75909,7 @@ bool ds4_engine_quality_speed_resident(ds4_engine *e) {
 int ds4_session_quality_speed_set(ds4_session *s,float value) {
     uint32_t bits;memcpy(&bits,&value,sizeof(bits));
     if((bits&UINT32_C(0x7f800000))==UINT32_C(0x7f800000))return 1;
-    if(!s || !(value>=0 && value<=1.36125f) || !ds4_engine_quality_speed_resident(s->engine))return 1;
+    if(!s || !(value>=0 && value<=(ds4_engine_is_qwen4(s->engine)?8.0f:1.36125f)) || !ds4_engine_quality_speed_resident(s->engine))return 1;
     s->paired_quality_speed=value;return 0;
 }
 
@@ -76342,6 +76644,7 @@ int ds4_qwen4_vision_dump(const char *vision_path, const char *image_path, const
 #else
     ds4_model vm;
     ds4_qwen4_vision_weights w;
+    const double proof_start=now_sec();
     model_open(&vm, vision_path, true, false);
     qwen4_vision_weights_bind(&w, &vm);
     ds4_image image = {0};
@@ -76352,11 +76655,13 @@ int ds4_qwen4_vision_dump(const char *vision_path, const char *image_path, const
     }
     int ok = ds4_gpu_init() && ds4_gpu_set_model_map_range(vm.map, vm.size, vm.tensor_data_pos,
                                                           vm.size - vm.tensor_data_pos, vm.max_tensor_bytes);
+    const double proof_loaded=now_sec();
     float *emb = NULL;
     ds4_image_patches patches = {0};
     if (ok) ok = qwen4_vision_encode_image(&vm, &w, &image, min_image_tokens, max_image_tokens, &emb, &patches,
                                            err, sizeof(err));
     if (!ok) fprintf(stderr, "ds4: %s\n", err);
+    const double proof_encoded=now_sec();
     FILE *fp = ok ? fopen(out_path, "wb") : NULL;
     if (fp) {
         const uint32_t hdr[4] = { patches.image_token_count, w.n_out, patches.grid_height / 2u, patches.grid_width / 2u };
@@ -76369,6 +76674,11 @@ int ds4_qwen4_vision_dump(const char *vision_path, const char *image_path, const
     }
     free(emb);
     ds4_image_patches_free(&patches);
+    if(ok) {
+        printf("QFN_VISION_REFERENCE {\"load_seconds\":%.9f,\"encode_seconds\":%.9f,\"fingerprint\":\"",proof_loaded-proof_start,proof_encoded-proof_loaded);
+        for(size_t i=0;i<sizeof(image.fingerprint);i++)printf("%02x",image.fingerprint[i]);
+        printf("\",\"image_width\":%u,\"image_height\":%u}\n",image.width,image.height);
+    }
     ds4_image_free(&image);
     return ok;
 #endif
@@ -77448,6 +77758,7 @@ void ds4_session_free(ds4_session *s) {
                         100.0 * (double)s->qwen4_spec_accepted / (double)s->qwen4_spec_cycles);
             }
             free(s->qwen4_verify_logits);
+            free(s->qfn_test_logits);free(s->qfn_test_positions);free(s->qfn_test_tokens);
             if (s->qwen4_slot >= 0 && s->engine) {
                 s->engine->qwen4_pool_used &= ~(UINT64_C(1) << s->qwen4_slot);
             }
@@ -78192,6 +78503,7 @@ static void qwen4_session_draft(ds4_session *s, uint32_t row, int parent, uint32
  * first draft is identical at both depths, so the window is a comparable
  * signal across modes. */
 static int qwen4_spec_depth(ds4_session *s) {
+    if (s->engine->qwen4_mtp_depth) return s->engine->qwen4_mtp_depth;
     const char *env = getenv("DS4_QWEN4_MTP_DEPTH");
     const int v = env && env[0] ? atoi(env) : 0;
     if (v == 2 || v == 3) return v;
@@ -78223,8 +78535,9 @@ static void qwen4_spec_note_first_draft(ds4_session *s, bool accepted_first) {
  * — plus a second chained draft when the depth policy engages it — in one
  * 2- or 3-row pass.  Greedy and opportunistic sampling accept a draft when
  * it is the target argmax; exact sampling treats it as a point-mass proposal
- * (accept with p(draft), else replay a residual sample) and always runs at
- * depth 2. */
+ * (accept with p(draft), else replay a residual sample). Auto sampled mode
+ * retains depth 2; explicit depth 3 applies the same exact rule successively
+ * to both deterministic chained proposals. */
 static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float temperature, int top_k,
                                         float top_p, float min_p, uint64_t *rng, bool exact_sampling,
                                         int *accepted, int accepted_cap,
@@ -78236,7 +78549,12 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
     if (qwen4_session_replay_if_stale(s, err, errlen) != 0) return -1;
     const uint32_t pos = g->pos;
     const uint32_t V = DS4_N_VOCAB;
-    const int depth = (exact_sampling && temperature > 0.0f) || getenv("DS4_QWEN4_NO_MTP_BATCH") != NULL
+    const char *depth_env=getenv("DS4_QWEN4_MTP_DEPTH");
+    const bool fixed_three=e->qwen4_mtp_depth==3 || (!e->qwen4_mtp_depth&&depth_env&&atoi(depth_env)==3);
+    if(fixed_three&&getenv("DS4_QWEN4_NO_MTP_BATCH")) {
+        if(errlen)snprintf(err,errlen,"fixed MTP depth 3 conflicts with the no-batch option");return -1;
+    }
+    const int depth = (exact_sampling && temperature > 0.0f && !fixed_three) || getenv("DS4_QWEN4_NO_MTP_BATCH") != NULL
         ? 2 : qwen4_spec_depth(s);
     if (s->glm_mtp_have && first_token != s->glm_mtp_parent) s->glm_mtp_have = 0;
     if (depth == 3 && s->glm_mtp_have && s->glm_mtp_have2 && !g->snap2_ple_hist &&
@@ -78270,6 +78588,7 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         if (qwen4_spec_trace()) {
             fprintf(stderr, "ds4: spec pos %u token %d plain\n", pos, first_token);
         }
+        qfn_test_trace(s,g->pos,first_token,s->logits);
         accepted[0] = first_token;
         return 1;
     }
@@ -78312,6 +78631,7 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         return -1;
     }
     s->qwen4_spec_cycles++;
+    s->qwen4_mtp_proposed+=deep?2:1;s->qwen4_mtp_depth3+=deep?1:0;
     s->qwen4_rewound = false;
     token_vec_push(&s->checkpoint, first_token);
     s->checkpoint_valid = true;
@@ -78321,7 +78641,7 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
     if (deep) {
         accept2 = accept && (sample_argmax(rows + V, V) == d2 || qwen4_spec_force_accept());
     }
-    int replacement = -1;
+    int replacement = -1,replacement2=-1;
     if (exact_sampling && temperature > 0.0f) {
         if (!s->sample_probs) s->sample_probs = xmalloc((size_t)V * sizeof(s->sample_probs[0]));
         if (!rng || !sample_build_probabilities(rows, V, temperature, top_k, top_p, min_p, s->sample_probs)) {
@@ -78329,6 +78649,9 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
             s->checkpoint_valid = false;
             return -1;
         }
+        // The greedy prediction above does not decide either sampled draft.
+        // In particular a rejected first draft cannot count a second accept.
+        accept2 = false;
         accept = speculative_point_accept(s->sample_probs[d], 1.0f, rng);
         if (!accept) {
             replacement = speculative_point_replacement(s, d, rng);
@@ -78338,7 +78661,22 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
                 return -1;
             }
         }
+        if(accept&&deep) {
+            if(!sample_build_probabilities(rows+V,V,temperature,top_k,top_p,min_p,s->sample_probs)) {
+                if(errlen)snprintf(err,errlen,"Qwen3.8 mtp: second target distribution failed");
+                s->checkpoint_valid=false;return -1;
+            }
+            accept2=speculative_point_accept(s->sample_probs[d2],1.0f,rng);
+            if(!accept2) {
+                replacement2=speculative_point_replacement(s,d2,rng);
+                if(replacement2<0) {
+                    if(errlen)snprintf(err,errlen,"Qwen3.8 mtp: second residual sampling failed");
+                    s->checkpoint_valid=false;return -1;
+                }
+            }
+        }
     }
+    s->qwen4_mtp_kept+=(accept?1:0)+(accept2?1:0);
     qwen4_spec_note_first_draft(s, accept);
     if (deep) {
         if (accept2) s->qwen4_reject2_streak = 0u;
@@ -78384,6 +78722,8 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         accepted[0] = first_token;
         accepted[1] = d;
         if (deep) accepted[2] = d2;
+        qfn_test_trace(s,pos+1u,first_token,rows);qfn_test_trace(s,pos+2u,d,rows+V);
+        if(deep)qfn_test_trace(s,pos+3u,d2,rows+2u*V);
         return deep ? 3 : 2;
     }
     if (accept && deep) {
@@ -78396,6 +78736,27 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         s->checkpoint.len = pos + 1;
         token_vec_push(&s->checkpoint, d);
         memcpy(s->logits, rows + V, (size_t)V * sizeof(float));
+        if(replacement2>=0) {
+            // Restore the accepted two-row frontier and catch its predictor
+            // up before evaluating the residual replacement as the third row.
+            const int next_tokens[2]={d,replacement2};int ignored=-1;
+            if(!qwen4_graph_mtp_steps(g,m,w,0,next_tokens,2u,pos,true,NULL,&ignored)||
+               !qwen4_graph_forward_tokens(g,m,w,&replacement2,1,s->logits,false)) {
+                if(errlen)snprintf(err,errlen,"Qwen3.8 mtp: second residual replay failed");
+                s->checkpoint_valid=false;return -1;
+            }
+            token_vec_push(&s->checkpoint,replacement2);
+            qwen4_session_draft(s,0,sample_argmax(s->logits,V),pos+2u);
+            if(s->glm_mtp_have&&g->pos+1u<g->ctx_cap) {
+                int draft2=-1;
+                if(qwen4_graph_mtp_chain_step(g,m,w,s->glm_mtp_draft,g->pos,&draft2)) {
+                    s->glm_mtp_draft2=draft2;s->glm_mtp_have2=true;
+                }
+            }
+            s->qwen4_spec_accepted++;accepted[0]=first_token;accepted[1]=d;accepted[2]=replacement2;
+            qfn_test_trace(s,pos+1u,first_token,rows);qfn_test_trace(s,pos+2u,d,rows+V);
+            qfn_test_trace(s,pos+3u,replacement2,s->logits);return 3;
+        }
         const int parent = sample_argmax(s->logits, V);
         const int next_tokens[2] = {d, parent};
         int draft = -1;
@@ -78414,6 +78775,7 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         s->qwen4_spec_accepted++;
         accepted[0] = first_token;
         accepted[1] = d;
+        qfn_test_trace(s,pos+1u,first_token,rows);qfn_test_trace(s,pos+2u,d,rows+V);
         return 2;
     }
     if (!g->snap_valid || !qwen4_graph_state_swap(g)) {
@@ -78430,8 +78792,15 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
         }
         token_vec_push(&s->checkpoint, replacement);
         qwen4_session_draft(s, 0, sample_argmax(s->logits, V), pos + 1u);
+        if(depth==3 && s->glm_mtp_have && g->pos+1u<g->ctx_cap) {
+            int draft2=-1;
+            if(qwen4_graph_mtp_chain_step(g,m,w,s->glm_mtp_draft,g->pos,&draft2)) {
+                s->glm_mtp_draft2=draft2;s->glm_mtp_have2=true;
+            }
+        }
         accepted[0] = first_token;
         accepted[1] = replacement;
+        qfn_test_trace(s,pos+1u,first_token,rows);qfn_test_trace(s,pos+2u,replacement,s->logits);
         return 2;
     }
     memcpy(s->logits, rows, (size_t)V * sizeof(float));
@@ -78451,6 +78820,7 @@ static int ds4_session_qwen4_spec_cycle(ds4_session *s, int first_token, float t
             }
         }
     }
+    qfn_test_trace(s,pos+1u,first_token,s->logits);
     accepted[0] = first_token;
     return 1;
 }
@@ -79131,6 +79501,9 @@ bool ds4_session_has_vision_state(const ds4_session *s) {
  * Other backends keep more (for example rope positions shifted by an image),
  * and a TP load re-prefills the saved tokens as text, so neither persists. */
 static bool ds4_session_vision_restorable(const ds4_session *s) {
+#ifdef DS4_HAS_QWEN4_GPU
+    if(ds4_session_is_qwen4(s))return s->qwen4_graph_ready&&!s->distributed&&!s->engine->tp.active;
+#endif
 #ifdef DS4_HAS_DEEPSEEK41_GPU
     return ds4_session_is_ds41(s) && s->ds41_graph_ready && !s->distributed &&
            !s->engine->tp.active;
@@ -85792,25 +86165,6 @@ static int ds4_session_eval_dspark_speculative_argmax(
     return n_accept;
 }
 
-static bool speculative_point_accept(float target_p, float draft_p,
-                                     uint64_t *rng) {
-    if (!rng || !(draft_p > 0.0f) || !isfinite(draft_p)) return false;
-    if (target_p >= draft_p) return true;
-    if (!(target_p > 0.0f) || !isfinite(target_p)) return false;
-    return sample_rng_f32(rng) * draft_p <= target_p;
-}
-
-static int speculative_point_replacement(
-        ds4_session *s,
-        int draft_token,
-        uint64_t *rng) {
-    if (!s || !s->sample_probs || !rng ||
-        draft_token < 0 || draft_token >= (int)DS4_N_VOCAB) {
-        return -1;
-    }
-    s->sample_probs[draft_token] = 0.0f;
-    return sample_probabilities(s->sample_probs, DS4_N_VOCAB, rng);
-}
 
 static int ds4_session_eval_dspark_speculative_stochastic(
         ds4_session *s,

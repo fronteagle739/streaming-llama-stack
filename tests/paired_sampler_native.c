@@ -104,7 +104,7 @@ int main(int argc,char **argv) {
        fabsf(parsed.phases[DS4_QUALITY_CODE].temperature-.2f)>1e-6f)return 5;
     ds4_chain_config cfg={.enabled=true,.order_set=true,.order_count=5,
         .order={DS4_CHAIN_TOP_K,DS4_CHAIN_TYPICAL,DS4_CHAIN_TOP_P,DS4_CHAIN_MIN_P,DS4_CHAIN_TEMP},
-        .typical=1,.dyn_exponent=1,.dry_base=1.75f,.dry_allowed_length=2,.dry_last_n=-1};
+        .typical=1,.dyn_exponent=1,.dry_base=1.75f,.dry_allowed_length=2,.dry_last_n=-1,.top_n_sigma=-1};
     void *chain=ds4_chain_create(&cfg,NULL,NULL,0,123456,err,sizeof(err));
     float ordered[]={4,3,2,1};uint64_t seed=123456;
     if(!chain)return 6;

@@ -1,4 +1,4 @@
-// QFNSTREAM: Q2_0 grouped expert MMQ (same scheme as the generated instances).
+// QFN: Q2_0 grouped expert MMQ (same scheme as the generated instances).
 
 #include "../mmq_id_common.cuh"
 

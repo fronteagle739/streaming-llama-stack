@@ -214,7 +214,7 @@ endif()
 
 # DirectStorage support for weight fetcher (Windows only, optional)
 # Enables WF_MODE_DSTORAGE in llama-weight-fetcher.cpp (NVMe → GPU via D3D12)
-set(DS_SDK_DIR "${PROJECT_SOURCE_DIR}/external/directstorage")
+set(DS_SDK_DIR "${PROJECT_SOURCE_DIR}/external/directstorage" CACHE PATH "DirectStorage SDK package root")
 if (WIN32 AND EXISTS "${DS_SDK_DIR}/native/include/dstorage.h")
     message(STATUS "llama: DirectStorage SDK found — enabling WF_MODE_DSTORAGE in weight fetcher")
     target_include_directories(llama PRIVATE "${DS_SDK_DIR}/native/include")

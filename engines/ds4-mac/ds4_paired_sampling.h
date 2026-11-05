@@ -8,6 +8,9 @@
  * Never reinterpret this control as temperature or a logit bias. */
 #include "ds4_quality_phase.h"
 #include "ds4_sampling_bridge.h"
+/* Set once from the selected engine before accepting HTTP clients. */
+static int ds4_paired_vocab_size=129280;
+static float ds4_paired_bias_max=1.36125f;
 typedef struct {float temperature,top_p,min_p,bias;int top_k;} ds4_paired_phase;
 typedef struct {
     bool per_phase,bias_set,bias_map;
@@ -37,8 +40,8 @@ static bool ds4_paired_phase_parse(const char **p,ds4_paired_phase *out) {
         if(!strcmp(key,"temperature")){bit=1;ok=ds4_paired_number(p,&out->temperature,0,2);}
         else if(!strcmp(key,"top_p")){bit=2;ok=ds4_paired_number(p,&out->top_p,.001,1);}
         else if(!strcmp(key,"min_p")){bit=4;ok=ds4_paired_number(p,&out->min_p,0,1);}
-        else if(!strcmp(key,"bias")){bit=8;ok=ds4_paired_number(p,&out->bias,0,1.36125);}
-        else if(!strcmp(key,"top_k")){bit=16;ok=ds4_paired_int(p,&out->top_k,0,1024);}
+        else if(!strcmp(key,"bias")){bit=8;ok=ds4_paired_number(p,&out->bias,0,ds4_paired_bias_max);}
+        else if(!strcmp(key,"top_k")){bit=16;ok=ds4_paired_int(p,&out->top_k,0,ds4_paired_vocab_size);}
         free(key);if(!ok||(seen&bit))return false;seen|=bit;
         json_ws(p);if(**p=='}'){(*p)++;break;}if(*(*p)++!=',')return false;
     }return seen==31;
@@ -49,7 +52,7 @@ static bool ds4_paired_map(const char **p,ds4_paired_sampling *s,bool sampler) {
         int phase=ds4_paired_phase_index(name);free(name);json_ws(p);
         if(phase<0||(seen&(1u<<phase))||*(*p)++!=':')return false;seen|=1u<<phase;
         if(sampler){if(!ds4_paired_phase_parse(p,&s->phases[phase]))return false;}
-        else if(!ds4_paired_number(p,&s->bias[phase],0,1.36125))return false;
+        else if(!ds4_paired_number(p,&s->bias[phase],0,ds4_paired_bias_max))return false;
         json_ws(p);if(**p=='}'){(*p)++;break;}if(*(*p)++!=',')return false;
     }return seen==15;
 }
@@ -62,7 +65,10 @@ static bool ds4_paired_field(const char *key) {
         !strcmp(key,"dynatemp_range")||!strcmp(key,"dynatemp_exponent")||
         !strcmp(key,"xtc_probability")||!strcmp(key,"xtc_threshold")||
         !strcmp(key,"dry_multiplier")||!strcmp(key,"dry_base")||!strcmp(key,"top_n_sigma")||
-        !strcmp(key,"dry_allowed_length")||!strcmp(key,"dry_penalty_last_n");
+        !strcmp(key,"dry_allowed_length")||!strcmp(key,"dry_penalty_last_n")||
+        !strcmp(key,"mirostat")||!strcmp(key,"mirostat_tau")||!strcmp(key,"mirostat_eta")||
+        !strcmp(key,"min_keep")||!strcmp(key,"presence_context_size")||!strcmp(key,"frequency_context_size")||
+        !strcmp(key,"adaptive_target")||!strcmp(key,"adaptive_decay")||!strcmp(key,"dry_sequence_breakers");
 }
 static bool ds4_paired_parse(const char *key,const char **p,ds4_paired_sampling *s) {
     if(!strcmp(key,"samplers")) {
@@ -89,7 +95,7 @@ static bool ds4_paired_parse(const char *key,const char **p,ds4_paired_sampling 
     if(!strcmp(key,"quality_speed")){
         s->bias_set=true;json_ws(p);s->bias_map=**p=='{';
         if(s->bias_map)return ds4_paired_map(p,s,false);
-        if(!ds4_paired_number(p,&s->bias[0],0,1.36125))return false;
+        if(!ds4_paired_number(p,&s->bias[0],0,ds4_paired_bias_max))return false;
         for(int i=1;i<DS4_QUALITY_PHASE_COUNT;i++)s->bias[i]=s->bias[0];return true;
     }
     if(!strcmp(key,"presence_penalty"))return ds4_paired_number(p,&s->presence,-2,2);
@@ -99,7 +105,7 @@ static bool ds4_paired_parse(const char *key,const char **p,ds4_paired_sampling 
     if(!strcmp(key,"logit_bias")){
         json_ws(p);if(*(*p)++!='{')return false;json_ws(p);if(**p=='}'){(*p)++;return true;}
         while(1){char *name=NULL,*end=NULL;if(s->bias_count>=1024||!json_string(p,&name))return false;
-            long token=strtol(name,&end,10);bool ok=*name&&!*end&&token>=0&&token<129280;free(name);
+            long token=strtol(name,&end,10);bool ok=*name&&!*end&&token>=0&&token<ds4_paired_vocab_size;free(name);
             json_ws(p);if(!ok||*(*p)++!=':')return false;
             for(unsigned i=0;i<s->bias_count;i++)if(s->bias_tokens[i]==token)return false;
             s->bias_tokens[s->bias_count]=(int)token;
@@ -120,6 +126,9 @@ static void ds4_paired_logits(const ds4_paired_sampling *s,float *logits,int voc
         logits[i]=logits[i]>0?logits[i]/s->repeat:logits[i]*s->repeat;
         logits[i]-=s->presence+s->frequency*counts[i];
     }
+    for(unsigned i=0;i<s->bias_count;i++)if(s->bias_tokens[i]<vocab)logits[s->bias_tokens[i]]+=s->bias_values[i];
+}
+static void ds4_paired_bias_logits(const ds4_paired_sampling *s,float *logits,int vocab) {
     for(unsigned i=0;i<s->bias_count;i++)if(s->bias_tokens[i]<vocab)logits[s->bias_tokens[i]]+=s->bias_values[i];
 }
 #endif

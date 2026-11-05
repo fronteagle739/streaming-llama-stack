@@ -74,6 +74,31 @@ def producer_revision(cfg=None):
     return revision
 
 
+def installation_handshake(request,url,identity,health,record_path,status):
+    """One real shared native/paired qualification and acceptance contract."""
+    keep=identity.get('yoco_keep',0)
+    from .yoco import state_version
+    version=state_version(keep)
+    pin=identity['producer_sha256'];record_path=Path(record_path)
+    saved=json.loads(record_path.read_text()) if record_path.is_file() else {}
+    same=(saved.get('identity')==identity and saved.get('endpoint')==url
+          and saved.get('receiver_sha256')==health.get('receiver_sha256')
+          and health.get('paired_producer_sha256')==pin
+          and health.get('paired_tier')==identity['tier']
+          and health.get('paired_yoco_keep',0)==keep
+          and health.get('paired_yoco_state_version',0)==version)
+    if not same:
+        status('Pairing native prefill producer and Mac decoder')
+        request('/pair',identity)
+        request('/pair/qualification',{'mode':'native'})
+        request('/pair/qualification',{'mode':'paired'})
+        accepted=request('/pair/accept',{})
+        saved=dict(identity=identity,endpoint=url,receiver_sha256=health['receiver_sha256'],qualification=accepted)
+        atomic_json(record_path,saved)
+    request('/decode/setup',{})
+    return saved
+
+
 class Pair:
     def __init__(self, cfg, status=None):
         self.cfg, self.status = cfg, status or (lambda message: print(message, flush=True))
@@ -200,22 +225,7 @@ class Pair:
                 supported=health.get('yoco_state_versions',[health.get('yoco_state_version')])
                 if version not in supported:raise ValueError(f'Mac receiver needs YOCO state version{version} support')
                 identity.update(yoco_keep=keep,yoco_state_version=version)
-            saved = json.loads(self.record_path.read_text()) if self.record_path.is_file() else {}
-            same = (saved.get('identity') == identity and saved.get('endpoint') == self.url
-                    and saved.get('receiver_sha256') == health.get('receiver_sha256')
-                    and health.get('paired_producer_sha256') == pin
-                    and health.get('paired_tier') == identity['tier']
-                    and health.get('paired_yoco_keep',0)==keep
-                    and health.get('paired_yoco_state_version',0)==version)
-            if not same:
-                self.status('Pairing streaming-llama prefill and Mac decoder')
-                self.request('/pair', identity)
-                self.request('/pair/qualification', {'mode': 'native'})
-                self.request('/pair/qualification', {'mode': 'paired'})
-                accepted = self.request('/pair/accept', {})
-                atomic_json(self.record_path, {'identity': identity, 'endpoint': self.url,
-                    'receiver_sha256': health['receiver_sha256'], 'qualification': accepted})
-            self.request('/decode/setup', {})
+            installation_handshake(self.request,self.url,identity,health,self.record_path,self.status)
             self.connected = True
             self.status('Paired Mac decoder ready')
         except BaseException:

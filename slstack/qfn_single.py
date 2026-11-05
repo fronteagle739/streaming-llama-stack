@@ -16,6 +16,7 @@ forwarded unchanged to the engine. The pack defaults and validation live in the
 shared native parser used by chat, generate and the CLI.
 """
 from contextlib import ExitStack
+import base64
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -24,25 +25,32 @@ from pathlib import Path
 import queue
 import secrets
 import subprocess
+import struct
 import sys
 import threading
 import time
 
 from .config import ROOT
 
-# Owner-selected Max speed uses the historical 100K bias-0.68 measurement.
-# It has no installed-build natural-stop qualification; the owner requested
-# no new inference tests. Numeric requests retain the full original range.
+# Max speed biases routing toward resident experts; numeric biases retain 0..8.
 MAX_SPEED_BIAS = 0.68
 EXE = 'bin/qfn-engine.exe'
 
 
-def bias_of(value, settings=None):
+def bias_of(value, settings=None, max_speed_bias=None):
+    if isinstance(settings, (int,float)) and not isinstance(settings,bool):
+        max_speed_bias,settings=settings,None
     if settings is not None and isinstance(value, str):
         from .model_settings import load, named_bias
-        return named_bias(load(settings), value)
+        selected = named_bias(load(settings), value)
+        if value == 'max_speed' and max_speed_bias is not None and selected != max_speed_bias:
+            raise ValueError('Max speed bias differs between the explicit flag and model settings')
+        return selected
     if value is None or value == 'max_quality':return 0.0
-    if value == 'max_speed':return MAX_SPEED_BIAS
+    if value == 'max_speed':
+        if max_speed_bias is None:max_speed_bias = MAX_SPEED_BIAS
+        if type(max_speed_bias) not in (int,float):raise ValueError('QFN Max speed bias must be numeric')
+        return bias_of(max_speed_bias)
     if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 8:return float(value)
     raise ValueError('quality_speed must be "max_quality", "max_speed" or a bias between 0 and 8')
 
@@ -55,12 +63,44 @@ class QfnEngine:
         self.lease_factory = lease_factory or self._lease
         self.launch_factory = launch_factory or self.launch
         self.idle_seconds = float(cfg.get('qfn_idle_seconds', max(60, cfg.get('lease_minutes', 19) * 60 - 60)))
+        from .vision import Images
+        self.images=Images({**cfg,'model_family':'qfn'})
+
+    def prepare_images(self,body):
+        # Retire the complete language process before the DSV-style isolated
+        # encoder, then reacquire the normal engine lease on its next request.
+        with ExitStack() as ownership:
+            held=[False]
+            def before_encode():
+                if not held[0]:
+                    self.retire('lazy image encoder')
+                    ownership.enter_context(self.lease_factory());held[0]=True
+            body,blocks,_=self.images.prepare(body,before_encode)
+        projected=[]
+        for block in blocks:
+            with Path(block['file']).open('rb') as f:
+                header=f.read(48);magic,version,count,width=struct.unpack('<4I',header[:16]);data=f.read()
+            if (magic,version,width)!=(0x49564c53,1,2560) or len(data)!=count*width*4:
+                raise ValueError('QFN projected image extent differs')
+            projected.append(dict(marker=block['marker'],count=count,grid_height=block['grid_height'],
+                grid_width=block['grid_width'],fingerprint=header[16:].hex(),data=base64.b64encode(data).decode('ascii')))
+        return dict(op='chat',body=body,vision=projected)
 
     def _lease(self):
         from .lease import gpu_lease
         return gpu_lease(self.cfg)
 
     def command(self):
+        from .performance_contract import seal, validate
+        if self.cfg.get('performance_manifest') is None:
+            # Direct library callers use the same explicit, recorded defaults
+            # as the CLI. Existing manifests are validated without resealing.
+            resolved = dict(self.cfg)
+            for key, value in dict(host_budget_gib=3, qfn_host_budget_gib=6,
+                                   qfn_engram_scan_rings=1, qfn_tile=2048).items():
+                resolved.setdefault(key, value)
+            self.cfg = seal(resolved, 'qfn')
+        validate(self.cfg, 'qfn')
         exe = Path(self.cfg.get('qfn_engine') or ROOT / EXE)
         runtime = Path(self.cfg['runtime_root']);runtime.mkdir(parents=True, exist_ok=True)
         vocab = self.cfg.get('qfn_vocab_gguf')
@@ -69,8 +109,11 @@ class QfnEngine:
         elif not isinstance(vocab, (str, os.PathLike)) or not str(vocab):
             raise ValueError('qfn_vocab_gguf must be a nonempty path')
         argv = [str(exe), '--serve', '--model', self.cfg['model'], '--vocab-gguf', str(vocab),
-                '--ctx', str(int(self.cfg.get('context', 32768))), '--port', str(self.port())]
-        for key, flag in (('qfn_tile', '--tile'), ('qfn_cache_slots', '--cache-slots'), ('qfn_experts_file', '--experts-file')):
+                '--ctx', str(int(self.cfg.get('context', 32768))), '--port', str(self.port()),
+                '--protect-host-working-set',str(int(self.cfg.get('qfn_protect_host_working_set',1)))]
+        argv+=['--lock-host-resident',str(int(self.cfg.get('qfn_lock_host_resident',1)))]
+        for key, flag in (('qfn_tile', '--tile'), ('qfn_host_budget_gib', '--host-budget-gib'),
+                          ('qfn_cache_slots', '--cache-slots'), ('qfn_experts_file', '--experts-file')):
             if self.cfg.get(key) is not None:argv += [flag, str(self.cfg[key])]
         indexer = self.cfg.get('qfn_qsa_indexer')
         if indexer is not None:
@@ -101,7 +144,10 @@ class QfnEngine:
         """The engine runs under the stack's host-memory guard (tree-RSS budget, physical floor, Job commit cap,
         paging limits); it serves on 127.0.0.1 because the guard keeps the child's stdout in its job log."""
         from .process import OwnedProcess
-        return OwnedProcess(self.cfg, self.command(), 'qfn-engine', cwd=Path(self.cfg['runtime_root']), unbounded=True, scope='qfn-engine', telemetry=True)
+        argv = self.command()
+        cfg = dict(self.cfg, env_overrides={**self.cfg.get('env_overrides', {}),
+            'LLAMADECODE_ENGRAM_SCAN_RINGS': str(self.cfg['qfn_engram_scan_rings'])})
+        return OwnedProcess(cfg, argv, 'qfn-engine', cwd=Path(cfg['runtime_root']), unbounded=True, scope='qfn-engine', telemetry=True)
 
     def connect(self):
         """Progress-based: retry while the guarded engine is alive (it listens before it loads)."""
@@ -132,18 +178,20 @@ class QfnEngine:
                 if row is None:raise RuntimeError('qfn-engine closed its connection while loading')
                 if row.get('event') == 'ready':self.ready = row;break
                 if not row.get('ok', True):raise RuntimeError(row.get('error', 'qfn-engine refused to start'))
-            print('QFNSINGLE engine ready: ' + json.dumps(row), flush=True)
+            print('QfnSingle engine ready: ' + json.dumps(row), flush=True)
         except BaseException:
             self.retire('start failed');raise
 
     @staticmethod
     def _pump(rfile, events):
-        for line in rfile:
-            line = line.strip()
-            if not line:continue
-            try:events.put(json.loads(line))
-            except ValueError:events.put(dict(ok=False, error='unparseable engine line: ' + line[:200].decode('utf-8', 'replace')))
-        events.put(None)
+        try:
+            for line in rfile:
+                line = line.strip()
+                if not line:continue
+                try:events.put(json.loads(line))
+                except ValueError:events.put(dict(ok=False, error='unparseable engine line: ' + line[:200].decode('utf-8', 'replace')))
+        except OSError as error:events.put(dict(ok=False,error='QFN native transport closed: '+str(error)))
+        finally:events.put(None)
 
     def send(self, row):
         self.conn.sendall((json.dumps(row, separators=(',', ':')) + '\n').encode())
@@ -173,23 +221,36 @@ class QfnEngine:
         """Ask the engine to quit and wait for its guard to confirm the exit (VRAM freed), then release the GPU hold.
         A guard that does not end gets its progress-aware graceful stop (logged force fallback)."""
         job, conn, self.job, self.conn = self.job, self.conn, None, None
+        certified=job is None
         try:
             if conn is not None:
-                print('QFNSINGLE retiring engine: ' + why, flush=True)
+                print('QfnSingle retiring engine: ' + why, flush=True)
                 try:conn.sendall(b'{"op":"quit"}\n')
                 except OSError:pass
             if job is not None:
                 try:job.proc.wait(timeout=float(self.cfg.get('qfn_quit_grace_s', 120)))
                 except subprocess.TimeoutExpired:job.stop()
                 if job.proc.poll() is not None:
-                    try:job.wait()
-                    except Exception as exc:print('QFNSINGLE guard receipt: ' + repr(exc), file=sys.stderr, flush=True)
+                    try:result=job.wait()
+                    except Exception:
+                        # A failed inference job can still have certified
+                        # cleanup. Preserve the failure, but release its proven
+                        # dead process so shutdown cannot strand the lease.
+                        receipt=getattr(job,'receipt',None)
+                        if receipt is None or not Path(receipt).is_file():raise
+                        result=json.loads(Path(receipt).read_text())
+                        if not result.get('release_allowed'):raise
+                        print('QfnSingle retired failed job with certified cleanup: '+str(result.get('reason')),file=sys.stderr,flush=True)
+                    if not result.get('release_allowed'):raise RuntimeError('QFN engine retirement was not certified')
+                    certified=True
             if conn is not None:
                 try:conn.close()
                 except OSError:pass
         finally:
-            leases, self.leases = self.leases, None
-            if leases is not None:leases.close()
+            if certified:
+                leases, self.leases = self.leases, None
+                if leases is not None:leases.close()
+            else:self.job,self.conn=job,conn
 
     def idle_check(self):
         if self.job is None or not self.lock.acquire(blocking=False):return
@@ -231,7 +292,7 @@ def handler(state):
             except (ValueError, OSError) as exc:return self.send(400, dict(error=dict(message=str(exc))))
             if self.path == '/v1/stack/shutdown':return self.shutdown()
             if self.path != '/v1/chat/completions':return self.send(404, dict(error=dict(message='Unknown endpoint')))
-            try:body['bias'] = bias_of(body.pop('quality_speed', cfg.get('qfn_quality_speed')), cfg.get('model_settings'))
+            try:body['bias'] = bias_of(body.pop('quality_speed', cfg.get('qfn_quality_speed')), cfg.get('model_settings'), cfg.get('qfn_max_speed_bias'))
             except ValueError as exc:return self.send(400, dict(error=dict(message=str(exc), type='invalid_request_error')))
             if not engine.lock.acquire(blocking=False):return self.send(409, dict(error=dict(message='Another request owns the engine')))
             try:self.chat(body)
@@ -251,7 +312,8 @@ def handler(state):
                     self.send_response(200);self.send_header('Content-Type', 'text/event-stream');self.send_header('Cache-Control', 'no-cache')
                     self.send_header('Connection', 'close');self.end_headers();self.close_connection = True;headers = True
                     write(chunk(cid, model, created, dict(role='assistant')))
-                for event in engine.run(dict(op='chat', body=body), lambda e:e.get('done') is True):
+                request=engine.prepare_images(body)
+                for event in engine.run(request, lambda e:e.get('done') is True):
                     if not event.get('ok', True):raise RuntimeError(event.get('error', 'engine error'))
                     if 'delta' in event and streaming:write(chunk(cid, model, created, event['delta']))
                     elif event.get('done'):final = event
@@ -290,6 +352,9 @@ def serve(cfg):
     """Serve until /v1/stack/shutdown. The engine starts on the first request and retires when idle."""
     from .model_settings import apply
     cfg = apply(cfg, 'qfn')
+    cfg={**cfg,'model_family':'qfn'}
+    for key,value in dict(vision_backend='CUDA0',vision_min_tokens=64,vision_max_tokens=1024,
+                          vision_threads=8,vision_flash_attention=0,vision_host_budget_gib=3).items():cfg.setdefault(key,value)
     if not cfg.get('model'):raise ValueError('Set "model" to the Qwen3.8 Flash Next .basalt pack')
     engine = QfnEngine(cfg)
     state = dict(cfg=cfg, engine=engine, stopping=threading.Event(),
@@ -300,7 +365,7 @@ def serve(cfg):
         while not state['stopping'].wait(15):engine.idle_check()
     threading.Thread(target=idle, daemon=True).start()
     if cfg.get('qfn_preload'):engine.start()
-    print(f'QFNSINGLE ready on {server.server_address[0]}:{server.server_address[1]} ({state["model_id"]})', flush=True)
+    print(f'QfnSingle ready on {server.server_address[0]}:{server.server_address[1]} ({state["model_id"]})', flush=True)
     try:server.serve_forever(poll_interval=.1)
     finally:
         server.server_close()
