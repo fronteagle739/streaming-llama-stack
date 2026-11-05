@@ -1,10 +1,66 @@
 import json
 from pathlib import Path
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from unittest.mock import patch
+from scripts import build_combo_runtime
 from scripts.build_combo_runtime import relocate_runtime
 
 
 class InstallTest(unittest.TestCase):
+    def staging_args(self):
+        return ['--config','config.json','--stage','stage','--install-root','installed',
+            '--launcher','launcher','--studio-native','native.py','--native-baseline','baseline.json',
+            '--measurements','quality.json','balanced.json','speed.json',
+            '--alternating','reasoning-on.json','reasoning-off.json']
+
+    def test_source_branch_is_required_even_with_environment_override(self):
+        output=StringIO()
+        with patch.dict('os.environ',{'STACK_BUILD_BRANCH':'release-source'}), \
+                patch.object(build_combo_runtime,'stage') as stage, redirect_stderr(output):
+            with self.assertRaises(SystemExit) as error:
+                build_combo_runtime.main(self.staging_args())
+        self.assertEqual(error.exception.code,2)
+        self.assertIn('--source-branch',output.getvalue())
+        self.assertIn('required',output.getvalue())
+        stage.assert_not_called()
+
+    def test_explicit_source_branch_reaches_staging(self):
+        with patch.dict('os.environ',{'STACK_BUILD_BRANCH':'different-source'}), \
+                patch.object(build_combo_runtime,'stage') as stage:
+            build_combo_runtime.main(self.staging_args()+['--source-branch','release-source'])
+        self.assertEqual(stage.call_args.args[0].source_branch,'release-source')
+
+    def test_help_documents_source_branch_without_needing_inputs(self):
+        output=StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as error:
+            build_combo_runtime.main(['--help'])
+        self.assertEqual(error.exception.code,0)
+        self.assertIn('--source-branch SOURCE_BRANCH',output.getvalue())
+        self.assertIn('no environment or default branch',' '.join(output.getvalue().split()))
+
+    def test_source_branch_must_match_and_remain_owned_non_main(self):
+        owned='agent'+'/'
+        for current,selected in [(owned+'release',owned+'other'),('main','main'),
+                (owned+'main',owned+'main'),('release','release')]:
+            with self.subTest(current=current,selected=selected), \
+                    patch.object(build_combo_runtime,'read',return_value={}), \
+                    patch.object(build_combo_runtime,'acceptance'), \
+                    patch.object(build_combo_runtime.subprocess,'check_output',return_value=current):
+                args=unittest.mock.Mock(source_branch=selected)
+                with self.assertRaisesRegex(ValueError,'match --source-branch'):
+                    build_combo_runtime.stage(args)
+
+    def test_matching_explicit_branch_proceeds_to_clean_tree_check(self):
+        branch='agent'+'/'+'release'
+        with patch.dict('os.environ',{'STACK_BUILD_BRANCH':'different-source'}), \
+                patch.object(build_combo_runtime,'read',return_value={}), \
+                patch.object(build_combo_runtime,'acceptance'), \
+                patch.object(build_combo_runtime.subprocess,'check_output',side_effect=[branch,' M file']):
+            with self.assertRaisesRegex(ValueError,'Commit and publish'):
+                build_combo_runtime.stage(unittest.mock.Mock(source_branch=branch))
+
     def test_retired_scratch_is_not_a_runtime_dependency(self):
         scratch=Path.cwd()/'qualification-scratch'
         installed=Path.cwd()/'installed-runtime'

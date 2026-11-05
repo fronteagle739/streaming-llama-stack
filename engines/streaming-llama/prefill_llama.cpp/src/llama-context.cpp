@@ -4668,10 +4668,9 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
 
     // Skip KV-RAM re-point when we have a cached state blob — the state
     // was already captured before weight tensors were restored.
-    // STREAMED EXPORT from the NVMe tier (docs/KV_TIER_DESIGN.md P2b, 2026-09-10): when the tier holds
+    // Streamed export from the NVMe tier: when the tier holds
     // every row of the sequence's cells, the artifact is streamed from the files by the transport and
-    // nothing the size of the conversation is assembled in RAM (the 1.2 GB RAM artifact per turn at
-    // 11k tokens was the re-entry cost). A candidate needs the tier open and nothing that wants the
+    // nothing the size of the conversation is assembled in RAM. A candidate needs the tier open and nothing that wants the
     // bytes in RAM: a retained/restored blob (that IS the export), a kept file, a validate roundtrip,
     // a forced fresh capture. LLAMA_KV_TIER_STREAM_EXPORT=0 turns it off.
     kv_tier_export.reset();

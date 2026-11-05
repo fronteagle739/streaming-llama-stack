@@ -17,3 +17,5 @@ Before switching, the coordinator requires an empty process Job, a signaled proc
 `combo_measure` records streaming TTFT, 100/500/1000-token milestones, warm decode windows, transfer legs and prefix reuse. `combo_alternating` compares a six-turn transcript with native-only replay and complete logit vectors. These tools require explicit budgets and independent GPU admission. Automatic routing requires a compatible measured crossover rather than a guessed threshold.
 
 The immutable-runtime builder stages matching executable dependencies after its parity and conversation checks. Staging itself does not install a preset. Quality controls use authenticated native endpoints and preserve independent reasoning, tool, answer and code settings.
+
+Run `python scripts/build_combo_runtime.py --help` for the staging inputs. Every invocation requires `--source-branch <current-owned-branch>` along with the configuration, binary and qualification inputs. The branch must match the current checkout and be an owned non-main branch. There is no default source branch or environment override; a missing flag fails before reading inputs or creating a stage.

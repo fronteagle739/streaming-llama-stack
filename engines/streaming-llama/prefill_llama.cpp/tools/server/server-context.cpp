@@ -3812,11 +3812,11 @@ private:
                                             if (input_tokens[t] == LLAMA_TOKEN_NULL) { req_has_media2 = true; break; }
                                         }
                                     }
-                                    // 2026-07-21 GOAL#2 GLM read-guard fix (glm-kvstore-miss.md §5): a resident
+                                    // A resident
                                     // in-RAM blob only blocks the disk lookup when it is VIABLE FOR THIS request
                                     // (its prefix tokens prefix-match input_tokens) — a stale blob from a
                                     // different conversation is dropped later anyway (cell-count mismatch) and
-                                    // must not permanently shadow the persistent store (the GLM interleave miss).
+                                    // must not permanently shadow the persistent store.
                                     // Arch-agnostic; also covers DSV4 configs without LLAMA_DSV4_ROUTE_REUSE.
                                     bool blob_blocks_lookup = ctx_kvs && ctx_kvs->has_kv_blob_cache();
                                     if (blob_blocks_lookup) {
@@ -3827,8 +3827,8 @@ private:
                                         }
                                         blob_blocks_lookup = viable;
                                     }
-                                    // NVMe KV TIER RESTORE (2026-09-10, docs/KV_TIER_DESIGN.md): the
-                                    // conversation's rows live in per-conversation files on D:, written
+                                    // NVMe KV tier restore: the
+                                    // conversation's rows live in per-conversation files, written
                                     // once. Every streaming request hands its tokens over (recorded next
                                     // to the rows); when this process holds no cached prefix the tier is
                                     // asked for the longest stored prefix, the slot is seeded to it and the

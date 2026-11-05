@@ -116,9 +116,9 @@ def stage(args):
     cfg=read(args.config)
     acceptance(cfg,args.measurements,args.native_baseline,args.alternating)
     branch=subprocess.check_output(['git','branch','--show-current'],cwd=SOURCE,text=True).strip()
-    selected_branch = __import__("os").environ.get("STACK_BUILD_BRANCH", "agent/stackclean-sol-20261025")
+    selected_branch = args.source_branch
     if branch != selected_branch or not branch.startswith('agent/') or re.search(r'(^|[/._-])(main|master)($|[/._-])',branch,re.I):
-        raise ValueError('Owned task source branch required')
+        raise ValueError('Current source branch must match --source-branch and be an owned non-main branch')
     if subprocess.check_output(['git','status','--porcelain'],cwd=SOURCE,text=True).strip():
         raise ValueError('Commit and publish the final source before staging an immutable runtime')
     revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=SOURCE,text=True).strip()
@@ -184,9 +184,15 @@ def stage(args):
     print(json.dumps(dict(stage=str(target),files=len(manifest['files']),bytes=sum(v['bytes'] for v in manifest['files'].values()),revision=revision)))
 
 
-if __name__=='__main__':
-    parser=argparse.ArgumentParser()
+def main(argv=None):
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source-branch',required=True,
+        help='Exact current owned source branch to stage; no environment or default branch is used')
     for name in ('config','stage','install-root','launcher','studio-native','native-baseline'):
         parser.add_argument('--'+name,required=True)
     parser.add_argument('--measurements',nargs=3,required=True);parser.add_argument('--alternating',nargs=2,required=True)
-    stage(parser.parse_args())
+    stage(parser.parse_args(argv))
+
+
+if __name__=='__main__':
+    main()

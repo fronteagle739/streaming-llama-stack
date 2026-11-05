@@ -4505,17 +4505,9 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
             (uint64_t)cap * gate_expert_bytes;
         cache->down_capacity =
             (uint64_t)cap * down_expert_bytes;
-        /* [2026-08-18] ALWAYS-ON, was behind DS4_CUDA_STREAMING_EXPERT_CACHE_VERBOSE. The VRAM expert
-         * cache was the only major allocation in this engine that landed silently - the RAM cache
-         * announces itself (see the "CUDA RAM expert cache class %u allocated" line below), the DS
-         * arena announces itself, this did not. That gap cost a wrong conclusion in DS4_NOW.md: a
-         * missing allocation line was read as "the class never allocated", when no such line had ever
-         * existed. An absence can only be evidence if the presence was possible.
-         *
-         * Cheap to leave on: prepare() early-returns whenever the existing allocation already covers
-         * the target, so this fires on real capacity CHANGES, not per token. The guard below makes
-         * that explicit anyway. Paired with the DISABLED warning above, the two lines now cover both
-         * outcomes of every prepare - which is what makes "no DISABLED line" mean something. */
+        /* Report VRAM expert-cache capacity changes unconditionally. prepare()
+         * reuses sufficient allocations, and the guard avoids per-token logging.
+         * Together with the DISABLED warning, this reports both allocation outcomes. */
         if (cache->last_reported_cap != cap) {
             cache->last_reported_cap = cap;
             fprintf(stderr,
@@ -5905,8 +5897,7 @@ static int cuda_stream_host_expert_cache_find(
 
 static uint32_t cuda_stream_host_expert_cache_lru_slot(
         cuda_stream_host_expert_cache *cache) {
-    /* [2026-08-24] Ranking this by route hotness without a lifetime barrier was unsafe.
-     * See .planning/HOTNESS_EVICT_REVIEW.md. The host cache has no slot-lifetime protection:
+    /* Route-hotness eviction requires a lifetime barrier. The host cache has no slot-lifetime protection:
      * get_slot() can return a slot whose H2D copy is DEFERRED into a merged run, and a later miss
      * in the same run could evict and overwrite it before the copy reads it (ds4_cuda.cu run-flush
      * path). LRU's protection is incidental but real - a returned slot is stamped NEWEST, so LRU

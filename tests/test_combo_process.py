@@ -146,6 +146,7 @@ class ProcessTest(unittest.TestCase):
 
     def test_runtime_floor_reaches_producer_argv_and_session_watcher(self):
         from slstack.combo_producer import ComboProducer
+        from slstack.performance_contract import seal
         seen=[]
         class Files:
             @contextmanager
@@ -159,9 +160,11 @@ class ProcessTest(unittest.TestCase):
                 self.ready=dict(checkpoint=dict(context=262144,position=1))
         cfg=dict(runtime_root=os.environ['STUDIO_RUNTIME_ROOT'],llama_producer=sys.executable,model=sys.executable,
             producer_sha256=hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),producer_source_revision='r',
-            context=262144,gpu_uuid='TEST',min_available_gib=1,host_budget_gib=8,request_timeout_s=10,lease_minutes=1)
+            context=262144,gpu_uuid='TEST',min_available_gib=1,host_budget_gib=10.25,
+            combo_worker_host_budget_gib=10,producer_host_budget_gib=7.75,
+            producer_host_max_gib=7.75,producer_engram_scan_rings=1,request_timeout_s=10,lease_minutes=1)
         for floor in (None,0,6.5):
-            chosen=cfg if floor is None else dict(cfg,runtime_min_free_gib=floor)
+            chosen=seal(cfg if floor is None else dict(cfg,runtime_min_free_gib=floor),'dsv41')
             with patch('studio.dsv41_session_process.Producer',Process),patch('slstack.combo_producer.environment',return_value={}),patch('slstack.combo_producer.model_receipt',return_value=Path(sys.executable)),patch('slstack.combo_producer.model_digest',return_value=MODEL_SHA256):
                 p=ComboProducer(chosen,'1'*32,42,[1],lambda:False,runner=Files())
             p.leases.close()
