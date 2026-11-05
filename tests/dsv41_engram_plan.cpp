@@ -73,7 +73,7 @@ int main() {
                "duplicate ids across a page boundary share one extent and offset");
         expect(recover(file, ids, nullptr, base, 65536, extents, bytes, geometry) && geometry, "duplicate rows recovered exactly");
     }
-    {   // PAIRFIX scan geometry: a gap tolerance merges rows across unread pages.
+    {   // scan geometry: a gap tolerance merges rows across unread pages.
         const std::vector<uint32_t> ids{0, 100, 2000, 3000};   // ~pages 0, 6, 129, 193 past the base
         const auto strict = ep::build(ids.data(), ids.size(), nullptr, base, rb, 1 << 20);
         const auto merged = ep::build(ids.data(), ids.size(), nullptr, base, rb, 1 << 20, ep::page_bytes, 64 * 1024);

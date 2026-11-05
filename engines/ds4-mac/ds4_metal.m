@@ -11894,7 +11894,7 @@ int ds4_gpu_tp_init(uint32_t rank,
         (volatile uint32_t *)((uint8_t *)ds4_gpu_tensor_contents(slab) + gpu_flags_off) : NULL;
     /* Flag arrival is the default: the slab-word publish detects in ~1-3us
      * where signaledValue polling costs 10-20, worth +2.3 t/s on the pair
-     * (A/B 2026-07-06, byte-identical output).  DS4_TP_EVENT_GATES falls
+     * (A/B byte-identical output).  DS4_TP_EVENT_GATES falls
      * back to the shared-event arrival path. */
     g_tp_flag_gates = g_tp_gpu_flags != NULL && getenv("DS4_TP_EVENT_GATES") == NULL;
     g_tp_poll_gates = false;
@@ -11905,7 +11905,7 @@ int ds4_gpu_tp_init(uint32_t rank,
     g_tp_gate_prefetch = getenv("DS4_TP_DISABLE_GATE_PREFETCH") == NULL;
     memset(g_tp_prefetch_count, 0, sizeof(g_tp_prefetch_count));
     /* Default with flag gates: byte-identical to the event wait and about
-     * 20 us cheaper per gate on the M5 Max pair (A/B 2026-09-01, README
+     * 20 us cheaper per gate on the M5 Max pair (A/B README
      * ctx 128: 46.6-47.2 vs 43.6 t/s). DS4_TP_DISABLE_POLL_GATES restores
      * the shared-event wait for diagnosis. */
     if (g_tp_flag_gates && getenv("DS4_TP_DISABLE_POLL_GATES") == NULL) {

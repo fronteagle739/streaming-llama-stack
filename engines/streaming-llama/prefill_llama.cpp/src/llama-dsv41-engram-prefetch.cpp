@@ -72,7 +72,7 @@ struct llama_dsv41_engram_prompt_cache::implementation {
     // LLAMADECODE_ENGRAM_EARLY only.
     bool early_mode=false;
     uint32_t early_rings=0,early_small=0,early_large=0,early_batch=0;
-    // PAIRFIX scan geometry (LLAMADECODE_ENGRAM_SCAN=auto|0|1): a dense row set
+    // scan geometry (LLAMADECODE_ENGRAM_SCAN=auto|0|1): a dense row set
     // is read as large sequential extents (gap-tolerant merge) instead of one
     // random 4-8 KiB read per row. Same rows, same bytes copied, same order of
     // table publication; only the read requests differ.
@@ -378,8 +378,8 @@ public:
     }
     // LLAMADECODE_ENGRAM_SCAN: auto (default) reads by large extents when the
     // predicted sequential time (bytes / LLAMADECODE_ENGRAM_SCAN_GBPS, default
-    // 15 GB/s, measured 15-22 on D:) beats the random-read prediction
-    // (requests / LLAMADECODE_ENGRAM_IOPS). Measured on D: (PAIRFIX iobench):
+    // 15 GB/s, measured 15-22 on NVMe storage) beats the random-read prediction
+    // (requests / LLAMADECODE_ENGRAM_IOPS). Storage measurements:
     // random 264 B rows saturate at 150-285K IOPS, so a 200K prompt's ~3M row
     // reads take 26 s, while both 101 GB tables stream in ~10-13 s.
     void choose_scan(uint64_t admitted,uint64_t without,uint64_t meta){
@@ -390,10 +390,9 @@ public:
         const uint32_t kib=env_u32("LLAMADECODE_ENGRAM_SCAN_KIB",1024,256,32768);
         require(kib%4==0,"LLAMADECODE_ENGRAM_SCAN_KIB must be a multiple of 4");
         const uint32_t scan_cap=kib*1024;
-        // Merge tolerance. Defaults measured at 200K real text (PAIRFIX cand3 vs
-        // cand4): 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;
+        // Merge tolerance. Defaults measured at 200K real text: 8 MiB straight-through extents read 200.8 GB, prompt 46.57 s;
         // 1 MiB extents with a 64 KiB gap read 119.9 GB, prompt 44.44 s. One ring
-        // of 64 slots (cand6, 43.17 s) matches the bench optimum: on this RAID one
+        // of 64 slots (43.17 s) matches the bench optimum: on this RAID one
         // queue at QD64 beats several queues for 256 KiB+ random reads.
         const uint64_t scan_gap=uint64_t(env_u32("LLAMADECODE_ENGRAM_SCAN_GAP_KIB",64,4,32768))*1024;
         const char*g=std::getenv("LLAMADECODE_ENGRAM_SCAN_GBPS");

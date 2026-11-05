@@ -3,12 +3,12 @@
 #include "mma.cuh"
 #include "fattn-common.cuh"
 
-// TEST: Phase 2.2 angle 47 — f32 VKQ accumulator for SM120 NCOLS=64 MLA path.
+// TEST: angle 47 — f32 VKQ accumulator for SM120 NCOLS=64 MLA path.
 // Enables a parallel tile<16,8,float> accumulator alongside the existing
 // tile<16,8,half2> path. Auto-activated only for (DKQ=576, DV=512, ncols=64).
 // Other shapes constexpr-fold to identical-to-HEAD code paths.
 // To disable: comment this #define out and rebuild.
-// [2026-08-27] DISABLED. This accumulator is not a fix for the MLA shape -- it IS the defect.
+// DISABLED. This accumulator is not a fix for the MLA shape -- it IS the defect.
 //
 // Measured with test-backend-ops on hsk=576/hsv=512 (the DeepSeek/GLM MLA shape), after
 // extending the kv sweep past 1024 and relaxing the nr2 filter that pinned that shape to
@@ -583,7 +583,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_iter(
             (V_h2 + int64_t(k_VKQ_0)*stride_V, tile_V, nbatch_V2, stride_V, k_VKQ_sup);
     } else {
         constexpr bool use_cp_async = nstages == 1;
-        if (mask_h) { // NOMASK(2026-05-30): null mask = direct_causal inline-m path; skip load (avoid null deref + free O(ub*n_kv) mask). Behavior-identical when mask present.
+        if (mask_h) { // NOMASKnull mask = direct_causal inline-m path; skip load (avoid null deref + free O(ub*n_kv) mask). Behavior-identical when mask present.
             flash_attn_ext_f16_load_mask<ncols1, nwarps, nbatch_fa, use_cp_async, oob_check>
                 (mask_h + k_VKQ_0, tile_mask, stride_mask, k_VKQ_sup, jt*ncols1, ne01);
         }
@@ -964,7 +964,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_iter(
                 }
             }
             if constexpr (use_f32_acc) {
-                // FIX 2026-05-13: rescale per-col-parity within each N-slice tile.
+                // FIX rescale per-col-parity within each N-slice tile.
                 // For tile<16,8,float>: thread holds 4 floats at (row 0/8, col 0/1).
                 // Even col positions (l%2==0) use KQ_max_scale[0]; odd use KQ_max_scale[1].
                 const int n_acc_pairs = (DV/2)/T_C_VKQ::J;
@@ -1028,7 +1028,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_iter(
         cp_async_wait_all();
         __syncthreads();
         if (!last_iter) {
-            if (mask_h) { // NOMASK(2026-05-30): null mask = direct_causal inline-m path; skip load. Behavior-identical when mask present.
+            if (mask_h) { // NOMASKnull mask = direct_causal inline-m path; skip load. Behavior-identical when mask present.
                 flash_attn_ext_f16_load_mask<ncols1, nwarps, nbatch_fa, use_cp_async, oob_check>
                     (mask_h + k_VKQ_0 + nbatch_fa, tile_mask, stride_mask, k_VKQ_sup, jt*ncols1, ne01);
             }
@@ -1118,7 +1118,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_iter(
                     // swap A and B for CUDA.
                     mma(VKQ_C[i_VKQ_0/i0_stride], B[k00/(np*T_A_VKQ::J)], A);
                     if constexpr (use_f32_acc) {
-                        // FIX 2026-05-13: drop the broken tile<8,8,half2> B-packing.
+                        // FIX drop the broken tile<8,8,half2> B-packing.
                         // Issue raw m16n8k16.f32 PTX twice using the SAME register split
                         // the half2 wrapper at mma.cuh:935-940 uses for its two MMAs:
                         //   half2 MMA 1: D.x[0..1] from PTX-B = (V.x[0], V.x[2])  → covers N=0..7
@@ -1377,7 +1377,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
 
     int kb0 = kb0_start;
 
-    // CAUSAL BLOCK-SKIP (2026-05-30, direct_causal / LLAMA_FA_MLA_CAUSAL_DIRECT): cap the K-loop to
+    // CAUSAL BLOCK-SKIP (direct_causal / LLAMA_FA_MLA_CAUSAL_DIRECT): cap the K-loop to
     // the tile's causal boundary so the iterated block COUNT is independent of ne11 (the padded
     // cache width). PROVEN root cause of multi-ub incoherence: identical K but different ne11 =>
     // iterating a different number of fully-masked far blocks perturbs the online-softmax by ~1 ULP
@@ -1423,7 +1423,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
         constexpr bool use_cp_async = true;
         constexpr bool oob_check    = false;
         constexpr int  k_VKQ_sup    = nbatch_fa;
-        if (mask_h) { // NOMASK(2026-05-30): null mask = direct_causal inline-m path; skip load. Behavior-identical when mask present.
+        if (mask_h) { // NOMASKnull mask = direct_causal inline-m path; skip load. Behavior-identical when mask present.
             flash_attn_ext_f16_load_mask<ncols1, nwarps, nbatch_fa, use_cp_async, oob_check>
                 (mask_h + kb0*nbatch_fa, tile_mask, stride_mask, k_VKQ_sup, jt*ncols1, ne01);
         }
@@ -1562,7 +1562,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
         float KQ_max_scale[cols_per_thread];
 #pragma unroll
         for (int col = 0; col < cols_per_thread; ++col) {
-            // Phase 2.2 angle 36 (2026-05-13): port ggml-org/llama.cpp upstream
+            // angle 36 port ggml-org/llama.cpp upstream
             // fix — add (threadIdx.y/np)*cols_per_warp offset to jc index for
             // multi-warp configs (nwarps > 1). Without this, multi-warp
             // sinks_f indexing reads the wrong sink slot. Kimi K2.6 has no
@@ -1606,7 +1606,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
                 }
             }
             if constexpr (use_f32_acc) {
-                // FIX 2026-05-13: same per-col-parity rescale as the earlier site.
+                // FIX same per-col-parity rescale as the earlier site.
                 const float s_even = KQ_max_scale[0];
                 const float s_odd  = KQ_max_scale[1];
 #pragma unroll
@@ -1805,7 +1805,7 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
             for (int k1 = 0; k1 < nbatch_combine; k1 += T_C_VKQ::J) {
                 const int i_acc = (k00 + k1)/T_C_VKQ::J;
                 if constexpr (use_f32_acc) {
-                    // FIX 2026-05-13: f32 N-slice writeback.
+                    // FIX f32 N-slice writeback.
                     // VKQ_C is half2 representing 16x16 D. Per thread, x[l] holds half-col
                     // pair at (row get_i(l), cols get_j(l)*2 + 0,1). Layouts:
                     //   l=0: (row 0, cols 0..1) → from T0  (N=0..7)
@@ -2000,7 +2000,7 @@ static __global__ void flash_attn_ext_f16(
     const int stride_mask = nb31 / sizeof(half);
 
     const int stride_V = V_is_K_view ? stride_K : nb21 / sizeof(half2);
-    // 2026-05-30: relaxed for the causal-block-skip fix. The skip only needs a causal mask +
+    // relaxed for the causal-block-skip fix. The skip only needs a causal mask +
     // max_bias==0; the old ne11%ne01.z layout conditions were from the unimplemented design and
     // failed for the real multi-ub layout (ne11 = padded full cache, not a multiple of ubatch).
     const bool direct_causal =
@@ -2183,7 +2183,7 @@ void ggml_cuda_flash_attn_ext_mma_f16_case(ggml_backend_cuda_context & ctx, ggml
 
 #if !defined(GGML_USE_MUSA)
         CUDA_CHECK(cudaFuncSetAttribute(reinterpret_cast<fattn_kernel_ptr_t>(fattn_kernel), cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared_total));
-        // Phase 2.2 angle 31 (2026-05-13): diagnostic for H2 (shmem carveout
+        // angle 31 diagnostic for H2 (shmem carveout
         // silently truncates opt-in request). Log actual vs requested per
         // first launch when LLAMA_FA_SHMEM_AUDIT=1.
         if (const char * env = std::getenv("LLAMA_FA_SHMEM_AUDIT")) {
@@ -2227,7 +2227,7 @@ void ggml_cuda_flash_attn_ext_mma_f16_case(ggml_backend_cuda_context & ctx, ggml
 
 #if !defined(GGML_USE_MUSA)
         CUDA_CHECK(cudaFuncSetAttribute(reinterpret_cast<fattn_kernel_ptr_t>(fattn_kernel), cudaFuncAttributeMaxDynamicSharedMemorySize, nbytes_shared_total));
-        // Phase 2.2 angle 31 (2026-05-13): audit second branch too (logit_softcap=true path).
+        // angle 31 audit second branch too (logit_softcap=true path).
         if (const char * env = std::getenv("LLAMA_FA_SHMEM_AUDIT")) {
             if (env[0] != '\0' && env[0] != '0') {
                 static bool logged_b = false;

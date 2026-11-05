@@ -95,7 +95,7 @@ static void test_basic_roundtrip() {
 
 
 static void test_seq_ids_preserved_verbatim() {
-    // Phase 316z architectural fix: producer's [3, 7, 19] is exactly
+    // architectural fix: producer's [3, 7, 19] is exactly
     // receiver's [3, 7, 19]. No implicit remap to 0, no other shifts.
     std::vector<llama_seq_id> seq_ids = {3, 7, 19};
     auto blob = build_blob(seq_ids, {32, 32, 32});

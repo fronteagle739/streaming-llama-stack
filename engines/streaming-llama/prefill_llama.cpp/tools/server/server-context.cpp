@@ -540,7 +540,7 @@ struct server_slot {
             GGML_ASSERT(!is_processing());
         }
 
-        // TURN-2 REUSE FIX (2026-07-18): the release-time prompt_clear (release()->prompt_clear for
+        // TURN-2 REUSE FIX the release-time prompt_clear (release()->prompt_clear for
         // child slots or LLAMA_SERVER_RELEASE_FREES_SLOT_KV) fires AFTER a streaming remote-handoff has
         // exported+migrated+retained the KV but BEFORE commit_route_reuse_record() commits it — wiping the
         // fully-valid retained candidate (slot.prompt.tokens + ctx generation/prefix/resident) so the commit
@@ -862,7 +862,7 @@ struct server_slot {
                 prompt_clear(false);
             }
 
-            // Phase 329 (2026-05-05): when LLAMA_SERVER_RELEASE_FREES_SLOT_KV=1
+            // when LLAMA_SERVER_RELEASE_FREES_SLOT_KV=1
             // is set, also clear the parent slot's KV on release. This is
             // required for kv_unified mode at high NP (=64+) where cells
             // accumulate across slots in stream 0; without explicit eviction
@@ -875,7 +875,7 @@ struct server_slot {
             if (!task->is_child()) {
                 const char * release_clear_env = std::getenv("LLAMA_SERVER_RELEASE_FREES_SLOT_KV");
                 if (release_clear_env && release_clear_env[0] && release_clear_env[0] != '0') {
-                    SLT_DBG(*this, "%s", "Phase 329: clearing slot KV on release\n");
+                    SLT_DBG(*this, "%s", "clearing slot KV on release\n");
                     prompt_clear(false);
                 }
             }
@@ -1120,7 +1120,7 @@ public:
         }
     }
 
-    // Phase 327 (2026-05-05): public accessor for /v1/seq_cp endpoint.
+    // public accessor for /v1/seq_cp endpoint.
     // Used from server_routes::init_routes lambda. Caller must ensure
     // the context is alive (not in sleep state) before dereferencing.
     llama_context * get_ctx_unsafe() const { return ctx; }
@@ -1226,7 +1226,7 @@ private:
     }
 
     void invalidate_route_reuse(server_slot * slot, const char * reason, bool clear_prompt) {
-        // Environment registry (2026-07-28):
+        // Environment registry
         //   LLAMA_SERVER_CHUNK_ROUTE_FIX=0
         //       Restore legacy invalidation order and task_n-batch_n reuse
         //       accounting for A/B. The default-on path makes an intentional
@@ -1657,7 +1657,7 @@ private:
             params_dft.cache_type_k = params_spec.cache_type_k;
             params_dft.cache_type_v = params_spec.cache_type_v;
 
-            // Phase 335 (2026-05-05): drafter must NOT use the target's streaming
+            // drafter must NOT use the target's streaming
             // prefill / WF / KV-RAM machinery. The drafter is fully GPU-resident
             // (-ngld 99) and small (~600 MB for jukofyork Kimi-K2 0.6B drafter).
             // Without these overrides, the drafter inherits -ps from params_base
@@ -1670,7 +1670,7 @@ private:
             // the gate that activates WF mode in llama_model_load_data. Confirmed
             // empirically that LLAMA_NO_HOST=1 alone doesn't break a non-streaming
             // model load.
-            SRV_INF("Phase 335: drafter context will use prefill_streaming=false "
+            SRV_INF("drafter context will use prefill_streaming=false "
                     "(target uses %s)\n", params_base.prefill_streaming ? "true" : "false");
 
             if (params_spec.cpuparams.n_threads > 0) {
@@ -1818,9 +1818,9 @@ private:
         // decode in common_speculative_is_compat() accesses layer weight tensors which
         // have sentinel data (0x1) in no_alloc mode, causing access violations.
         //
-        // Phase 6.3 (2026-05-12): if a drafter is explicitly configured AND wf_active,
+        // if a drafter is explicitly configured AND wf_active,
         // trust the user — assume spec-decode is compatible. Without this the WF path
-        // entirely loses spec-decoding (Phase 6.3 was getting n_drafted=0). The test
+        // entirely loses spec-decoding (was getting n_drafted=0). The test
         // decode that crashed is the only thing this protects against; skipping it
         // means a wrong drafter MAY crash on first speculation, but a right drafter
         // will work.
@@ -1835,7 +1835,7 @@ private:
                 const bool drafter_configured = params_base.speculative.has_dft();
                 if (drafter_configured) {
                     can_spec = true;
-                    fprintf(stderr, "*** SRV: wf_active + drafter configured — trusting user, assuming spec-decode compatible (Phase 6.3)\n");
+                    fprintf(stderr, "*** SRV: wf_active + drafter configured — trusting user, assuming spec-decode compatible ()\n");
                 } else {
                     fprintf(stderr, "*** SRV: skipping speculative compat check (wf_active, no drafter)\n");
                 }
@@ -3234,7 +3234,7 @@ private:
                     fprintf(stderr, "*** HANDOFF_EXPORT: case enter, task.id=%d, n_ids=%zu\n",
                         task.id, task.handoff_action.request_ids.size());
                     fflush(stderr);
-                    // Phase G (2026-05-06): KV reads run on the main loop where
+                    // KV reads run on the main loop where
                     // they're safe.  Direct call from the request thread
                     // crashed in this fork's streaming-prefill llama-context.
                     auto res = std::make_unique<server_task_result_handoff_export>();
@@ -3252,8 +3252,8 @@ private:
                     per_seq_pos.reserve(task.handoff_action.request_ids.size());
 
                     bool failed = false;
-                    // Use the MLA-aware llama_handoff_capture_kv (Phase G,
-                    // 2026-05-06) which sets v_trans on attn caches before
+                    // Use the MLA-aware llama_handoff_capture_kv (,
+                    // ) which sets v_trans on attn caches before
                     // state_seq access — required for streaming-prefill
                     // DeepSeek-V2 / Kimi-style models.
                     for (int32_t raw_sid : task.handoff_action.request_ids) {
@@ -3285,7 +3285,7 @@ private:
                             failed = true;
                             break;
                         }
-                        // FEATURE (RAM-artifact mode, user 2026-05-29): when
+                        // FEATURE (RAM-artifact mode, user ): when
                         // LLAMA_PREFILL_KV_ARTIFACT_PATH is set, also persist the captured
                         // streaming-KV blob to a file artifact (<path>/kv_seq<sid>.artifact).
                         // This is the SAME serialization the split path ships over TCP
@@ -3360,7 +3360,7 @@ private:
                         break;
                     }
 
-                    // Phase 316z architectural guard: pre-flight every target
+                    // architectural guard: pre-flight every target
                     // before writing ANY.  Conflict -> 409, never silent
                     // overwrite.
                     bool conflict = false;
@@ -3628,7 +3628,7 @@ private:
 
         // next, batch any pending prompts without exceeding n_batch
         if (params_base.cont_batching || batch.n_tokens == 0) {
-            // Phase 5.3 (2026-05-12): serial-prefill mode. Under streaming-prefill
+            // serial-prefill mode. Under streaming-prefill
             // (LLAMA_PREFILL_TB_ENABLE-style stack), the per-layer kv_ram buffer
             // is shared across slots and indexed by token position [0..N-1].
             // Concurrent multi-slot prefill writes overwrite each other at the
@@ -3665,7 +3665,7 @@ private:
                     continue;
                 }
 
-                // Phase 5.3 serial-prefill mode: skip additional slots that
+                // serial-prefill mode: skip additional slots that
                 // have prompt work pending if one slot already claimed the
                 // prompt batch in this iteration.
                 const bool has_prompt_work =
@@ -3768,7 +3768,7 @@ private:
                                 n_past = slot.prompt.tokens.get_common_prefix(input_tokens);
                                 raw_common_prefix = n_past;
 
-                                // 2026-06-01 vision cache-robustness (STEP 1b): an image request MUST be
+                                // vision cache-robustness (STEP 1b): an image request MUST be
                                 // fully re-processed so the VISION-PS block (~line 3270) fires, re-encodes
                                 // the image, and re-stashes the handoff image embeddings. On a REPEATED
                                 // identical image request, get_common_prefix's mtmd branch matches the
@@ -3863,7 +3863,7 @@ private:
                                     }
                                     // The NVMe tier supersedes the .kva store: a store-restored RAM blob would
                                     // be migrated into a CPU KV module that virtual KV never allocates (the
-                                    // 2026-09-10 warm-up crash, GGML_ASSERT tensor not allocated).
+                                    // warm-up crash, GGML_ASSERT tensor not allocated).
                                     const bool can_store_lookup = !tier_hit &&
                                         ctx_kvs && ctx_kvs->kv_store_enabled() && !ctx_kvs->kv_tier_enabled() &&
                                         ctx_kvs->is_prefill_streaming() &&
@@ -3907,7 +3907,7 @@ private:
                                     }
                                 }
 
-                                // 2026-05-29 LLAMA_PREFILL_CAP_NPAST_AT_BLOB (default off): for the
+                                // LLAMA_PREFILL_CAP_NPAST_AT_BLOB (default off): for the
                                 // streaming-prefill handoff, KV beyond the RTX's retained blob lives only
                                 // on the Mac (decoded there; the receiver clears KV per-request). Claiming
                                 // the full common-prefix as n_past makes the handoff blob non-viable at
@@ -3935,7 +3935,7 @@ private:
                                     }
                                 }
 
-                                // 2026-07-21 STREAMED-CONTINUATION GUARD (doc 6.16d/6.16f): DSV4's compressed
+                                // STREAMED-CONTINUATION GUARD (doc 6.16d/6.16f): DSV4's compressed
                                 // caches cannot resume from an arbitrary unaligned prefix — the comp state was
                                 // cleared and a mid-block continuation mis-binds cells => deterministic garbled
                                 // output (proven: identical-prompt warm request reused a 9-token prefix and
@@ -3963,7 +3963,7 @@ private:
                                                 if (match) viable = bc;
                                             }
                                         }
-                                        // NVMe KV tier (2026-09-10): a prefix whose rows the tier holds is
+                                        // NVMe KV tier a prefix whose rows the tier holds is
                                         // exactly as viable as a retained blob -- the pass uploads those rows
                                         // and continues at cell == position (reserve_prefill_prefix_cells).
                                         if (n_past != viable && ctx->kv_tier_prefix_ready((uint32_t) n_past)) {
@@ -4067,7 +4067,7 @@ private:
                             //       https://github.com/ggml-org/llama.cpp/issues/17043
                             if (!mctx && n_past > 0 && n_past < slot.prompt.n_tokens()) {
                                 const auto pos_min = llama_memory_seq_pos_min(llama_get_memory(ctx), slot.id);
-                                // Phase 316m (2026-05-04): for streaming-prefill / WF
+                                // for streaming-prefill / WF
                                 // mode, KV lives in kv_ram_layers (host-pinned RAM)
                                 // not the GPU memory module, so seq_pos_min returns
                                 // -1 even when the cached prefix is fully valid.
@@ -4087,7 +4087,7 @@ private:
                                     n_past = 0;
                                 } else if (pos_min == -1 && trust_kv_ram) {
                                     SLT_INF(slot,
-                                            "Phase 316m: trusting prompt cache despite pos_min=-1 (KV-RAM mode). n_past=%d slot.prompt.tokens.size()=%d seq_id=%d\n",
+                                            "trusting prompt cache despite pos_min=-1 (KV-RAM mode). n_past=%d slot.prompt.tokens.size()=%d seq_id=%d\n",
                                             n_past, (int) slot.prompt.tokens.size(), slot.id);
                                 } else {
                                     // when the prompt prefix does not match, print the tokens around the mismatch
@@ -4215,7 +4215,7 @@ private:
 
                         slot.prompt.tokens.keep_first(n_past);
 
-                        // STREAMING CONTINUATION (2026-09-10). After a streamed turn's handoff the
+                        // STREAMING CONTINUATION . After a streamed turn's handoff the
                         // retained prefix's CELLS are gone from the cache (only the slot's tokens and the
                         // host/NVMe copy of its KV survive), so a follow-up that reuses n_past tokens had
                         // its new tokens placed at cells 0.. while their positions started at n_past.
@@ -4279,7 +4279,7 @@ private:
                         const auto & img_chunk = input_tokens.find_chunk(slot.prompt.n_tokens());
                         const size_t n_img = mtmd_input_chunk_get_n_tokens(img_chunk.get());
                         if (streaming_prefill_active) {
-                            // PATH A (2026-05-31 vision): the non-streaming process_chunk ends in
+                            // PATH A (vision): the non-streaming process_chunk ends in
                             // llama_decode on a model that is NOT resident (the -ps weight-fetcher
                             // streams 460GB). Instead: clip/MoonViT-encode the image here, then
                             // prefill the image embeddings through the STREAMING executor — build an
@@ -4293,7 +4293,7 @@ private:
                                 continue;
                             }
                             float * img_embd = mtmd_get_output_embd(mctx);
-                            // 2026-05-31 vision diag: stats over the image embeddings to
+                            // vision diag: stats over the image embeddings to
                             // tell a broken vision tower (NaN/all-zero/huge) from plausible
                             // output (mean~0, modest std). n_embd = LM embedding dim (7168).
                             if (img_embd) {
@@ -4313,7 +4313,7 @@ private:
                                 fprintf(stderr, "*** VISION_EMBD_STATS: n_img=%zu n_embd=%d mean=%.5f std=%.5f min=%.4f max=%.4f nan=%zu zero=%zu/%zu [VISION_ROUTE_V2]\n",
                                         n_img, n_embd_img, mean, var > 0 ? std::sqrt(var) : 0.0, vmin, vmax, n_nan, n_zero, n_vals);
                                 fflush(stderr);
-                                // 2026-05-31 embedding-parity probe: dump the projected image embeddings
+                                // embedding-parity probe: dump the projected image embeddings
                                 // for element-wise comparison vs the mlx-vlm reference vision tower.
                                 if (std::getenv("LLAMA_VISION_DUMP_EMBD")) {
                                     FILE * df = fopen("diagnostics/rtx_img_embd.bin", "wb");
@@ -4416,7 +4416,7 @@ private:
                         // v1.9 small-image-forward (opt-in LLAMA_SMALL_IMG_FORWARD): stash the RAW
                         // image bytes + the bare question so the receiver runs mlx_vlm generate()
                         // locally (sidesteps the RTX F16-VKQ entirely). The MLX dispatch checks
-                        // raw_image FIRST. prompt_text = the question (override at export). (USER 2026-06-01.)
+                        // raw_image FIRST. prompt_text = the question (override at export). (USER .)
                         if (ctx_internal && std::getenv("LLAMA_SMALL_IMG_FORWARD") &&
                                 !input_tokens.raw_image_files.empty()) {
                             // v1.10 multi-turn: pack ALL images as b"MIMG"+[N:u32]+[size_i:u32]*N+[blobs]
@@ -4505,7 +4505,7 @@ private:
                         std::getenv("LLAMA_PREFILL_NO_REMOTE_TAIL_HANDOFF") != nullptr ||
                         ctx_internal->get_prefill_decode_mode() ==
                             LLAMA_PREFILL_DECODE_MODE_STREAM_LOCAL;
-                    // 2026-05-31 vision: the suffix optimization hands the remaining
+                    // vision: the suffix optimization hands the remaining
                     // [n_tokens..task) span to the Mac to prefill locally. That is INVALID
                     // when the remaining span contains an image placeholder (LLAMA_TOKEN_NULL):
                     // the Mac receives only raw text tokens (the export breaks at NULL) and
@@ -4536,7 +4536,7 @@ private:
                             for (int t = 0; t < slot.task->n_tokens(); t++) {
                                 llama_token tok = input_tokens[t];
                                 if (tok == LLAMA_TOKEN_NULL) {
-                                    // 2026-05-31 vision EXPORT FIX: image placeholder cells have no
+                                    // vision EXPORT FIX: image placeholder cells have no
                                     // token id in the stream. Their KV is ALREADY computed + serialized
                                     // in the exported blob (pos covers them), so DON'T break here —
                                     // breaking truncated streamed_prefix to the pre-image text count and
@@ -4779,11 +4779,11 @@ private:
         // we remap back to slot.id.
         const char * wf_env = getenv("LLAMA_PREFILL_WF");
         const bool wf_active = wf_env && wf_env[0] != '\0' && strcmp(wf_env, "0") != 0;
-        // Phase 316z (2026-05-05): the seq_id->0 remap was added for the Mac
+        // the seq_id->0 remap was added for the Mac
         // handoff path (KV export needs seq_id=0). For RTX-only KIMI_NP>1, this
         // remap CORRUPTS multi-slot inference: every slot's data lands at
         // seq_id=0 in the unified KV cache, plus the seq_rm at remap time
-        // wipes prior slots' data. Phase 316w bisect proved KIMI_NP=1 produces
+        // wipes prior slots' data. bisect proved KIMI_NP=1 produces
         // coherent output and KIMI_NP>1 produces gibberish — this remap is the
         // culprit. Set LLAMA_SERVER_NO_REMAP_SEQ=1 to skip the remap when
         // running RTX-only (no Mac handoff) so multi-slot KV stays separated
@@ -4801,7 +4801,7 @@ private:
                     // Clear seq 0 before remapping — may have stale data from a previous handoff
                     auto * const seq_memory = llama_get_memory(ctx);
                     llama_memory_seq_rm(seq_memory, 0, -1, -1);
-                    // [2026-07-28 STREAMING_CONTINUATION_SEQ_REHYDRATE_V1, codex-v6] Chunked
+                    // Chunked
                     // streaming (>n_batch prompts) runs each chunk as seq 0, then copies the
                     // cells back to slot.id and REMOVES them from seq 0 before returning to the
                     // scheduler. Chunk 2+ is relabeled slot.id -> 0 below, but without copying
@@ -4866,8 +4866,7 @@ private:
             if (crossover <= 0 &&
                 ctx_internal->get_prefill_decode_mode() == LLAMA_PREFILL_DECODE_MODE_SPLIT_THUNDERBOLT) {
                 // DEFAULT ONLY. An explicitly configured --prefill-crossover is now honoured exactly,
-                // including values BELOW 3072 (owner, 2026-09-03: "the crossover shouldn't be limited
-                // to minimum 3072", wanting to tune it in the 2k-10k range).
+                // including values below the default 3072-token threshold.
                 //
                 // The floor used to apply unconditionally, which made the knob silently INERT below
                 // 3072: 23 of the 48 Mac-side presets carry crossover=1, and every one of them was
@@ -4957,12 +4956,12 @@ private:
             bool cached_prefix_handoff_viable = false;
             if (cache_reuse_narrowed_batch && ctx_internal->has_kv_blob_cache() && slot_batched && slot_batched->task) {
                 const auto & cached_prefix = ctx_internal->get_prefill_kv_state_cache_prefix_tokens();
-                // 2026-05-29 LLAMA_PREFILL_VIABILITY_AS_PREFIX (default off, RC-safe):
+                // LLAMA_PREFILL_VIABILITY_AS_PREFIX (default off, RC-safe):
                 // accept the retained blob as a STRICT PREFIX of the reused n_past.
                 // At turn3+ the reused common-prefix (n_past_cached) spans turn1's
                 // streamed cells PLUS turn2's Mac-only cells, so the retained blob
                 // (turn1 only, e.g. 14336) is SMALLER than n_past_cached (e.g. 14671).
-                // The old Phase 67 rule required EXACT equality and dropped the blob,
+                // The old rule required EXACT equality and dropped the blob,
                 // forcing a full re-stream. With the gate on we instead export the
                 // blob (covering its cached_prefix.size() leading cells) and ship
                 // streamed_prefix = cached_prefix.size(); the Mac imports those cells
@@ -5046,7 +5045,7 @@ private:
             // Server doesn't run its own prefill in the first two paths —
             // the delta is tiny, Mac prefills much faster than Windows'
             // weight-fetcher spin-up cost.
-            // Phase 66 fix: Always allow small-delta routing to Mac when SUFFIX (delta)
+            // fix: Always allow small-delta routing to Mac when SUFFIX (delta)
             // is below threshold. Three sub-cases:
             //   - Cache reuse + viable blob → CACHED-PREFIX HANDOFF (export blob, Mac
             //     imports KV, re-prefills delta only)
@@ -5057,7 +5056,7 @@ private:
             // Without this fix, multi-turn conversations with PROMPT-DIRECT-only
             // history have no blob and were forced into RTX streaming on every
             // turn after the first one that triggered cache reuse.
-            // 2026-05-31 vision path A: image requests MUST NOT go PROMPT-DIRECT — that
+            // vision path A: image requests MUST NOT go PROMPT-DIRECT — that
             // path skips KV capture and would drop the image-derived kv_ram (the decoder
             // can't vision-encode raw placeholder tokens -> garbage). Force them onto the
             // full streaming export+handoff (which ships kv_ram incl the image cells).
@@ -5089,7 +5088,7 @@ private:
             // NVMe KV tier continuation: the prefix rows live in the tier files, so the RTX uploads
             // them and prefills the tail whatever its size; the blob-based cached-prefix handoff has
             // nothing to ship and prompt-direct would make the Mac redo the whole prompt.
-            // Delta routing (2026-09-10): a small delta whose prefix the decoder already holds resident
+            // Delta routing a small delta whose prefix the decoder already holds resident
             // goes PROMPT-DIRECT: the Mac prefills the few new tokens against its retained cache in well
             // under a second, while the RTX's streaming pass is a full weight-stream over every layer
             // (~30 s) however small the delta (measured: a 1-token re-entry cost 41 s with the tier
@@ -5431,7 +5430,7 @@ private:
                     ctx_ho->set_prefill_handoff_capture_seq_id(handoff_slot->id);
                     ctx_ho->set_decode_stop_words(handoff_slot->task->params.antiprompt);
 
-                    // 2026-05-31 vision EXPORT FIX: for an image request the prompt token
+                    // vision EXPORT FIX: for an image request the prompt token
                     // stream has LLAMA_TOKEN_NULL placeholders at the image cells. Breaking
                     // at the first NULL truncated the advertised prompt to the pre-image
                     // text (19 tok) and shipped streamed_prefix=0, so the Mac re-prefilled
@@ -5515,7 +5514,7 @@ private:
                     // and stash the embd + raw_image + question. The export reuses the ship-embd logic
                     // ([prefix][suffix] + embd + raw_image, image range skipped via img_cell_count); the
                     // wait-loop matches via cand_img; the MLX dispatches via raw_image -> generate(). No
-                    // RTX LM-prefill at all. (USER 2026-06-01 text-skip: ~14s vs 38s.)
+                    // RTX LM-prefill at all. (USER text-skip: ~14s vs 38s.)
                     if (small_img_pd) {
                         auto & st = handoff_slot->task->tokens;
                         int img_pos = -1;
@@ -5791,7 +5790,7 @@ private:
             // not actual KV state — reusing it corrupts the next handoff).
             if (prompt_direct_done) {
                 auto * ctx_pd = static_cast<llama_context *>(ctx);
-                // 2026-05-29: a CACHED-PREFIX HANDOFF (export_cached_prefix_kv)
+                // a CACHED-PREFIX HANDOFF (export_cached_prefix_kv)
                 // just retained a REAL KV blob in host RAM tagged with its
                 // prefix tokens. The next turn reuses it (exact-match or
                 // viable-as-prefix) so the Mac prefills only the bounded tail
@@ -5813,7 +5812,7 @@ private:
             }
         }
 
-        // Phase 132: per-request dynamic batch/ubatch sizing for streaming-prefill.
+        // per-request dynamic batch/ubatch sizing for streaming-prefill.
         // Keep the RTX prefix FA-clean and exactly tiled, but do not let exact
         // divisor math choose arbitrary 512-aligned ubatches. On Kimi MLA FA,
         // 1024 and 3072 have both produced coherent-looking K rows with corrupt
@@ -5823,12 +5822,12 @@ private:
         bool         _dyn_ub_applied = false;
         uint32_t     _saved_n_ubatch = 0;
         uint32_t     _saved_n_batch  = 0;
-        // Phase 261 (2026-05-03): user-algo's batch + tail computed inside
+        // user-algo's batch + tail computed inside
         // dynamic-UB block. _dyn_dispatch_batch < batch.n_tokens triggers
         // dispatch-loop clip; tail goes to Mac via handoff.
         uint32_t     _dyn_dispatch_batch = 0;  // 0 = no clip
         uint32_t     _dyn_dispatch_tail  = 0;
-        // Phase 266 (2026-05-04): pad-and-trim algorithm needs to know
+        // pad-and-trim algorithm needs to know
         // pad_amount separately (for K-cell trim before export). Distinct from
         // _dyn_dispatch_tail (which is the Mac-side tail to prefill).
         uint32_t     _dyn_pad_amount    = 0;
@@ -6041,7 +6040,7 @@ private:
                     dyn_ub_choice choice;
                     const char * _strategy = "fallback";
 
-                    // Phase 259/260 (2026-05-03): user-spec'd algorithm for clean
+                    // user-spec'd algorithm for clean
                     // chunking. For ANY prompt size:
                     //   1. n_ub = ceil(prompt_n / base_ub_target)
                     //   2. ub = align_down(prompt_n / n_ub, 256)
@@ -6056,7 +6055,7 @@ private:
                     // (no chunking, no tail).
                     {
                         constexpr uint32_t grid_256 = 256u;
-                        // Phase 266 (2026-05-04): user's pad-and-trim algorithm.
+                        // user's pad-and-trim algorithm.
                         // For prompt_n, pick:
                         //   1. n_ub = ceil(prompt_n / base_ub_target)
                         //   2. ub = ceil(prompt_n / n_ub) rounded UP to 256-grid
@@ -6068,13 +6067,13 @@ private:
                         // bug. K cells for padding positions are TRIMMED before
                         // export. Mac receives full prompt + complete trimmed KV.
                         // Mode select via LLAMA_PREFILL_TILING_ALGO=pad-and-trim
-                        // (default) or =tail-to-mac (Phase 260 algo).
+                        // (default) or =tail-to-mac (algo).
                         const char * algo_env = std::getenv("LLAMA_PREFILL_TILING_ALGO");
                         const bool use_pad_trim = !algo_env ||
                                                   algo_env[0] == '\0' ||
                                                   std::strcmp(algo_env, "pad-and-trim") == 0;
                         if (use_pad_trim) {
-                            // Phase 278 (2026-05-04): support LLAMA_PREFILL_LOCK_UB
+                            // support LLAMA_PREFILL_LOCK_UB
                             // env to force ub == _target exactly (no division).
                             // Used by adaptive WF=2 mode where ub must equal the
                             // FA-validated power-of-2 sweet spot (4096) for the
@@ -6100,7 +6099,7 @@ private:
                             // prompt (no Mac-side tail prefill needed). pad_amount
                             // stored in _dyn_dispatch_tail for trim logic.
                             //
-                            // Phase 3.2 GLM-5.1 16k crash fix (2026-05-12): pad-and-
+                            // GLM-5.1 16k crash fix pad-and-
                             // trim can pick batch_u > _saved_n_batch (initial -b),
                             // e.g. prompt_n=16626 + 9x2048 -> batch=18432 vs
                             // saved=18000. The server's llama_batch was allocated
@@ -6149,7 +6148,7 @@ private:
                         if (choice.found) _strategy = "exact-divisor";
                     }
                     if (!choice.found) {
-                        // Last-resort fallback. Phase 259: clamp tail to <256
+                        // Last-resort fallback. clamp tail to <256
                         // (sub-grid). If standard chunking would leave a bigger
                         // tail, prefer a single oversized ubatch over the buggy
                         // chunk-with-tail dispatch path.
@@ -6169,7 +6168,7 @@ private:
                     _dyn_batch  = choice.batch;
                     _dyn_ubatch = choice.ubatch;
                     _tail       = choice.tail;
-                    // Phase 261: hoist for dispatch-loop clipping
+                    // hoist for dispatch-loop clipping
                     _dyn_dispatch_batch = _dyn_batch;
                     _dyn_dispatch_tail  = _tail;
                     fprintf(stderr,
@@ -6199,11 +6198,11 @@ private:
             }
         }
 
-        // Phase 267 (2026-05-04): pad-and-trim — append _dyn_pad_amount safe
+        // pad-and-trim — append _dyn_pad_amount safe
         // pad tokens to batch so streaming-prefill processes a 256-aligned batch
         // with uniform 256-aligned ubatches (no FA-split, no partial last ubatch
         // that triggers the K-value bug). K cells for padding positions are
-        // trimmed at export (Phase 268 — TODO).
+        // trimmed at export (TODO).
         // Pad token: BOS is safe (model has natural handling). Use seq_id from
         // the active slot. Positions continue sequentially.
         if (!prompt_direct_done && _dyn_pad_amount > 0 && batch.n_tokens > 0) {
@@ -6227,7 +6226,7 @@ private:
         }
 
         // process the created batch of tokens (skip if prompt-direct handled it)
-        // Phase 261 (2026-05-03): clip dispatch to user-algo's _dyn_dispatch_batch
+        // clip dispatch to user-algo's _dyn_dispatch_batch
         // so RTX only processes the 256-aligned batch portion. The ragged tail
         // stays in slot.task and is routed to Mac via the existing handoff
         // logic — Mac compares prompt vs received-KV size and prefills the diff.
@@ -6313,8 +6312,8 @@ private:
                     // Trigger the decode handoff: export KV → send to Mac → relay tokens.
                     if (ret == 2) {
                         auto * ctx_sp = static_cast<llama_context *>(ctx);
-                        // Phase 268 (2026-05-04): pad-and-trim — if pad-and-trim
-                        // injected pad tokens (Phase 267), trim the streamed
+                        // pad-and-trim — if pad-and-trim
+                        // injected pad tokens (), trim the streamed
                         // count down by pad_amount so the export only includes
                         // K cells for real prompt positions, not padding ones.
                         if (_dyn_pad_amount > 0) {
@@ -6367,7 +6366,7 @@ private:
                             const int tail_limit = std::max(1, (int) llama_n_ubatch(ctx) - 1);
                             const bool force_local_tail_env = std::getenv("LLAMA_PREFILL_NO_REMOTE_TAIL_HANDOFF") != nullptr;
                             const bool force_local_tail = force_local_tail_env && remaining_prompt > 1;
-                            // 2026-05-31 vision: if the un-streamed remainder [keep_n..task) contains
+                            // vision: if the un-streamed remainder [keep_n..task) contains
                             // an image placeholder (LLAMA_TOKEN_NULL), the Mac cannot prefill it (no
                             // pixel data). Keep streaming on RTX so update_slots re-enters and the image
                             // block (VISION-PS) encodes+streams it before any handoff. [VISION_ROUTE_V2]
@@ -6446,7 +6445,7 @@ private:
                             // on RTX, but small final tails are delegated to Mac prefill.
                             const bool force_local_tail_env2 = std::getenv("LLAMA_PREFILL_NO_REMOTE_TAIL_HANDOFF") != nullptr;
                             const bool force_local_tail2 = force_local_tail_env2 && local_remaining_prompt > 1;
-                            // 2026-05-31 vision: same image guard as the ret==2 path above — never
+                            // vision: same image guard as the ret==2 path above — never
                             // delegate an un-streamed image span to the Mac. [VISION_ROUTE_V2]
                             bool remaining_has_image_b = false;
                             for (int t = (int) slot_batched->prompt.n_tokens(); t < (int) slot_batched->task->n_tokens(); ++t) {
@@ -6586,7 +6585,7 @@ private:
             // on successful decode, restore the original batch size
             n_batch = llama_n_batch(ctx);
 
-            // Phase 261/263 (2026-05-03): debug + handoff trigger when dispatch
+            // debug + handoff trigger when dispatch
             // was clipped to user-algo batch.
             if (_dispatch_limit < batch.n_tokens && i_next >= _dispatch_limit) {
                 fprintf(stderr,
@@ -6680,7 +6679,7 @@ private:
                         continue; // continue loop of slots
                     }
 
-                    // [2026-07-27 FRESH-STREAMING-PREFILL HANDOFF GUARD] If a decode handoff was armed
+                    // If a decode handoff was armed
                     // during streaming prefill (set in decode_streaming, llama-context.cpp:6993), do NOT
                     // fall through to the local sampler. For M3/Kimi WF streaming the output-head weights
                     // are sentinel data so LLAMA_SERVER_SKIP_LOGITS_MARK=1 left batch.logits[n-1] unmarked;
@@ -6703,17 +6702,17 @@ private:
 
                     // prompt evaluated for next-token prediction
 
-                    // Phase 268 COMPLETION — decode pad-trim (LLAMA_PREFILL_KV_PAD_TRIM=1, default OFF).
-                    // The streaming pad-and-trim (Phase 267) appends _dyn_pad_amount BOS pad tokens to
+                    // COMPLETION — decode pad-trim (LLAMA_PREFILL_KV_PAD_TRIM=1, default OFF).
+                    // The streaming pad-and-trim () appends _dyn_pad_amount BOS pad tokens to
                     // 256-align the prefill (e.g. real 9860 -> 9984), leaving the KV memory with pad cells
-                    // past the real prompt (pos_max overshoots slot.prompt.n_tokens()). Phase 268 trims only
+                    // past the real prompt (pos_max overshoots slot.prompt.n_tokens()). trims only
                     // the EXPORT count on the Mac-handoff (ret==2) path; that branch break's out before here.
                     // For LOCAL (wir_local) decode we reach this point with the UNtrimmed KV, so the next
                     // generation token's position is non-consecutive and balloc->init rejects it
                     // (Y=real != X+1=padded). Drop the pad cells [real_end, end) so local decode continues.
                     {
                         auto * ctx_pt = (llama_context *) ctx;
-                        // Default ON: the streaming pad-and-trim (Phase 267) ALWAYS appends pad tokens to
+                        // Default ON: the streaming pad-and-trim () ALWAYS appends pad tokens to
                         // 256-align the prefill, so local decode ALWAYS needs the KV-memory trim to keep
                         // positions consecutive. Mac-handoff path breaks out at ret==2 before reaching here,
                         // so this is local-decode-only and Mac-safe. Opt out with LLAMA_PREFILL_KV_PAD_TRIM=0.
@@ -6848,7 +6847,7 @@ private:
             }
         }
 
-        // Phase 132: restore original n_ubatch / n_batch after the dynamic-ub override.
+        // restore original n_ubatch / n_batch after the dynamic-ub override.
         if (_dyn_ub_applied) {
             auto * ctx_dub = static_cast<llama_context *>(ctx);
             ctx_dub->set_n_ubatch(_saved_n_ubatch);
@@ -6901,7 +6900,7 @@ private:
                 // Pass stop words (antiprompts + chat template stops) to Mac
                 ctx_ho->set_decode_stop_words(handoff_slot->task->params.antiprompt);
 
-                // 2026-05-31 vision EXPORT FIX: image requests carry LLAMA_TOKEN_NULL
+                // vision EXPORT FIX: image requests carry LLAMA_TOKEN_NULL
                 // placeholders at the image cells. Breaking here truncated the advertised
                 // prompt to the pre-image text (19 tok), so the Mac re-prefilled the image
                 // positions locally (no pixels -> garbage). The image KV is already
@@ -6924,7 +6923,7 @@ private:
                     full_prompt.push_back(tok);
                 }
 
-                // Phase 81: when local-tail continuation extended the streamed prefix
+                // when local-tail continuation extended the streamed prefix
                 // past the slot.prompt rollback (LLAMA_PREFILL_NO_REMOTE_TAIL_HANDOFF=1),
                 // use the actual streamed count from the context, not the rolled-back
                 // slot.prompt.n_tokens (which would understate kv_tokens and force Mac to
@@ -6971,7 +6970,7 @@ private:
                 // HOST:PORT", "token stream handshake timeout", "retained-prefix-miss", a read
                 // timeout and "no token stream endpoint configured".
                 //
-                // Measured 2026-08-31 on a preset-3 turn: the prefill completed in 28 s, every KV
+                // on a preset-3 turn: the prefill completed in 28 s, every KV
                 // chunk was sent, and the RTX then spent 240 s exhausting 120 connect retries to the
                 // Mac's token relay on <peer-ip>:9101 — after which it blamed disk space, on a
                 // machine with 60 GB free. A suggested cause that is wrong is worse than none: it
@@ -7070,7 +7069,7 @@ private:
                         record_mac_retained_handle(slot, true);
                         slot.release();
                         if (route_reuse_enabled && !commit_route_reuse_record(slot)) {
-                            // FIX (B) 2026-07-18: clear_prompt=false. The comment above says slot.prompt reflects
+                            // FIX (B) clear_prompt=false. The comment above says slot.prompt reflects
                             // the FA prefix in local KV and next turn's prompt cache should MATCH it — but
                             // clear_prompt=true WIPED it, forcing turn-2 to full re-prefill (reused_n=0). Keep the
                             // slot tokens so turn-2's common-prefix match yields reused_n>0 -> STREAMING CONTINUATION
@@ -7737,7 +7736,7 @@ void server_routes::init_routes() {
         return res;
     };
 
-    // Phase 327 (2026-05-05): /v1/seq_cp endpoint. Calls llama_memory_seq_cp
+    // /v1/seq_cp endpoint. Calls llama_memory_seq_cp
     // to clone a source sequence's KV cache into a destination sequence at
     // zero GPU memory cost (under kv_unified=1, n_stream=1: pure metadata
     // op adding dst seq_id to existing cells; under multi-stream mode it
@@ -7771,7 +7770,7 @@ void server_routes::init_routes() {
         return res;
     };
 
-    // Phase G (2026-05-06): KVBlob v2 export endpoint.
+    // KVBlob v2 export endpoint.
     // Body JSON: {"request_ids":[3,7,19], "p0":-1, "p1":-1}
     // Returns: KVBlob v2 byte stream (LAYOUT_OPAQUE — payload is per-seq
     // llama_state_seq blobs).  See <runtime-path>
@@ -7834,7 +7833,7 @@ void server_routes::init_routes() {
         return res;
     };
 
-    // Phase G (2026-05-06): KVBlob v2 import endpoint.
+    // KVBlob v2 import endpoint.
     // Body: raw KVBlob v2 bytes
     // Header X-KVBlob-SeqId-Remap: optional "src=dst,src=dst"
     // Returns: {"ok":true,"n_seqs":N}, or HTTP 409 on remap conflict.

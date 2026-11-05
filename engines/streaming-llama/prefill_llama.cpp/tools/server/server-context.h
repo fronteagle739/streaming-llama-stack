@@ -107,13 +107,13 @@ struct server_routes {
     server_http_context::handler_t post_rerank;
     server_http_context::handler_t get_lora_adapters;
     server_http_context::handler_t post_lora_adapters;
-    // Phase 327 (2026-05-05): /v1/seq_cp endpoint exposing llama_memory_seq_cp.
+    // /v1/seq_cp endpoint exposing llama_memory_seq_cp.
     // Lets fenrir orchestrate shared-prefix KV across slots without going
     // through cache_prompt's per-slot scan logic. Zero-copy under kv_unified=1
     // (just metadata add of dst seq_id to cells already owned by src).
     server_http_context::handler_t post_seq_cp;
 
-    // Phase G (2026-05-05): KVBlob v2 handoff endpoints.
+    // KVBlob v2 handoff endpoints.
     //
     // post_handoff_export_kvblob_v2:
     //   Body: {"request_ids":[3,7,19],"p0":-1,"p1":-1}
@@ -124,7 +124,7 @@ struct server_routes {
     //   Header: X-KVBlob-SeqId-Remap: "src=dst,src=dst" (optional)
     //   Returns: {"ok":true,"n_seqs":N} or HTTP 409 on remap conflict
     //
-    // Architectural fix for the Phase 316z multi-slot bug: the wire
+    // Architectural fix for the multi-slot bug: the wire
     // format carries seq_ids in the per-seq descriptor table, so the
     // receiver iterates the table and never has a "everything goes to
     // seq 0" path.  The seq_id->0 remap in pre-decode batch processing

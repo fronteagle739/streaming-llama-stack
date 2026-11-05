@@ -15,7 +15,7 @@
 // PR 21038) but NEITHER round trip, so the compressed rows it stores are not the representation the
 // weights were trained against.
 //
-// Measured 2026-08-27, same 153 GB GGUF, temperature 0, exact match: ds4-server (which does apply
+// same 153 GB GGUF, temperature 0, exact match: ds4-server (which does apply
 // them) repeats a code planted at the start of a 596-token prompt; this fork returns filler. Forcing
 // the indexer dense (LLAMA_DSV4_INDEXER_TOP_K=60000) does NOT fix it, which is why the attention
 // compressor's FP8 matters as much as the indexer's FP4 -- the content is wrong, not just the
@@ -295,7 +295,7 @@ ggml_tensor * llm_build_deepseek4::build_hca_compressed_kv_from_state(
     score = ggml_reshape_3d(ctx0, score, n_embd_head, DSV4_HCA_RATIO, n_blocks);
     cb(score, name, il);
 
-    // HCA HAS NEVER BEEN VERIFIED (2026-08-28). Every dump, oracle and numpy comparison in the
+    // HCA HAS NEVER BEEN VERIFIED . Every dump, oracle and numpy comparison in the
     // needle investigation landed on CSA layers (2, 30, 42 -- all clean). The compress-ratio array
     // is [0,0,4,128,4,128,...]: even layers >=2 are CSA, odd layers 3..41 are HCA. That is 20
     // layers, ~45% of the model's attention, on the LONG-RANGE path -- the regime that fails --
@@ -609,7 +609,7 @@ ggml_tensor * llm_build_deepseek4::build_lid_top_k(
     indexer_score = ggml_add(ctx0, indexer_score, inp_lid.kq_mask);
     cb(indexer_score, "lid_score_masked", il);
 
-    // BUG#2 test lever (2026-07-16, default-off): the resident stream_local decode marginally demotes the
+    // BUG#2 test lever (default-off): the resident stream_local decode marginally demotes the
     // needle (its LID score sits ~0.05 below the K=512 cutoff at the layers where it is a strong match ->
     // selected at too few layers -> wrong recall). LLAMA_DSV4_INDEXER_TOP_K=<N> raises the top-k so the
     // borderline needle is included; if recall returns with a modest bump (e.g. 768), the marginal-demotion
@@ -737,7 +737,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
     // EXPERIMENT (LLAMA_DSV4_RAW_MASK_LEAF, default off): take the mask from the LEAF that
     // set_input_kq_mask actually writes, instead of the _cnv copy that get_kq_mask_swa() returns.
     //
-    // Measured 2026-08-28 on the failing prompt, same run, layer 42:
+    // on the failing prompt, same run, layer 42:
     //     leaf self_kq_mask_swa      -inf=40896   q0=1   q255=128   == ds4's rule, 256/256 exact
     //     _cnv copy (what we read)   -inf=0       q0=256 q255=256   ==  0/256
     // i.e. the raw half of the mask attention sees carries no causal/window masking at all, which
@@ -763,7 +763,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
     // (llama-kv-cache.cpp:2294 -- observed). `inp_dsv4->get_raw_kq_mask()` is a separate DSV4-owned
     // input, filled by the SAME set_input_kq_mask, consumed HERE inside the layer range -- exactly
     // how inp_csa.kq_mask already works, which is the half of the mask that arrives correct.
-    // This header said "THE FIX ... default ON" until 2026-08-28. It was wrong on both counts and
+    // This header said "THE FIX ... default ON" until . It was wrong on both counts and
     // contradicted the code ten lines below it. The shipping fix is LLAMA_DSV4_RAW_MASK_LEAF (the
     // ggml_cont route); THIS knob is a refuted alternative. Corrected because the stale header cost
     // real time twice -- once when written, once when re-read during the GRAPH_ALLOC gate.
@@ -783,7 +783,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
     }
 
     if (raw_mask_from_leaf && inp_attn->self_kq_mask_swa) {
-        // Bisected 2026-08-28: the LEAF is correct on device (-inf=40896, == ds4's rule 256/256)
+        // Bisected the LEAF is correct on device (-inf=40896, == ds4's rule 256/256)
         // while `_cnv = ggml_cast(leaf, F16)` reads back as 65536 zeros -- a node whose output was
         // never written, because it is built once at the graph HEAD (llama-graph.cpp:3450) and the
         // streaming executor computes per-layer node RANGES. Same structure as the M3 defect at
@@ -795,7 +795,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
         // copy carries a per-ubatch (smaller) ne". Concatenating a constant-max leaf against a
         // per-ubatch compressed mask misaligns the two halves -- which is exactly what garbage
         // output looks like. So take the LIVE region explicitly rather than the whole leaf.
-        // [LEAFCONT 2026-08-28] ALWAYS take a ggml_cont, not only when the shapes differ.
+        // LEAFCONT ALWAYS take a ggml_cont, not only when the shapes differ.
         //
         // This one line is why every attempt at the leaf route died on
         // `llama-kv-cache.cpp:2294 GGML_ASSERT(ggml_backend_buffer_is_host(dst->buffer))`. When the
@@ -820,7 +820,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
     }
     ggml_tensor * csa_mask = build_top_k_mask(inp_csa.kq_mask, top_k, "csa_top_k_mask", il);
 
-    // BISECT (2026-08-28): the leaf self_kq_mask_swa is CORRECT on device (-inf=40896, == ds4's
+    // BISECT the leaf self_kq_mask_swa is CORRECT on device (-inf=40896, == ds4's
     // rule 256/256) yet what the FA kernel reads is missing exactly those 40896 maskings. With
     // fa=on there are TWO cast nodes between them:
     //     leaf(F32) -> self_kq_mask_swa_cnv = ggml_cast(leaf, F16)   [llama-graph.cpp:3450]
@@ -844,7 +844,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
         raw_mask = ggml_cast(ctx0, raw_mask, csa_mask->type);
     }
 
-    // 2026-08-28: the dumped CONCAT mask carries 57408 -inf entries, ALL of them in the compressed
+    // the dumped CONCAT mask carries 57408 -inf entries, ALL of them in the compressed
     // half -- the raw half is 0.0 everywhere, i.e. every query token may attend every raw cell.
     // That contradicts the loaded config (`n_swa = 128`, `causal attn = 1`) and it contradicts the
     // model's own behaviour (a needle 104 tokens back is recalled exactly, output is fluent), so it
@@ -914,7 +914,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
     // the two have completely different fixes -- so dump both and let the numbers say which.
     ggml_tensor * kq_mask_pre_cast = kq_mask;
 
-    // [NO_F16_MASK 2026-08-28] LLAMA_DSV4_NO_F16_MASK (default off) leaves the concatenated mask in
+    // NO_F16_MASK LLAMA_DSV4_NO_F16_MASK (default off) leaves the concatenated mask in
     // F32 while flash attention stays ON.
     //
     // One of only two things `fa=off` changes that remain untested. fa=off RECALLS the needle (n=2,
@@ -934,7 +934,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
         const char * e = std::getenv("LLAMA_DSV4_NO_F16_MASK");
         return e != nullptr && e[0] != 0 && e[0] != '0';
     }();
-    // Gate to PREFILL (nt > 1). Measured 2026-08-28: without this the knob also strips the cast on
+    // Gate to PREFILL (nt > 1). without this the knob also strips the cast on
     // DECODE graphs, where LLAMA_DSV4_PREFILL_DECOMP does NOT apply (it requires n_tokens > 1) -- so
     // the FA kernel still runs and asserts `mask->type == GGML_TYPE_F16` (fattn-common.cuh:826).
     // The two knobs must cover the SAME graphs or they fight each other; this makes the mask stay
@@ -959,7 +959,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
         const char * e = std::getenv("LLAMA_DSV4_ZERO_DECODE_SINK");
         return e && e[0] != '\0' && e[0] != '0';
     }();
-    // [ZERO_PREFILL_SINK 2026-08-28] The PREFILL-side counterpart, which did not exist.
+    // ZERO_PREFILL_SINK The PREFILL-side counterpart, which did not exist.
     //
     // `LLAMA_DSV4_ZERO_DECODE_SINK` above is gated to nt==1, and on the shipped preset
     // (382f322e21c2, RTX prefill + Mac decode) DECODE RUNS ON THE MAC -- so that lever cannot touch
@@ -1016,7 +1016,7 @@ ggml_tensor * llm_build_deepseek4::build_csa_lid_attention(
         ggml_build_forward_expand(gf, out);
     }
 
-    // LLAMA_DSV4_LID_PROBE (bug#2, 2026-07-18): pin the CSA attention CONSUMPTION tensors at DECODE (nt==1)
+    // LLAMA_DSV4_LID_PROBE (bug#2, ): pin the CSA attention CONSUMPTION tensors at DECODE (nt==1)
     // so the clean LID_PROBE post-decode dump (llama_dsv4_lid_probe_dump) can raw-byte them. Offline the
     // oracle recomputes q@k_all -> (masked joint) softmax -> @k_all and compares to attn_csa_lid: this is the
     // decode attention MATH - the last un-verified bug#2 suspect after compression+selection+query were all
@@ -1095,7 +1095,7 @@ ggml_tensor * llm_build_deepseek4::build_hca_attention(
 
     ggml_tensor * raw_mask = inp_attn->get_kq_mask_swa();
 
-    // [LEAFCONT_HCA 2026-08-28] Same fix as the CSA path, applied here for CONSISTENCY.
+    // LEAFCONT_HCA Same fix as the CSA path, applied here for CONSISTENCY.
     //
     // `get_kq_mask_swa()` returns `self_kq_mask_swa_cnv`, a ggml_cast built at the GRAPH HEAD that
     // the layer-major executor never evaluates -- measured at inf=0 (no causal masking, no window)
@@ -1134,7 +1134,7 @@ ggml_tensor * llm_build_deepseek4::build_hca_attention(
     ggml_tensor * kq_mask = ggml_concat(ctx0, raw_mask, hca_mask, 0);
     cb(kq_mask, "hca_kq_mask", il);
 
-    // [NO_F16_MASK 2026-08-28] LLAMA_DSV4_NO_F16_MASK (default off) leaves the concatenated mask in
+    // NO_F16_MASK LLAMA_DSV4_NO_F16_MASK (default off) leaves the concatenated mask in
     // F32 while flash attention stays ON.
     //
     // One of only two things `fa=off` changes that remain untested. fa=off RECALLS the needle (n=2,
@@ -1154,7 +1154,7 @@ ggml_tensor * llm_build_deepseek4::build_hca_attention(
         const char * e = std::getenv("LLAMA_DSV4_NO_F16_MASK");
         return e != nullptr && e[0] != 0 && e[0] != '0';
     }();
-    // Gate to PREFILL (nt > 1). Measured 2026-08-28: without this the knob also strips the cast on
+    // Gate to PREFILL (nt > 1). without this the knob also strips the cast on
     // DECODE graphs, where LLAMA_DSV4_PREFILL_DECOMP does NOT apply (it requires n_tokens > 1) -- so
     // the FA kernel still runs and asserts `mask->type == GGML_TYPE_F16` (fattn-common.cuh:826).
     // The two knobs must cover the SAME graphs or they fight each other; this makes the mask stay
@@ -1208,13 +1208,13 @@ ggml_tensor * llm_build_deepseek4::build_raw_attention(
     // binding above is a const reference.
     ggml_tensor * kq_mask_eff = kq_mask;
 
-    // [LEAFCONT_RAW 2026-08-28] The RAW layers need the same mask fix as CSA and HCA.
+    // LEAFCONT_RAW The RAW layers need the same mask fix as CSA and HCA.
     //
     // **Every DSV4 layer is SWA.** llama-model.cpp calls `hparams.set_swa_pattern(0)`, and
     // set_swa_pattern's body is `swa_layers[il] = n_pattern == 0 || ...` -- with n_pattern 0 the
     // first clause is unconditionally true. So `is_swa(il)` holds for layers 0/1/43 too, and this
     // path reads `get_kq_mask_swa()` -> `self_kq_mask_swa_cnv`, the head-built ggml_cast the
-    // layer-major executor never evaluates. Measured on 2026-08-28: `raw_kq_mask_obs-1` reads
+    // layer-major executor never evaluates. Measured on `raw_kq_mask_obs-1` reads
     // **inf=0** across 9 firings -- no causal masking and no window on the raw layers either.
     //
     // LEAFCONT was applied to build_csa_lid_attention and build_hca_attention but NOT here, so the
@@ -1258,7 +1258,7 @@ ggml_tensor * llm_build_deepseek4::build_raw_attention(
         }
     }
 
-    // [RAWMASK_OBS 2026-08-28] Make the RAW layers' consumed mask observable.
+    // RAWMASK_OBS Make the RAW layers' consumed mask observable.
     //
     // Why this is needed: LLAMA_DLM_NODE_NAN_SCAN matches nodes by their per-layer "-<il>" name
     // suffix, so it can ONLY see cb()-named per-layer nodes. The `_cnv` masks are built ONCE AT THE
@@ -1272,8 +1272,8 @@ ggml_tensor * llm_build_deepseek4::build_raw_attention(
     //                                             the defect is not confined to the compressed path
     //     inf == the causal count               -> the cast DOES execute here, so only the CSA
     //                                             route is broken
-    // That distinction decides whether this is a DSV4-CSA bug or a whole-fork layer-major+FA bug,
-    // which is the open question after the owner reported that ISWA models have never worked.
+    // That distinction separates a DSV4-CSA mask defect from a layer-major+FA mask defect
+    // shared by ISWA models.
     //
     // ggml_cont (not the tensor itself): pinning a view/input does not stop the allocator reusing
     // the base, and consuming a mask LEAF directly moves it device-side and trips the host-buffer
@@ -1291,7 +1291,7 @@ ggml_tensor * llm_build_deepseek4::build_raw_attention(
         }
     }
 
-    // [RAWMASK_F32 2026-08-28] LLAMA_DSV4_RAW_MASK_F32 (default off): give the RAW layers an F32
+    // RAWMASK_F32 LLAMA_DSV4_RAW_MASK_F32 (default off): give the RAW layers an F32
     // mask, the same treatment the compressed paths get from LEAFCONT.
     //
     // The raw path reads `_cnv`, which is F16 under fa=on. That produces an asymmetry the compressed

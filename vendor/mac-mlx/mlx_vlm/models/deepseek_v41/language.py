@@ -62,22 +62,22 @@ FP8_MAX = 448.0     # e4m3fn
 
 import time
 
-# Phase 0 of the v41 port (2026-09-15): the step ledger. DSV41_STEP_LEDGER=1 times the n-gram hashing on
+# Decode step ledger. DSV41_STEP_LEDGER=1 times the n-gram hashing on
 # the host; DSV41_STEP_LEDGER_CUTS=1 additionally evaluates after every layer of a decode step and records
 # per-layer GPU ms (attribution only: it serialises the N+1 pipeline).
 _LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
 _LEDGER_CUTS = _LEDGER_ON and os.environ.get("DSV41_STEP_LEDGER_CUTS", "0") == "1"
-# v41 port lever 1 (2026-09-15): intra-step overlap for decode steps. The ledger showed the DSV4.1
+# Intra-step overlap for decode steps. The ledger showed the DSV4.1
 # step fully serial -- the host builds all 40 layers (with two 3-6 ms Engram memmap fetches inline)
 # and only then does the GPU start. With DSV41_STEP_OVERLAP=1: the rows of every Engram layer after
 # the first are fetched on a worker thread as soon as the step's hashes exist, and an async_eval is
 # issued right before the second Engram layer so the GPU runs layers 0..13 while the host finishes
 # the fetch and builds 14..39. Numerics are untouched (the same ops in the same order).
 _STEP_OVERLAP = os.environ.get("DSV41_STEP_OVERLAP", "0") == "1"
-# Prefill too (2026-09-15 evening): a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
+# Prefill overlap: a 512-token chunk fetches 12,288 Engram rows per Engram layer on the
 # host; with this switch layer 14's fetch runs on the worker while the GPU has layers 0..13.
 _STEP_OVERLAP_PREFILL = _STEP_OVERLAP and os.environ.get("DSV41_STEP_OVERLAP_PREFILL", "0") == "1"
-# v41 port lever 2a (2026-09-15): the promoted fp32 decode weights are half of what a token reads
+# Promoted fp32 decode weights are half of what a token reads
 # (wo_a 134 MB x 40 layers + lm_head 2.65 GB of ~16 GB). DSV41_WO_A_BF16=1 contracts the attention
 # output in bf16 (fp32 accumulation inside the GEMM; wo_b consumes bf16 anyway) from a bf16 weight;
 # DSV41_HEAD_BF16=1 keeps the head bf16 and needs DSV41_OMLX_HEAD=1 for fp32 logits (checked at
@@ -634,7 +634,7 @@ class Indexer(nn.Module):
         q = fake_quant_fp4_ue8m0(q, 32)
 
         # Prefill chunks only: DSpark's verify forward is n = 1 + drafts and the one-query-per-threadgroup
-        # kernel is far slower than the eager path at tiny n (2026-09-15 arm: decode 20 -> 7-14 tok/s).
+        # kernel is far slower than the eager path at tiny n (decode 20 -> 7-14 tok/s).
         v41_index = _v41_prefill_enabled("INDEX", n)
         if (not v41_index and n >= int(os.environ.get("DSV41_PREFILL_TILED_MIN_N", "64"))
                 and os.environ.get("DSV41_PREFILL_TILED_INDEX", "0") == "1"):

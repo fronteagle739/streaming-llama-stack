@@ -715,7 +715,7 @@ bool llama_token_stream_client::connect(const std::string & host, int port,
     // 13k-token tail prefill on the Mac, 90+ seconds -- and that ~240 s ceiling is deliberate, so it
     // is preserved here. But the COMMON case is a bind race that resolves in milliseconds: the Mac
     // binds 9101 PER SESSION, so the RTX's first attempt can land before the receiver reaches its
-    // bind. Measured on production 2026-09-03: 4 of 25 handoffs logged "attempt 1/120 failed" and
+    // bind. Measured on production 4 of 25 handoffs logged "attempt 1/120 failed" and
     // ZERO ever reached "exhausted all" -- every occurrence succeeded on the very next try, having
     // slept a flat 2000 ms waiting for something that was already ready. ~2 s of dead latency on
     // 16% of turns.

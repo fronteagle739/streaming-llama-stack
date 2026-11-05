@@ -1662,7 +1662,7 @@ static void wf_gds_read_layer(wf_context * wf, int layer_idx) {
 // Called from wf_create() when mode is WF_MODE_DSTORAGE.
 // On success, populates gpu_bufs[].ptr with valid CUDA device pointers.
 // Returns true on success, false on failure (caller should fall back).
-// 2026-06-01 R3 self-test (LLAMA_WF_TEST_DUAL_BUF=1, runs ONCE): validate the dual-use buffer
+// R3 self-test (LLAMA_WF_TEST_DUAL_BUF=1, runs ONCE): validate the dual-use buffer
 // mechanism the USER's design relies on — a D3D12 heap (>4GB) with placed <=4GB sub-resources,
 // imported to CUDA as ONE contiguous pointer (cudaExternalMemoryHandleTypeD3D12Heap), writable
 // across the 4GB boundary. Proves the foundation before the full re-architecture.
@@ -1754,7 +1754,7 @@ static void wf_selftest_dual_buffer(ID3D12Device * dev) {
 static bool wf_ds_fence_wait(wf_context * wf, uint64_t val, ID3D12Fence * fence = nullptr);  // defined later; used by the B1 probe
 static bool wf_cuda_wait_ds_fence(wf_context * wf, uint64_t val, cudaStream_t stream);
 #endif
-// 2026-06-01 R3 BLOCKER B1 probe (design-review wf_86c0bf41): the dual-buffer self-test proved
+// R3 BLOCKER B1 probe (design-review wf_86c0bf41): the dual-buffer self-test proved
 // CUDA writes across the 4GB boundary, but NOT that DirectStorage writes into PLACED-in-heap
 // resources at >4GB heap offsets land at the correct heap-absolute address. DS silently writes
 // ZEROS for Destination.Buffer.Offset > ~4GB. Open question: when Destination.Buffer.Resource is a
@@ -1863,7 +1863,7 @@ static void wf_selftest_ds_placed(wf_context * wf) {
 #endif
 }
 
-// 2026-06-01 R3 DS-direct edit 4: create ONE permanent D3D12-heap-backed CUDA buffer via the B1-proven
+// R3 DS-direct edit 4: create ONE permanent D3D12-heap-backed CUDA buffer via the B1-proven
 // recipe. heap = ALIGN_UP(buf_size,256MB), carved into NQ=3 placed quarters (<4GB each, so DS
 // Destination.Buffer.Offset stays <4GB), imported as ONE contiguous CUDA ptr. Out-params receive the ptr
 // + the objects required to free it (teardown order matters; see wf_free_dual_use_heap). Frees partial
@@ -2032,7 +2032,7 @@ static void wf_selftest_dual_heaps(wf_context * wf) {
 #endif
 }
 
-// 2026-06-01 R3: create the STATEFUL DS objects (fence, CUDA semaphore, queue) — re-created
+// R3: create the STATEFUL DS objects (fence, CUDA semaphore, queue) — re-created
 // PER REQUEST even when the inert infra (device/factory/files/staging) is persisted, because
 // reusing the stateful queue/fence stale in-flight state is what wedges the GPU ("GPU is lost").
 static bool wf_dstorage_create_stateful(wf_context * wf) {
@@ -2361,7 +2361,7 @@ static bool wf_persist_infra_matches(wf_context * wf, size_t buf_size) {
 
 static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
     HRESULT hr;
-    // 2026-06-01 R3 (USER permanent-buffer design): if the inert infra is cached, REUSE it
+    // R3 (USER permanent-buffer design): if the inert infra is cached, REUSE it
     // (device+factory+files+staging) and only re-create the stateful queue/fence. This kills the
     // per-request CreateCommittedResource/cudaImportExternalMemory churn that corrupts 2nd+ prefills.
     if (!wf->required_dstorage && wf_persist_infra_enabled() && wf_persist_infra_matches(wf, buf_size)) {
@@ -2504,7 +2504,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         wf->dxgi_factory->Release(); wf->dxgi_factory = nullptr;
         return false;
     }
-    // 2026-06-01 R3 coherence fix (LLAMA_WF_PERSIST_FACTORY, default OFF for A/B): DStorageGetFactory
+    // R3 coherence fix (LLAMA_WF_PERSIST_FACTORY, default OFF for A/B): DStorageGetFactory
     // returns a process SINGLETON; releasing it per request (wf_destroy:2565) can drive its refcount
     // to 0 and DESTROY+recreate the DS factory (and its GPU upload engine) every request, which is a
     // prime suspect for the 2nd+ consecutive prefill corrupting. Hold ONE permanent reference so the
@@ -2693,7 +2693,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
             wf->ds_factory->Release(); wf->ds_factory = nullptr;
             return false;
         }
-        // [2026-08-07 device-hang fix] PIN THE STAGING RESOURCE AGAINST EVICTION. Every DirectStorage
+        // PIN THE STAGING RESOURCE AGAINST EVICTION. Every DirectStorage
         // write targets this resource; if WDDM demotes/evicts it under VRAM pressure (torch's caching
         // allocator holds its whole peak between denoise passes, and a 6.25GB MoE ring slot sits on top),
         // a DS write into a non-resident resource hangs the device (DXGI_ERROR_DEVICE_HUNG 0x887A0006 —
@@ -2770,7 +2770,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         wf->ds_staging_size = stg_size;
         WF_LOG("DS staging: %.2f GB at %p (D3D12 + CUDA), %d compute bufs",
                stg_size / (1024.0 * 1024.0 * 1024.0), stg.cuda_ptr, (int)wf->gpu_bufs.size());
-        // Phase 316e (2026-05-04): track DS staging alloc to attribute the
+        // track DS staging alloc to attribute the
         // ~3.5 GB/cycle VRAM leak. If this 3.5 GB stage IS the leak, allocs
         // per cycle will accumulate without matching frees.
         fprintf(stderr, "*** DS_STAGE_ALLOC: %.2f GB cuda_ptr=%p ext_mem=%p d3d=%p shared=%p\n",
@@ -2779,7 +2779,7 @@ static bool wf_dstorage_init(wf_context * wf, size_t buf_size) {
         fflush(stderr);
     }
 
-    // 2026-06-01 R3: cache the inert infra (device/factory/files/staging) for reuse across
+    // R3: cache the inert infra (device/factory/files/staging) for reuse across
     // requests, THEN create the stateful objects (queue/fence) via the helper.
     if (!wf->required_dstorage && wf_persist_infra_enabled() && !wf->ds_direct_mode && !g_wf_persist.valid &&
             wf->ds_stage.d3d_resource && wf->ds_stage.ext_mem &&
@@ -3156,7 +3156,7 @@ static void wf_dstorage_prebuild_requests(wf_context * wf) {
         }
 
         // Determine how many waves this layer needs.
-        // TASK-A FIX (2026-07-20): capacity must be computed from the PADDED span extent
+        // TASK-A FIX capacity must be computed from the PADDED span extent
         // (max gpu_offset+nbytes), not the raw byte sum (total_bytes). Request placement uses
         // alloc-padded gpu_offsets; sizing waves by total_bytes silently DROPPED any request
         // beyond ceil(total_bytes/stg) waves ("if (w >= n_waves) break") and the final wave's
@@ -3364,7 +3364,7 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    // Phase 2.2 v11 (2026-05-11): route the WF CUDA ops through wf->copy_stream
+    // v11 route the WF CUDA ops through wf->copy_stream
     // instead of the default per-thread stream. The default-stream variants of
     // cudaMemset/cudaMemcpy implicitly synchronize with the compute stream,
     // serializing the DStorage prefetch behind compute (overlap efficiency=0%).
@@ -3554,7 +3554,7 @@ static bool wf_dstorage_transfer_layer(wf_context * wf, int layer_idx, int gpu_i
             submitted++;
             wave_enqueued++;
         }
-        // [2026-08-07 stale-serve hunt] trace-gated: distinguishes "requests skipped at enqueue"
+        // trace-gated: distinguishes "requests skipped at enqueue"
         // (wave_enqueued < reqs) from "requests failed in DS" (error record below).
         WF_LOG("transfer layer %d wave %d: enqueued %d/%d requests (%.1f MB)",
                layer_idx, w, wave_enqueued, (int)wave.reqs.size(), wave.nbytes / 1e6);
@@ -4221,7 +4221,7 @@ static void wf_pipeline_thread_fn(wf_context * wf) {
         int next = wf->pipeline_next_layer.load();
         bool any_progress = false;
 
-        // --- Phase A: check DMA completion ---
+        // --- check DMA completion ---
 #ifdef WF_HAS_DSTORAGE
         // Wave-based DS transfers: the DMA thread does blocking transfers
         // and sets GPU_READY directly. Nothing for the pipeline thread to do.
@@ -4301,7 +4301,7 @@ static void wf_pipeline_thread_fn(wf_context * wf) {
             }
         }
 
-        // --- Phase B: submit new layers into the pipeline ---
+        // --- submit new layers into the pipeline ---
         //
         // With round-robin chunk distribution, each layer's I/O is interlocked
         // sequential.  Use fewer, larger layers to give the RAID controller
@@ -4311,7 +4311,7 @@ static void wf_pipeline_thread_fn(wf_context * wf) {
 
 #ifdef WF_HAS_DSTORAGE
             // DMA control thread handles all DS submissions after startup.
-            // Pipeline thread only does Phase A (fence checks → GPU_READY).
+            // Pipeline thread only does (fence checks → GPU_READY).
             // Startup layers were submitted directly in wf_start().
             if (wf->ds_initialized) {
                 goto phase_b_done;
@@ -4715,7 +4715,7 @@ static wf_context * wf_create_impl(const wf_params * params, bool required_dstor
                     WF_ERR("malloc also failed for RAM buffer %d", i);
                 }
             } else {
-                // Phase 316d (2026-05-04): track WF per-cycle pinned-host allocs.
+                // track WF per-cycle pinned-host allocs.
                 // This is the actual allocator that fires in the WF=on path
                 // (prefill_pinned_alloc only fires when WF is off).
                 fprintf(stderr, "*** WF_PIN_ALLOC: slot=%d ptr=%p +%.1fMB\n",
@@ -4941,7 +4941,7 @@ void wf_destroy(wf_context * wf) {
 
         // Release staging resource
         auto & stg = wf->ds_stage;
-        // Phase 316e (2026-05-04): log the staging release to confirm/refute
+        // log the staging release to confirm/refute
         // ds_stage as the leak source. If the matching DS_STAGE_FREE never
         // logs, this 3.5 GB stays mapped per cycle.
         fprintf(stderr, "*** DS_STAGE_FREE: cuda_ptr=%p ext_mem=%p d3d=%p shared=%p\n",
@@ -4961,12 +4961,12 @@ void wf_destroy(wf_context * wf) {
                         cudaGetErrorString(sync_err));
             }
         }
-        // Phase 2.3b (2026-05-12) — VRAM-leak fix.
+        // VRAM-leak fix.
         // Per CUDA docs: cudaExternalMemoryGetMappedBuffer's pointer MUST be
         // freed via cudaFree() before the parent cudaExternalMemory_t is
         // destroyed. Otherwise the GPU mapping stays alive — each request
         // re-imports + maps fresh, accumulating ~staging_size MB per cycle.
-        // Pre-fix Phase 2.3b bisect (commit 221b12df) showed perfect 1:1
+        // Pre-fix bisect (commit 221b12df) showed perfect 1:1
         // scaling with LLAMA_DS_STAGING_MB.
         // R3 persist: when the staging is the cached persistent buffer, do NOT free its CUDA
         // mapping (cuda_ptr/ext_mem) — it lives in g_wf_persist for reuse. The COM d3d_resource
@@ -5049,7 +5049,7 @@ void wf_destroy(wf_context * wf) {
         for (auto & slot : wf->ram_bufs) {
 #ifdef WF_HAS_CUDA
             if (slot.ptr) {
-                // Phase 316d (2026-05-04): track WF per-cycle pinned-host frees.
+                // track WF per-cycle pinned-host frees.
                 fprintf(stderr, "*** WF_PIN_FREE: slot=%d ptr=%p -%.1fMB\n",
                         slot_idx, slot.ptr, slot.capacity / (1024.0 * 1024.0));
                 fflush(stderr);
@@ -5484,7 +5484,7 @@ void * wf_wait_layer_gpu(wf_context * wf, int layer_idx) {
         }
         int bi = 0;
 
-        // [2026-07-28 M3 wf=1 DIAG] LLAMA_WF_M3_DIAG=1: localize the single-buffer garble.
+        // LLAMA_WF_M3_DIAG=1: localize the single-buffer garble.
         static const bool wf1_diag = []() { const char * e = std::getenv("LLAMA_WF_M3_DIAG"); return e && e[0] && e[0] != '0'; }();
         static std::vector<unsigned long long> g_wf1_hash;   // post-fill hash per layer (sync path is single-threaded)
         static std::vector<char>               g_wf1_have;
@@ -5581,7 +5581,7 @@ void * wf_wait_layer_gpu(wf_context * wf, int layer_idx) {
             cudaMemcpy(compute_buf, wf->prefetch_buf, layer.total_bytes, cudaMemcpyDeviceToDevice);
             { uint8_t barrier[16] = {}; cudaMemcpy(barrier, compute_buf, 16, cudaMemcpyDeviceToHost); (void)barrier; }
         } else if (wf->prefetch_buf && wf->prefetch_buf_size > 0 && layer.total_bytes > wf->prefetch_buf_size
-                   // [2026-07-28 M3 wf=1 GARBLE FIX] This relay (wf_dstorage_transfer_range) is a SEPARATE,
+                   // This relay (wf_dstorage_transfer_range) is a SEPARATE,
                    // simpler fetch that OMITS mmap-fallback span handling (spans with file_offset==0 &&
                    // mmap_addr!=nullptr, excluded from DS and delivered by H2D in wf_dstorage_transfer_layer),
                    // plus the expert cache-hit reapply, and runs default-stream-only. It leaves every
@@ -6776,7 +6776,7 @@ static bool wf_fetch_extents_impl(wf_context * wf, int bank, const wf_extent * e
     using wf_clock = std::chrono::high_resolution_clock;
     auto ms_since = [](wf_clock::time_point t) { return std::chrono::duration<double, std::milli>(wf_clock::now() - t).count(); };
     const auto submitted_at = wf_clock::now(); g_wf_extent_stats.submit_ms += std::chrono::duration<double, std::milli>(submitted_at - started).count();
-    // RAMFIX: caller work (RAM-tier uploads on its own CUDA stream) runs while this batch is in flight.
+    // caller work (RAM-tier uploads on its own CUDA stream) runs while this batch is in flight.
     if (overlap) overlap(overlap_user);
     const auto overlapped_at = wf_clock::now();
     if (!wf_ds_fence_wait(wf, fence)) return false;

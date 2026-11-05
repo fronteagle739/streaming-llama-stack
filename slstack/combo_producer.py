@@ -102,7 +102,7 @@ def engram_prompt_bytes(rows):
 FOLD_CAP=61440   # owner, measured: fold wins at 54,037 and 60,176, loses at 93,668
 
 def fold_sweeps(prompt_tokens,sweep,capacity,fold_cap=None,align=4096):
-    """Owner fold rule (llama_dsv41_prefill::fold): primary sweeps of `sweep` tokens; the remainder
+    """Producer fold rule (llama_dsv41_prefill::fold): primary sweeps of `sweep` tokens; the remainder
     r = n - k*sweep is folded into the last one, last = sweep + r; n <= sweep is one sweep.
     last > fold_cap: the remainder is its own sweep (tail). last > capacity but <= fold_cap
     (RAM-limited): rebalance `last` into m near-equal passes (m from ceil(last / capacity floored to
@@ -133,7 +133,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
     producer_host_reserve_gib (default 0.5 GiB of headroom for Studio/daemon/OS growth), so the working set plus everything
     else fits physical RAM and stays resident (hard-minimum working set); the budget is
     page-rounded (Windows keeps a hard-minimum working set only in whole pages).
-    producer_prefill_sweep_tokens S (absent = the above): the owner fold policy instead; S-token
+    producer_prefill_sweep_tokens S (absent = the above): the producer fold policy instead; S-token
     sweeps with the remainder folded into the last (fold_sweeps), C = the largest sweep (at least
     49152), the same host raise for C; when the folded sweep cannot fit the cap, or exceeds the fold
     cap producer_prefill_fold_cap_tokens (default 61440), the remainder is its own sweep."""
@@ -192,7 +192,7 @@ def prefill_plan(cfg,prompt_tokens,available=None):
                     int(prompt_tokens),base+sum(extra(min(max(LEGACY_SWEEP,int(prompt_tokens)),limit))),top,capped_by,want))
 
 def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
-    """prefill_plan under producer_prefill_sweep_tokens (the owner fold policy).
+    """prefill_plan under producer_prefill_sweep_tokens (the producer fold policy).
     sweep 'auto' (the default since OPUS22 round 6, owner: single stream by default): one sweep up to
     the largest capacity under the host cap (rounded down to 4096); a longer prompt is rebalanced into
     near-equal sweeps under that cap (the fold cap does not apply)."""
@@ -235,7 +235,7 @@ def fold_plan(cfg,prompt_tokens,available,sweep,base,top,capped_by,extra,limit):
                     sum(sweeps[n//sweep-1:]),cap,capped_by,'+'.join(map(str,sweeps[n//sweep-1:]))) if rebalance else None)
 
 def whole_prompt_engram(cfg,plan,count,available):
-    """PAIRFIX: a multi-sweep prompt admits its whole prompt's Engram rows once. The producer's
+    """a multi-sweep prompt admits its whole prompt's Engram rows once. The producer's
     early load (LLAMADECODE_ENGRAM_WHOLE_PROMPT, default 1) reads every sweep's rows in one
     pass before the weight stream starts, and later sweeps reuse them, so the admission grows
     from one sweep's rows to the whole prompt's (same per-row formula). It is added outside the

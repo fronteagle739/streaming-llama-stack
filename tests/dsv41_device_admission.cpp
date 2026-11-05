@@ -1,7 +1,7 @@
 // LLAMADECODE measured device plan: admitted = min(job bound, measured free - reserve);
 // the combined plan must fit under it; the context cache is charged at what it
 // can hold for its context (<= --cache-bytes). Numbers are the RTX 5090 runs of
-// 2026-10-25 (lazy free 32495370240, EAGER free 32252100608, job 31377412860).
+// (lazy free 32495370240, EAGER free 32252100608, job 31377412860).
 #include "llama-dsv41-device-admission.h"
 #include <cstdio>
 
@@ -47,7 +47,7 @@ int main() {
         (unsigned long long)plan1m, (unsigned long long)e1m.admitted, (long long)(plan1m - e1m.admitted));
     expect(e262.ok, "EAGER 262K f32: today's args fit the measured admission (cache charged exactly)");
     expect(!e1m.ok, "EAGER 1M bf16: today's args do not fit (no component freed; refused loudly, not shrunk)");
-    // Gate bug (2026-10-25): the second check before the sweep opens compared EAGER free with the fixed job.
+    // Gate bug the second check before the sweep opens compared EAGER free with the fixed job.
     // EAGER: first free 32252100608 (context + modules 895033344), second free the same.
     const uint64_t plan262_today = plan262;
     auto s1 = a::recheck(eager_free, eager_free, job, gib, plan262_today);

@@ -101,7 +101,7 @@ static __global__ void soft_max_f32(
     // find the max value in the block
     max_val = block_reduce<block_reduce_method::MAX, block_size_template>(max_val, buf_iw);
 
-    // [DSA_SPARSE_FULLY_MASKED_GUARD 2026-06-25] A fully-masked softmax row (every input
+    // DSA_SPARSE_FULLY_MASKED_GUARD A fully-masked softmax row (every input
     // -INFINITY, e.g. mask all -inf) yields exp(-inf - (-inf)) = exp(NaN) = NaN, which then
     // poisons the whole forward pass. This happens in GLM-5.2 DSA-on multi-ubatch prefill: the
     // (non-causal) sparse indexer top_k can select only future keys for the earliest query

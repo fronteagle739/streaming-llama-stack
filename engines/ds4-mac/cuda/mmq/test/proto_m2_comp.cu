@@ -201,7 +201,7 @@ __global__ static void comp_pair_store_fused_kernel(
     const uint32_t lane = threadIdx.x & 31u;
     const uint32_t warp = threadIdx.x >> 5u;
 
-    /* Phase 1: one warp per (matmul m, row, kseg) tile. */
+    /* one warp per (matmul m, row, kseg) tile. */
     const uint32_t tiles_per_m = width * KS;
     const uint32_t nwarp = gridDim.x * (blockDim.x >> 5u);
     for (uint32_t t = blockIdx.x * (blockDim.x >> 5u) + warp;
@@ -245,7 +245,7 @@ __global__ static void comp_pair_store_fused_kernel(
 
     cooperative_groups::this_grid().sync();
 
-    /* Phase 2: combine (kseg ascending, verbatim) + verbatim store body. */
+    /* combine (kseg ascending, verbatim) + verbatim store body. */
     const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
     const uint32_t n2 = 2u * width;
     if (gid >= n2) return;

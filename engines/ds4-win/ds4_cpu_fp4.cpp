@@ -176,14 +176,14 @@ constexpr int CH1 = 32, CH2 = 64;
 static void work(int tid) {
     auto &p = *g;
     const job_t &J = p.job;
-    // Phase 0: thread 0 quantizes x; others wait (tiny).
+    // thread 0 quantizes x; others wait (tiny).
     if (tid == 0) {
         quantize_split(J.x, NB_IN, p.xq.xl, p.xq.xh, p.xq.sdd);
         p.quant_ready.store(1, std::memory_order_release);
     } else {
         while (!p.quant_ready.load(std::memory_order_acquire)) _mm_pause();
     }
-    // Phase 1: gate+up rows of every expert -> mid.
+    // gate+up rows of every expert -> mid.
     const int rows1 = J.k * DIM_MID, chunks1 = rows1 / CH1;
     for (int c; (c = p.next1.fetch_add(1)) < chunks1;) {
         for (int r = c * CH1; r < c * CH1 + CH1; ++r) {
@@ -208,7 +208,7 @@ static void work(int tid) {
         p.fin1.fetch_add(1, std::memory_order_acq_rel);
     }
     while (p.fin1.load(std::memory_order_acquire) < chunks1) _mm_pause();
-    // Phase 1a: SwiGLU on the GPU (its expf is ex2.approx, which the CPU cannot
+    // SwiGLU on the GPU (its expf is ex2.approx, which the CPU cannot
     // reproduce bit for bit); thread 0 runs the round trip, the others wait.
     if (J.epilogue) {
         if (tid == 0) {
@@ -218,13 +218,13 @@ static void work(int tid) {
             while (!p.epi_done.load(std::memory_order_acquire)) _mm_pause();
         }
     }
-    // Phase 1b: quantize mid per expert (one expert per thread).
+    // quantize mid per expert (one expert per thread).
     for (int e = tid; e < J.k; e += p.n) {
         quantize_split(p.mid + (size_t) e * DIM_MID, NB_MID, p.ml[e], p.mh[e], p.msd[e]);
         p.quant_ready.fetch_add(1, std::memory_order_acq_rel);
     }
     while (p.quant_ready.load(std::memory_order_acquire) < 1 + J.k) _mm_pause();
-    // Phase 2: down rows, each expert's per-row sum.
+    // down rows, each expert's per-row sum.
     const int chunks2 = DIM_OUT / CH2;
     for (int c; (c = p.next2.fetch_add(1)) < chunks2;) {
         for (int n = c * CH2; n < c * CH2 + CH2; ++n)

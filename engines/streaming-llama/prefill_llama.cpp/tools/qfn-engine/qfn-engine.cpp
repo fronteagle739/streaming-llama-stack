@@ -747,7 +747,7 @@ struct qfn_engine::impl {
             return;
         }
         // Lossless packed prefill is qualified against the calibrated raw reference.
-        // Decode/indexer candidates failed the owner full-model gate and stay explicit.
+        // Decode/indexer candidates failed full-model qualification and stay explicit.
         if (pack.native_nvfp4_packed && !opt.nvfp4_mode_explicit) opt.nvfp4_mode = 6;
         require((opt.nvfp4_mode >= 0 && opt.nvfp4_mode <= 4) || opt.nvfp4_mode==6, "invalid NVFP4 prefill arithmetic mode");
         require(opt.nvfp4_mode!=6 || pack.native_nvfp4_packed,

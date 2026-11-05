@@ -240,7 +240,7 @@ struct llama_dsv41_weight_provider::implementation {
         require(host.store(layer,uint32_t(key)%384,src,sizes)==1,"RAM expert victim admission failed");
         if(host.find(layer,uint32_t(key)%384)>=0)++host_stored;
     }
-    // RAMFIX (owner 2026-10-29): RAM-tier data movement off the critical path.
+    // RAM-tier data movement off the critical path.
     // LLAMADECODE_HOST_ASYNC: 0 = the original synchronous path; 1 = VRAM->RAM copy-in on
     // its own non-blocking stream (batched D2H, one event); 2 = also submit the DirectStorage
     // batch first and upload RAM hits on a separate H2D stream while it is in flight, waiting
@@ -419,7 +419,7 @@ struct llama_dsv41_weight_provider::implementation {
         if(defer_copies)finish_host_work(stream);
         return slot_of;
     }
-    // Phase 1-2 (before DirectStorage): victim D2H copy-ins on their own stream after one
+    // 2 (before DirectStorage): victim D2H copy-ins on their own stream after one
     // event from the provider stream, then the VRAM slot copies ordered after them by one
     // event. DirectStorage writes are outside CUDA ordering, so the existing host drain covers
     // any L1 slot a copy reads or a copy-in reads before storage overwrites it.
@@ -445,7 +445,7 @@ struct llama_dsv41_weight_provider::implementation {
         (void)stream;(void)copied;
 #endif
     }
-    // Phase 3: RAM-hit uploads on the H2D stream (level 1 keeps them before storage, synchronous
+    // RAM-hit uploads on the H2D stream (level 1 keeps them before storage, synchronous
     // per hit as before), then publish the completed copy-ins. Runs while DirectStorage reads.
     void upload_ram_hits(void*stream,bool async){
 #ifdef GGML_USE_CUDA
@@ -561,7 +561,7 @@ struct llama_dsv41_weight_provider::implementation {
         bool adopted=false;
     };
     std::shared_ptr<early_engram>early;
-    // PAIRFIX whole-prompt Engram: the early cache built for every sweep of the
+    // whole-prompt Engram: the early cache built for every sweep of the
     // request, its tokens, and the tokens earlier sweeps already adopted. Rows
     // are content-addressed by id, so a later sweep reads exactly the same
     // bytes; a missing row fails the read loudly (never a substitute).
@@ -1127,7 +1127,7 @@ bool llama_dsv41_weight_provider::implementation::launch_early(const std::vector
             // =1 would fail this request at adoption; auto keeps the ordinary path, which applies its own admission.
             llama_dsv41_layer_log("LLAMADECODE_ENGRAM_EARLY_DECISION at=%s tokens=%zu early=0 reason=plan_failed what=\"%s\"\n",at,tokens.size(),failure.what());return false;}
         auto d=llama_dsv41_engram_early::decide(e->cache->planned_requests(),llama_dsv41_engram_early_iops(),gap_s);
-        // PAIRFIX: a scan-geometry load is sequential, so starting it before the
+        // a scan-geometry load is sequential, so starting it before the
         // weight stream only moves bytes out of the contended window: start it
         // now even when it does not fit the gap (the sweep-start arm would read
         // the same bytes later, entirely against the weight stream).
@@ -1188,7 +1188,7 @@ bool llama_dsv41_weight_provider::start_engram_cold(std::string&error){return p-
     }
     // Same charge rule as start_engram_prompt_early: the current pass's own
     // worst case unless this cache is for the very request that runs next.
-    // PAIRFIX whole prompt: tokens cover every sweep; prepare_early admits the
+    // whole prompt: tokens cover every sweep; prepare_early admits the
     // actual rows and IO arena against the same admission (plan_failed is logged
     // and the sweeps load their own rows as before).
     const bool whole_prompt=tokens.size()>p->options.engram_prefetch_tokens;

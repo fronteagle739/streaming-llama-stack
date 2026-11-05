@@ -5,10 +5,8 @@ Port of ``inference/engram.py`` and the ``ParallelEngramEmbedding`` / ``Engram``
 reference bit for bit: every one of the 384M rows of each table is addressed by it, and a mismatch
 turns 189 GiB of learned memory into noise.
 
-Table storage (owner, 2026-09-10: "support for fetching ngrams from ram OR nvme"; "make a ngram
-cache that fits as much into the mac unified memory and only fetch the last bits from nvme";
-"weights, mtp and vision live in unified along with as much ngram as possible"; "a hotness tracking
-lru cache for ngram like the ds4 one"):
+Table storage keeps model weights, MTP and vision in unified memory and offers
+RAM, NVMe or a unified-memory row cache with sampled LRU eviction:
 
 * ``ram``    -- the whole table resident as MLX mxfp8 (uint32 payload + e8m0 scales, chunked so no
                 single Metal buffer holds 98 GB). ~94 GiB per table.
@@ -47,7 +45,7 @@ import numpy as np
 import time as _ledger_time
 from .prefill_ledger import _PREFILL_LEDGER_ON
 
-# Phase 0 of the v41 port (2026-09-15): host milliseconds spent fetching Engram rows per decode step.
+# Decode step ledger: host milliseconds spent fetching Engram rows per decode step.
 _LEDGER_ON = os.environ.get("DSV41_STEP_LEDGER", "0") == "1"
 LEDGER = {"engram_host_ms": 0.0, "engram_calls": 0}
 

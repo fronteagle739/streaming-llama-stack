@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // proto_gemm_dense_q8_d2r.cu - dense Q8_0 decode-to-registers prototype.
 //
-// Targets the dense-q8 census shapes (cmdq8shape15 2026-07-09, N = chunk
+// Targets the dense-q8 census shapes (cmdq8shape15 N = chunk
 // tokens 4096) where production mul_mat_q<8,128,0> runs far under the
 // cuBLASLt-int8 ceiling at the same shapes:
 //   sexp gate/up  M= 2048 K=4096   mmq 65 TF  vs Lt-int8 156

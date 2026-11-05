@@ -3099,7 +3099,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
     // Only the GGUF header (tensor metadata) is needed in RAM.
     // This eliminates the ~21GB mmap working set for Qwen3.5-27B (or ~196GB for Step-3.5-Flash).
     //
-    // Phase 6.3 (2026-05-12): only the FIRST model load uses WF. Subsequent
+    // only the FIRST model load uses WF. Subsequent
     // loads (e.g. `-md <drafter>` for speculative-decoding) need normal
     // mmap-based load. Drafter is small (~447 MB Q4_0) and has no WF
     // configured — its load fails with "Invalid access to memory location"

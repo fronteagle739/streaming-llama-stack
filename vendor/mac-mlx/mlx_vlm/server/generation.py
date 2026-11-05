@@ -629,7 +629,7 @@ class GenerationArguments:
             kw["thinking_end_token"] = self.thinking_end_token
         if self.chat_template_kwargs:
             # Without this a request's reasoning_effort never reached the template and GLM-5.3
-            # ran at its default MAX effort whatever the client asked (measured 2026-09-10).
+            # ran at its default MAX effort whatever the client asked ().
             kw.update({str(k): v for k, v in dict(self.chat_template_kwargs).items()})
         return kw
 

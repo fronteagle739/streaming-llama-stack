@@ -230,7 +230,7 @@ static size_t ggml_backend_metal_buffer_type_get_alloc_size(ggml_backend_buffer_
             } break;
         case GGML_OP_DSA_INDEXER_TOPK:
             {
-                // scratch for the [n_kv, n_q] f32 score buffer that Phase M3
+                // scratch for the [n_kv, n_q] f32 score buffer that indexer top-k
                 // allocates between the score and top-k passes.
                 res += ggml_metal_op_dsa_indexer_topk_extra_tmp(tensor);
             } break;
@@ -638,7 +638,7 @@ void ggml_backend_metal_capture_next_compute(ggml_backend_t backend) {
     ggml_metal_capture_next_compute(ctx);
 }
 
-// Phase 3 split-decode event API — wrappers around the internal
+// split-decode event API — wrappers around the internal
 // ggml_metal_device_event_* / ggml_metal_event_* functions so callers can
 // work with MTLSharedEvent without including device-internal headers.
 ggml_metal_event_t ggml_backend_metal_event_init(ggml_backend_t backend) {
@@ -705,7 +705,7 @@ bool ggml_backend_metal_graph_compute_gated(
     return st == GGML_STATUS_SUCCESS;
 }
 
-// 2026-04-21 (iter 9): return the id<MTLBuffer> and byte offset for a tensor
+// (iter 9): return the id<MTLBuffer> and byte offset for a tensor
 // in a Metal buffer. Used by llama-context.cpp to set up the inp_out_ids fill.
 void * ggml_backend_metal_tensor_get_mtl_buf(struct ggml_tensor * tensor, size_t * out_offs) {
     if (!tensor || !tensor->buffer) {

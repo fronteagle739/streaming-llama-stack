@@ -126,7 +126,7 @@ typedef struct {
 } ds4_tp_verbs_api;
 
 /* AppleThunderboltRDMA quirks (validated with scratchpad probes,
- * 2026-07-06): only UC queue pairs exist (RC/UD: ENOTSUP); RDMA WRITE work
+ * ): only UC queue pairs exist (RC/UD: ENOTSUP); RDMA WRITE work
  * requests are accepted but never execute, so the data plane is two-sided
  * SEND/RECV like Apple's own JACCL; messages above 16KB are not delivered;
  * RTR requires GRH addressing with the IPv4-mapped GID that appears only

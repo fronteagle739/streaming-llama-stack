@@ -315,7 +315,7 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     p->options=parse_config(raw);p->config_sha=sha256(raw.data(),raw.size());
     require(p->options.source_base_revision==DSV41_BOUNDARY_SOURCE_BASE_REVISION,"compiled source revision does not match trusted config");
     require(executable_digest()==p->options.binary_sha256,"actual capture executable differs from trusted config");
-    // The owner build receipt binds this manifest to the observed binary. The
+    // The build receipt binds this manifest to the observed binary. The
     // base revision alone is deliberately never described as the variant SHA.
     const std::string manifest=read_small(std::filesystem::path(diagnostic_root())/L"boundary-capture.source-manifest.json");
     require(sha256(manifest.data(),manifest.size())==p->options.variant_manifest_sha256,
@@ -323,7 +323,7 @@ capture::capture(uint32_t layer,uint32_t start,uint32_t count,const std::vector<
     require(residual.size()==size_t(5120)*4*count&&pre.size()==size_t(4)*count,"common input geometry changed");
     require(sha256(residual.data(),residual.size()*4)==p->options.residual_sha256&&
             sha256(pre.data(),pre.size()*4)==p->options.previous_pre_sha256,"actual common input SHA differs from predeclared config");
-    
+
     load_replay(read_small(std::filesystem::path(diagnostic_root())/L"boundary-replay.inputs.json"),
         read_bounded(std::filesystem::path(diagnostic_root())/L"boundary-replay.weights.json",256*1024),
         [&](const std::string&name,size_t bytes){return read_bounded(std::filesystem::path(diagnostic_root())/name,bytes);});
@@ -380,7 +380,7 @@ void capture::load_replay(const std::string&inputs_raw,const std::string&proof_r
     require(sha256(canonical_runtime.data(),canonical_runtime.size())==p->attention_contract.at("native_runtime_sha256")&&
         runtime==receipt.at("raw_attention_parameters"),"canonical runtime object SHA or complete receipt object binding mismatch");
     const auto expected_runtime=strict_json(R"DS4ACTUAL({"bc_mask":false,"entry":"ds4_gpu_attention_decode_raw_batch_heads_tensor","has_kvpad":true,"head_dim":512,"heads":64,"ids":"implicit_raw_positions_0_through_31","internal_padding_bytes":135168,"kernel":"kernel_flash_attn_ext_f16_dk512_dv512","logical_mask_bytes":2048,"logical_mask_copied_from_padding":false,"logical_mask_stride_bytes":64,"mask":"actual_cpu_f16_mask","n_raw":32,"ncpsg":64,"noncausal":false,"nqptg":8,"nsg":8,"raw_cap":32,"raw_start":0,"rows":32,"sinks":"pinned_original_model","start":0,"window":128})DS4ACTUAL");
-    require(runtime==expected_runtime,"actual native cold32 geometry/dispatch object changed; owner review required");
+    require(runtime==expected_runtime,"actual native cold32 geometry/dispatch object changed; source review required");
     require(receipt.at("schema")=="ds4split-native-layer0-replay-v1"&&receipt.at("complete")==true&&receipt.at("mode")=="attention_capture"&&
         receipt.at("layer")==0&&receipt.at("start")==0&&receipt.at("rows")==32&&receipt.at("kernel_replaced")==false&&
         receipt.at("prompt_sha256")=="8c6b8bef556f819920623362e38abd040f1d2faa90cf1fe863c4de1b3e067fee","original native cold canonical capture receipt contract");

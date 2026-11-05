@@ -461,7 +461,7 @@ void llama_context::kv_tier_verify_mirror(const char * where) {
         return;
     }
     static const bool tier_verify = []() {
-        // Off by default since 2026-09-10: four live runs read every file back byte-exact against
+        // Off by default since four live runs read every file back byte-exact against
         // the mirror; on it doubles the tier's reads per pass (2.3 GB at 11k tokens).
         const char * e = std::getenv("LLAMA_KV_TIER_VERIFY");
         return e && e[0] != 0 && e[0] != '0';
@@ -771,7 +771,7 @@ int32_t compute_stream_crossover_tokens(double stream_floor_ms, double stream_to
 // llama_context
 //
 
-// STEP 2 (2026-06-01): path-independent per-layer dump to confirm the SM120 F16-VKQ diagnosis.
+// STEP 2 path-independent per-layer dump to confirm the SM120 F16-VKQ diagnosis.
 // Installed via cparams.cb_eval so it fires on BOTH the RTX streaming layer-major path AND the
 // Mac receiver's full-local re-prefill (same llama lib). With ship-embeddings the receiver
 // re-prefills the SAME shipped RTX embeddings, so diffing the RTX (NCOLS=32 F16 VKQ) vs the Mac
@@ -801,7 +801,7 @@ static bool llama_layer_cmp_eval_cb(ggml_tensor * t, bool ask, void * /*user_dat
     int il = -1; const char * kind = nullptr;
     if      (strncmp(nm, "__fattn__-", 10) == 0) { il = atoi(nm + 10); kind = "fattn"; }
     else if (strncmp(nm, "l_out-",      6) == 0) { il = atoi(nm + 6);  kind = "lout";  }
-    // [DIAG_SPARSE_NAN 2026-06-25] probe the DSA-on multi-ubatch sparse attention internals
+    // DIAG_SPARSE_NAN probe the DSA-on multi-ubatch sparse attention internals
     // (post-softmax kq, kqv, kqv_mla) to localize the first-NaN op. Named in build_attn_mha
     // when LLAMA_DIAG_SPARSE_NAN is set. Zero cost otherwise (these names never appear).
     else if (strncmp(nm, "diagsoftmax-", 12) == 0) { il = atoi(nm + 12); kind = "diagsoftmax"; }
@@ -819,7 +819,7 @@ static bool llama_layer_cmp_eval_cb(ggml_tensor * t, bool ask, void * /*user_dat
     const size_t nbytes = ggml_nbytes(t);
     std::vector<uint8_t> buf(nbytes);
     ggml_backend_tensor_get(t, buf.data(), 0, nbytes);  // synchronous device->host copy
-    // [DIAG_SPARSE_NAN 2026-06-25] for the diag* kinds, only dump the ubatch that actually
+    // DIAG_SPARSE_NAN for the diag* kinds, only dump the ubatch that actually
     // contains NaN (multiple ubatches share the same shape -> filename collides; the NaN one
     // is the interesting/corrupt ubatch). Append _NAN<count> so it never collides with clean ones.
     const bool is_diag = (strncmp(kind, "diag", 4) == 0);
@@ -1325,7 +1325,7 @@ static void llama_dsv4_lid_probe_dump(
     static std::atomic_int q_dump_count { 0 };
     if (q_dump_count.load() < 3) {
         const int qc = q_dump_count.fetch_add(1);
-        // bug#2 (2026-07-18): also dump the CSA attention CONSUMPTION tensors (pinned in build_csa_lid_attention
+        // bug#2 also dump the CSA attention CONSUMPTION tensors (pinned in build_csa_lid_attention
         // at nt==1) for the offline decode-attention-math oracle - the last un-verified suspect.
         // Decode-only names (see build_csa_lid_attention). The old list asked for "csa_lid_kq_mask-2"
         // and "attn_csa_lid-2", which are the PREFILL-graph names: the mask one resolved to a tensor
@@ -2154,7 +2154,7 @@ void llama_context::sched_reserve() {
     // For streaming prefill: reserve with minimal tokens so WDDM virtual
     // memory commits are small, leaving room for WF GPU buffers.
     // decode_layer_major rebuilds and alloc's the graph at actual batch size.
-    // NOTE (2026-05-30): LLAMA_PREFILL_RESERVE_FULL (up-front reserve) was tried for
+    // NOTE LLAMA_PREFILL_RESERVE_FULL (up-front reserve) was tried for
     // the 100k OOM and REFUTED — it enlarges the (still-live) init reserve and makes
     // OOM worse. The 100k OOM is a CONTIGUOUS-alloc fragmentation issue (the n_kv-scaled
     // prefill compute buffer can't find a contiguous slot among the WF buf + graph),
@@ -2177,7 +2177,7 @@ void llama_context::sched_reserve() {
         // L2 expert slab: the routed-expert fetch callback must survive sched recreation —
         // the FIRST slab build sets sched_need_reserve, and without this re-install the very
         // next (batch/prompt) graph computed on the fresh sched ran UNOBSERVED, leaving the
-        // slab unwritten -> garbage prompt KV (verified 2026-07-20: prompt eval fired no
+        // slab unwritten -> garbage prompt KV (verified prompt eval fired no
         // callbacks, decode ids degenerated to 0..5 from layer 3).
         ggml_backend_sched_set_eval_callback(sched.get(), llama_expert_slab_eval_cb, this);
     }
@@ -3464,7 +3464,7 @@ int llama_context::decode(const llama_batch & batch_inp) {
     // This is true REGARDLESS of transport: with a Mac receiver the decode happens remotely; with no
     // receiver (e.g. `--prefill-only`, executor=local_cpu) there is no decode to do — return cleanly.
     // (Iter 35j had narrowed this to `&& use_transport`, which let the no-transport prefill-only path fall
-    // through to a local compute on sentinel weights and crash — STEP37_STREAMING_PREFILL_2026-06-14.md.)
+    // through to a local compute on sentinel weights and crash.)
     if (decode_handoff_active && model.hparams.wf_active) {
         LLAMA_LOG_INFO("%s: handoff active + wf_active (sentinel weights) — skipping local compute "
                        "(transport=%d)\n", __func__, (int) decode_handoff_plan.use_transport);
@@ -4066,7 +4066,7 @@ bool llama_context::retain_slot_kv_enabled() const {
 }
 
 void llama_context::invalidate_route_reuse_state() {
-    // TURN-2 REUSE DIAG (2026-07-18): this is the SILENT clear path — the server "route-reuse invalidated"
+    // TURN-2 REUSE DIAG this is the SILENT clear path — the server "route-reuse invalidated"
     // log lives only in the invalidate_route_reuse() wrapper, so a CLEAR here can happen with no log.
     fprintf(stderr, "*** INVALIDATE_STATE: ctx=%p gen=%llu prefix=%zu resident=%d\n",
             (void *) this, (unsigned long long) prefill_kv_state_cache_generation,
@@ -4136,7 +4136,7 @@ bool llama_context::migrate_kv_cache_to_cpu(const std::vector<uint8_t> * src_blo
         }
         state_data = src_blob->data();
         state_size = src_blob->size();
-        // FIX (2026-07-21) GLM retain "n_stream mismatch": the retain path hands us prefill_kv_state_cache,
+        // FIX GLM retain "n_stream mismatch": the retain path hands us prefill_kv_state_cache,
         // which for the streamed-handoff archs is the KVARTIF1 Mac-handoff ARTIFACT (envelope + metadata +
         // prompt payload), NOT a raw state_seq blob. Feeding it to state_seq_set_data made the cache reader
         // interpret ASCII "KVAR" as n_stream -> throw. Detect the artifact magic and unwrap to the raw KV
@@ -4160,7 +4160,7 @@ bool llama_context::migrate_kv_cache_to_cpu(const std::vector<uint8_t> * src_blo
             state_data = unwrapped_payload.data();
             state_size = unwrapped_payload.size();
         }
-        // FIX (2026-07-18): retained-KV RACE. Increment-1's blob path skipped the synchronize() that the GPU-read
+        // FIX retained-KV RACE. Increment-1's blob path skipped the synchronize() that the GPU-read
         // path (else) still does. But the module replacement below (create_memory frees/replaces the old GPU KV
         // module) must not race pending async prefill computes still reading that KV — otherwise a compute-node
         // tensor_get reads freed memory (ggml_cuda_error). memcheck+cdb serialize streams and MASK it, proving a
@@ -4308,7 +4308,7 @@ bool llama_context::capture_kv_state_blob(std::vector<uint8_t> &out, std::string
 
     // Determine which seq_id has data. The server assigns tokens to slot.id
     // (not always 0). Try seq_id=0 first, then scan for the first active seq.
-    // Phase 5.3 (2026-05-12): the receiver v1.7+ routes the import to
+    // the receiver v1.7+ routes the import to
     // dest_seq_id = meta.source_slot_id (set from preferred_seq on the RTX
     // side). When preferred_seq is set explicitly under kv_unified+multi-slot
     // we therefore export FROM preferred_seq directly — avoiding the
@@ -4328,7 +4328,7 @@ bool llama_context::capture_kv_state_blob(std::vector<uint8_t> &out, std::string
                                               && cparams.kv_unified
                                               && cparams.n_seq_max > 1
                                               && preferred_seq >= 0;
-    // Phase 5.3 (2026-05-12) diagnostic: under kv_unified+multi-slot we need
+    // diagnostic: under kv_unified+multi-slot we need
     // to know which seq_id the streaming-prefill TB path actually tagged
     // cells with. Sweep all 0..min(8, n_seq_max-1) and report sizes + pos.
     if (multi_slot_capture_eligible) {
@@ -4344,7 +4344,7 @@ bool llama_context::capture_kv_state_blob(std::vector<uint8_t> &out, std::string
     }
     bool multi_slot_capture = false;
     if (multi_slot_capture_eligible) {
-        // Phase 5.3 (2026-05-12): try direct per-slot export FIRST. If
+        // try direct per-slot export FIRST. If
         // preferred_seq actually has KV data tagged to it (>16 bytes of
         // serializable state), export directly from there — no seq_cp merge
         // needed. Mac receiver v1.7+ routes via meta.source_slot_id.
@@ -4460,7 +4460,7 @@ bool llama_context::capture_kv_state_blob(std::vector<uint8_t> &out, std::string
         }
     }
 
-    // Phase 5.3 (2026-05-12): record the seq we actually exported FROM so
+    // record the seq we actually exported FROM so
     // meta.source_slot_id below can reflect reality rather than the requested
     // slot id (which differs when we fell back to legacy seq_cp(preferred→0)
     // because TB streaming-prefill wrote cells with seq_id=0 only).
@@ -4736,7 +4736,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
             if (ram.v_bytes > 0 && !is_mla && ram.v_ram) {
                 cache->set_v_data_all(il, ram.v_ram, cpu_buf_handle);
             }
-            // Phase 3.5-lite (iter 29): redirect k_idx (DSA indexer cache) to its own
+            // lite (iter 29): redirect k_idx (DSA indexer cache) to its own
             // per-layer RAM too. Without this, state_write_data read all layers' k_idx
             // from the SHARED staging buffer (same address for every layer) → wrote
             // bit-identical k_idx bytes for all 78 layers → Mac-side sparse decode
@@ -4785,7 +4785,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
             return true;
         }
         if (cached_state_export) {
-            // KV-RAM guard vs a cached-state export (2026-09-10). The guard scans k_ram for all-zero
+            // KV-RAM guard vs a cached-state export . The guard scans k_ram for all-zero
             // rows, but this export ships prefill_kv_state_cache, not k_ram. After a disk-store
             // restore the restored span is zero in k_ram by design, so the guard refused every
             // "restored prefix + large new tail" turn (4225 restored + 3370 new -> HTTP 500 "Decode
@@ -4809,7 +4809,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
             return true;
         }
 
-        // Phase 5.3 (2026-05-12) CORRECTION: under kv_unified=true, the
+        // CORRECTION: under kv_unified=true, the
         // underlying KV cache uses n_stream=1 (one shared buffer with cells
         // tagged via seq bitsets). Cells are CONSECUTIVE, not strided. The
         // earlier strided-scan hypothesis was wrong — empirical KV_SEQ_SWEEP
@@ -4865,18 +4865,18 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
             }
 
             size_t zero_rows = 0;
-            // Phase 5.3 (2026-05-12): under strided scan we check only
+            // under strided scan we check only
             // 1/n_stream of rows, so the zero-row tolerance scales the same.
             const size_t scanned_rows = use_strided_scan
                 ? (rows_to_check + (size_t) n_stream - 1) / (size_t) n_stream
                 : rows_to_check;
             const size_t zero_row_limit = std::max<size_t>(4, scanned_rows / 128);
-            // Phase 255 (2026-05-03): collect ALL zero row indices before failing
+            // collect ALL zero row indices before failing
             // so we can see WHICH rows are missing K writes. The pattern reveals
             // whether it's tail-padding, ubatch-boundary, or scattered race.
             std::vector<size_t> zero_indices;
             zero_indices.reserve(64);
-            // Phase 5.3 (2026-05-12): under kv_unified multi-slot,
+            // under kv_unified multi-slot,
             // scan only THIS slot's strided positions (capture_seq_id,
             // capture_seq_id + n_stream, ...). Otherwise scan consecutively.
             const size_t scan_start = use_strided_scan ? (size_t) capture_seq_id : 0;
@@ -4897,7 +4897,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                     }
                 }
             }
-            // [KV_ROW_GEOMETRY 2026-08-26] Distinguish "kv_ram lacks the prior-chunk rows"
+            // KV_ROW_GEOMETRY Distinguish "kv_ram lacks the prior-chunk rows"
             // from "kv_ram holds them at indices the guard does not scan". The guard reports
             // zeros as a TAIL, which is only consistent with each chunk writing from row 0 --
             // yet the July rehydrate proves prior-chunk cells survive for attention. Both
@@ -4927,7 +4927,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                         nz_count, ram.k_bytes, row_bytes);
                 fflush(stderr);
             }
-            // [KV_PREFIX_HASH 2026-08-26 v3] Hash CONTENT over fixed absolute row windows, for K,
+            // KV_PREFIX_HASH   v3 Hash CONTENT over fixed absolute row windows, for K,
             // V **and the sparse indexer K (k_idx)**.
             //
             // v2 hashed K only, and K came back BIT-IDENTICAL across all four turns of a run whose
@@ -4983,7 +4983,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                                 h *= 1099511628211ULL;            // FNV-1a prime
                             }
                         }
-                        // [KV_WIN_STATS 2026-08-26] A hash cannot tell ROUNDING from CORRUPTION --
+                        // KV_WIN_STATS A hash cannot tell ROUNDING from CORRUPTION --
                         // it fails on both. The delta pass batches ~13k tokens where a cold prefill
                         // batches ~39k, and different batch shapes can select different kernels and
                         // reduction orders, so identical mathematics can differ in the last mantissa
@@ -5017,7 +5017,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                 fflush(stderr);
             }
 
-            // [KV_GUARD_ZEROS 2026-08-25] Report the count even when it PASSES.
+            // KV_GUARD_ZEROS Report the count even when it PASSES.
             // The limit is scanned_rows/128, so up to 0.78% of exported K rows may be
             // ENTIRELY ZERO and still ship. Zeroed rows are not neutral -- they are
             // attended as if real -- and the tolerance SCALES with context (~102 rows
@@ -5135,7 +5135,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
         // the v_trans word capture_kv_state_blob would have written (it flips MLA caches to v_trans)
         const uint32_t v_trans_word = is_mla ? (mla_match_layout ? (prefill_kv_layout_flash_attn ? 0u : 1u) : 1u)
                                              : (cache->get_v_trans() ? 1u : 0u);
-        // Delta shipping (2026-09-10): ask the decoder how many leading tokens of this sequence it
+        // Delta shipping ask the decoder how many leading tokens of this sequence it
         // holds resident, and ship only the rows behind them. LLAMA_KV_DELTA_SHIP=0 turns it off.
         uint32_t base_prefix = 0;
         {
@@ -5218,7 +5218,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
         // (tensor pointers may have been invalidated since then)
         state = std::move(prefill_kv_state_cache);
         capture_ok = true;
-        // PERF (2026-07-18): diagnostic-only full-blob cksum (485MB serial loop) gated behind LLAMA_PREFILL_DEBUG
+        // PERF diagnostic-only full-blob cksum (485MB serial loop) gated behind LLAMA_PREFILL_DEBUG
         // to keep it off the handoff hot path (see the fresh-capture branch above).
         const char * dbg_cksum = std::getenv("LLAMA_PREFILL_DEBUG");
         if (dbg_cksum && dbg_cksum[0] && dbg_cksum[0] != '0') {
@@ -5251,7 +5251,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
         }
         capture_ok = capture_kv_state_blob(state, err);
         if (capture_ok) {
-            // PERF (2026-07-18): the full-blob cksum below is a ~485MB serial byte loop used ONLY for this
+            // PERF the full-blob cksum below is a ~485MB serial byte loop used ONLY for this
             // diagnostic line. It added ~0.5s of dead time to EVERY streaming->Mac handoff BEFORE the first
             // chunk sends (measured: 1.37s compute-done->first-chunk gap). Gate it behind LLAMA_PREFILL_DEBUG so
             // the hot path skips it; artifact integrity is still covered by the real payload_crc32 in the summary.
@@ -5292,7 +5292,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                     cache->set_v_data_all(il, kv_staging_base + kv_max_k_bytes, kv_staging_buf);
                 }
             }
-            // [KIDX_RESTORE 2026-07-03] ROOT-CAUSE FIX for the DSA sparse REQUEST-2
+            // KIDX_RESTORE ROOT-CAUSE FIX for the DSA sparse REQUEST-2
             // CRASH (use-after-free): the redirect above also re-pointed the indexer-K
             // cache tensors (set_k_idx_data_all -> cpu_buf_handle) but this restore
             // block never restored them, so after ggml_backend_buffer_free(cpu_buf_handle)
@@ -5363,7 +5363,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
 
     llama_kv_artifact_metadata meta;
     const bool has_prompt_payload = !prefill_handoff_prompt_tokens.empty() || !prefill_handoff_prompt_text.empty();
-    // Phase 5.3 (2026-05-12): bump to v1.7 when multi-slot is active so the
+    // bump to v1.7 when multi-slot is active so the
     // KV artifact carries the source slot id. Older clients that don't know
     // about v1.7 still parse the prior fields safely; new clients can use
     // source_slot_id to route concurrent slots to distinct decode sessions.
@@ -5383,7 +5383,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
                         ? 3
                         : (prefill_tail_tokens.empty() ? 1 : 2)))));  // v1.2 legacy tail tokens, v1.3 sampling, v1.4 decode cap, v1.5 prompt payload, v1.6 cache-hit, v1.7 slot-id
     if (is_multi_slot) {
-        // Phase 5.3 (2026-05-12): report the requested slot id, NOT the
+        // report the requested slot id, NOT the
         // exported seq. The streaming-prefill TB path under kv_unified
         // produces a STRIPED cell layout that is incompatible with Mac's
         // non-unified import — routing to dest=0 would import gibberish.
@@ -5515,7 +5515,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
     // the receiver runs mlx_vlm generate() on them locally (sidesteps the RTX F16-VKQ entirely).
     // prompt_text/tokens carry the question (used by generate + the wait-loop match). Needs
     // format_minor>=8 so the image header's reserved field carries the raw-image byte count;
-    // the serializer auto-sets FLAG_RAW_IMAGE from the non-empty payload.raw_image. (USER 2026-06-01.)
+    // the serializer auto-sets FLAG_RAW_IMAGE from the non-empty payload.raw_image. (USER .)
     if (ship_raw_image && has_prompt_payload) {
         meta.format_minor = std::max<uint16_t>(meta.format_minor, (uint16_t) 8);
         prompt_payload.raw_image = std::move(ship_raw_image_data);
@@ -5588,7 +5588,7 @@ bool llama_context::export_kv_artifact(std::string *out_path, llama_kv_artifact_
     }
 
     // -----------------------------------------------------------------------
-    // PERSISTENT KV STORE — write hook (Engine A / Phase A1).
+    // PERSISTENT KV STORE — write hook (Engine A / 1).
     // Cache the verbatim artifact bytes (header + canonical tokens + KV payload)
     // keyed by a content fingerprint so a future PROCESS (post-server-rebuild or
     // Mac-restart) can restore this prefix from disk and skip the re-stream.
@@ -6072,7 +6072,7 @@ bool llama_context::maybe_apply_decode_handoff() {
     // `--prefill-only` standalone, no Mac decode receiver), there is no valid place to run the decode — a
     // local executor / begin_session dereferences the freed weights and SEGFAULTs. There is nothing to hand
     // off in that case, so treat the handoff as complete (no-op) and return cleanly.
-    // (STEP37_STREAMING_PREFILL_2026-06-14.md: the no-Mac standalone prefill-only crash.)
+    // Standalone prefill without a Mac must not evaluate sentinel weights.
     if (model.hparams.wf_active && !decode_handoff_plan.use_transport) {
         LLAMA_LOG_INFO("%s: wf_active + no transport (sentinel weights, no decode target) — handoff is a "
                        "no-op; nothing to decode locally\n", __func__);
@@ -6145,7 +6145,7 @@ bool llama_context::maybe_apply_decode_handoff() {
         decode_handoff_plan.use_transport ||
         prefill_transport_mode != LLAMA_PREFILL_TRANSPORT_MODE_DISABLED;
 
-    // FIX (2026-07-18): export_kv_artifact() ends by calling clear_prefill_handoff_prompt() which resets
+    // FIX export_kv_artifact() ends by calling clear_prefill_handoff_prompt() which resets
     // prefill_handoff_streamed_prefix_count to 0. The DSV4 route-reuse retain block below (retain_remote_dsv4_kv)
     // reads that count AFTER the export, so it always saw 0 -> retain skipped -> migrate never ran -> turn-2 could
     // not reuse (cache_n=0, full re-prefill). Capture the streamed-prefix count HERE, before the export clears it.
@@ -6208,7 +6208,7 @@ bool llama_context::maybe_apply_decode_handoff() {
                 // empty (only happens on serializer failure, which would
                 // already have aborted the export).
                 bool publish_ok = false;
-                // Phase 280 (2026-05-04): retry publish up to N times on
+                // retry publish up to N times on
                 // transient transport failure (network glitch, Mac receiver
                 // momentarily unavailable). N controlled by env
                 // LLAMA_PREFILL_PUBLISH_RETRIES (default 3). Backoff 100ms.
@@ -6490,11 +6490,11 @@ bool llama_context::maybe_apply_decode_handoff() {
     // retries needs a different mechanism (e.g. tagged blob with prefix-
     // match validation) — not raw kv_ram persistence.
     //
-    // Phase 1.0 (2026-05-11): codex v2 traced the Phase 0.4 5x regress
+    // codex v2 traced the 5x regress
     // failure to clear_kv_ram_state() leaving kv_staging_buf live + cache
     // tensors dangling. Naively freeing staging crashed sched_reserve on
     // the next request. As an experimental alternative, allow opting out
-    // of the clear via env so Phase 0.4 can A/B "skip-clear" against the
+    // of the clear via env so can A/B "skip-clear" against the
     // current "clear + leak staging" baseline. Default OFF preserves the
     // original behaviour and the original comment's contamination guard.
     {
@@ -6555,7 +6555,7 @@ bool llama_context::ensure_dense_resident_for_decode() {
     if (budget_bytes == 0 || dense_resident_failed) {
         return false;
     }
-    // [F3 2026-08-27] The dense-resident working set (L1, ~5.7 GB VRAM) was gated to DEEPSEEK4 alongside the
+    // F3 The dense-resident working set (L1, ~5.7 GB VRAM) was gated to DEEPSEEK4 alongside the
     // expert slab. Separate env var from the slab ON PURPOSE: they are two independent optimisations
     // and giving them one switch would make an A/B change two things at once, which this program has
     // been burned by before. Requires LLAMA_WF_DECODE_RESIDENT_MB to be set as well, as before.
@@ -6796,9 +6796,9 @@ bool llama_context::ensure_expert_slab_for_decode() {
     if (!enabled || expert_slab_failed) {
         return false;
     }
-    // [F3 2026-08-27] The rotating expert VRAM slab -- what makes stream_local decode fetch ONLY the routed
+    // F3 The rotating expert VRAM slab -- what makes stream_local decode fetch ONLY the routed
     // experts rather than streaming every expert of every layer -- was gated to DEEPSEEK4, so GLM-5.2
-    // stream_local runs the FETCH_ALL path. Measured on this box 2026-08-27: >15 MINUTES for a
+    // stream_local runs the FETCH_ALL path. Measured on this box >15 MINUTES for a
     // 16-token reply (>56 s/token), against 28 tok/s for the SAME model on RTX-prefill/Mac-decode.
     // dsv4_expert_slab_loc_from_geometry() is GENERIC arithmetic (tensor_offset + expert*stride) and
     // VALIDATES the layout first -- a mismatched arch DECLINES rather than fetching wrong bytes.
@@ -7011,7 +7011,7 @@ void llama_context::expert_slab_fetch_layer(int il, ggml_tensor * topk) {
     }
     // The streaming sched runs with eval_skip_sync=true — the topk node's compute may still
     // be IN FLIGHT when the callback fires. Drain before reading the ids (reading early gave
-    // garbage ids -> wrong experts -> incoherent output, verified 2026-07-20). Raw sched sync
+    // garbage ids -> wrong experts -> incoherent output, verified ). Raw sched sync
     // (NOT llama_context::synchronize(), which mutates perf stats 43x/token).
     ggml_backend_sched_synchronize(sched.get());
     const int n_ids = (int) n_ids64;
@@ -7193,7 +7193,7 @@ size_t llama_context::reupload_kv_ram_to_gpu() {
         return 0;
     }
     size_t uploaded = 0;
-    // 2026-07-21 STALE-ROW RESURRECTION FIX (doc 6.16h/6.16i): the pass's D2H download mirrors
+    // STALE-ROW RESURRECTION FIX (doc 6.16h/6.16i): the pass's D2H download mirrors
     // the FULL layer tensor, capturing PHYSICALLY-present rows of PREVIOUS requests (logically
     // cleared by seq_rm but never zeroed). Re-uploading the full mirror resurrected those rows
     // as live-looking cells (observed: 9 stale request-1 rows after request 2's 167-token
@@ -7698,7 +7698,7 @@ int llama_context::decode_streaming(const llama_batch & batch_inp, int n_layer_b
     }
 
     // A split streaming pass runs the PREFIX through decode_layer_major(); the
-    // ragged tail does NOT reach that executor. MEASURED 2026-08-28 with an
+    // ragged tail does NOT reach that executor. with an
     // unconditional marker at decode_layer_major() entry: a 267-token request
     // logs exactly ONE entry, with n_tokens=256, so the 11-token tail runs
     // elsewhere. Consequence for debugging: every diagnostic hooked into
@@ -7764,7 +7764,7 @@ int llama_context::decode_streaming(const llama_batch & batch_inp, int n_layer_b
                            denom > 0.0f ? 100.0f * (1.0f - total_stall / denom) : 0.0f);
         }
 
-        // Phase 1.3 (2026-05-11): on-demand CUDA per-op profile dump.
+        // on-demand CUDA per-op profile dump.
         // Server's atexit-registered cuda_op_profile_dump doesn't fire reliably
         // on Windows force-kill. With LLAMA_CUDA_OP_PROFILE_DUMP_EACH=1 we dump
         // after every prefill so the next session can identify the dominant
@@ -7839,11 +7839,11 @@ int llama_context::decode_streaming(const llama_batch & batch_inp, int n_layer_b
     // decode (executor=local_cpu, transport off), handoff doesn't actually
     // happen at sampling time, so we still need output_ids populated.
     if (result.used_streaming) {
-        // Phase 310 (2026-05-04): output_ids manipulation REMOVED.
+        // output_ids manipulation REMOVED.
         // decode_layer_major already calls output_reserve(n_outputs_all) at
         // line 5453 and populates output_ids[out_ids[i]] = i at line 10516
-        // for every position where batch.logits[i]=true. Phase 284's
-        // defensive overwrite was redundant AND caused Phase 293's crash
+        // for every position where batch.logits[i]=true. 's
+        // defensive overwrite was redundant AND caused 's crash
         // by clobbering decode_layer_major's correct work with an
         // incorrectly-sized single-output mode.
         LLAMA_LOG_DEBUG("streaming-prefill: trusting decode_layer_major output_ids "
@@ -8516,7 +8516,7 @@ ggml_status llama_context::graph_compute_per_layer(ggml_cgraph *     gf,
                  strncmp(name, "lid_state_kv-", 13) == 0 ||
                  strncmp(name, "lid_state_score_ape-", 20) == 0 ||
                  strncmp(name, "lid_state_compress_rot-", 23) == 0 ||
-                 // bug#2 (2026-07-18): the CSA/CONSUMPTION compression chain (what attention actually reads
+                 // bug#2 the CSA/CONSUMPTION compression chain (what attention actually reads
                  // for pooled rows) - round-11 pinned it (deepseek-v4.cpp:867-871) but the writer was never
                  // extended to dump it, so it was never numerically verified vs MLX (only the LID chain was).
                  strncmp(name, "csa_state_kv-", 13) == 0 ||
@@ -8641,7 +8641,7 @@ ggml_status llama_context::graph_compute_per_layer(ggml_cgraph *     gf,
 
             // Disabled — cudaDeviceSynchronize now in post_layer_cb fixes the race.
             bool observe_debug = false;
-            // FA_NODE_DUMP (2026-05-30): request the ask=false callback for the __fattn__-0/1 node so we
+            // FA_NODE_DUMP request the ask=false callback for the __fattn__-0/1 node so we
             // can read its output RIGHT AFTER it computes (fast/C1 path reference for the loop-path FA bug).
             bool observe_fa = false;
             {
@@ -8658,7 +8658,7 @@ ggml_status llama_context::graph_compute_per_layer(ggml_cgraph *     gf,
             return observe_boundary || observe_user || observe_debug || observe_fa;
         }
 
-        // FA_NODE_DUMP (2026-05-30): read the __fattn__-0/1 output cksum RIGHT AFTER it computes
+        // FA_NODE_DUMP read the __fattn__-0/1 output cksum RIGHT AFTER it computes
         // (fast/C1 path; ask=false). Pairs with the loop-path read in compute_node_range — diff the
         // two for L0/L1 u0 to localize whether compute_node_range mis-executes the FA.
         {
@@ -8769,7 +8769,7 @@ ggml_status llama_context::graph_compute_per_layer(ggml_cgraph *     gf,
     return GGML_STATUS_SUCCESS;
 }
 
-// [DSA_NODE_SYNC 2026-07-02] env-gated per-node localization for the sched-based staging path.
+// DSA_NODE_SYNC env-gated per-node localization for the sched-based staging path.
 // Computes [start,end) one node at a time via the scheduler, syncing after each. The sync aborts
 // on the faulting node's CUDA error, so the LAST logged node is the culprit. Diagnostic only.
 static enum ggml_status dsa_sched_compute_node_by_node(ggml_backend_sched_t sched, ggml_cgraph * gf,
@@ -8856,7 +8856,7 @@ ggml_status llama_context::compute_node_range(ggml_cgraph * gf, int node_start, 
         /*.order            =*/ gf->order,
     };
 
-    // [DSA_NODE_SYNC 2026-07-02] env-gated: compute the range ONE NODE AT A TIME with a
+    // DSA_NODE_SYNC env-gated: compute the range ONE NODE AT A TIME with a
     // synchronize after each, so the first faulting node is named in the log. Diagnostic only
     // (huge overhead); off by default. Localizes the DSA-on multi-ubatch illegal-access.
     static const bool node_sync = []() {
@@ -9287,7 +9287,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     // Loop order: for each layer L: for each ubatch U: compute(L, U)
     // vs standard: for each ubatch U: for each layer L: compute(L, U)
 
-    // [DLM_ENTRY 2026-08-28] Settle how many layer-major passes a prompt actually runs.
+    // DLM_ENTRY Settle how many layer-major passes a prompt actually runs.
     //
     // Two readings of the same evidence have been load-bearing and they contradict each other:
     //   * llama-context.cpp:7149 says "A split streaming pass runs the prefix and ragged tail as
@@ -9856,7 +9856,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     // The mask, K cache view, and V cache view tensors all use n_kv for their
     // dimensions. Building with n_kv_max ensures the graph can handle any ubatch.
     // During the layer loop, FA's K/V ne[1] is patched down to per-ubatch n_kv.
-    // 2026-05-31: capture the chunk's build n_kv (depth) to gate PROTECT_REUSE to the deep zone
+    // capture the chunk's build n_kv (depth) to gate PROTECT_REUSE to the deep zone
     // only — the chunk5 free-reuse collision occurs at n_kv>=163840; protecting shallower multi-ub
     // prefills (100k, 8.5k) is unnecessary AND starves WF prefetch (5x slow). 0 => not the per-ubatch
     // streaming path => gate off.
@@ -10650,12 +10650,12 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         size_t pre_free = 0, pre_total = 0;
         wf_cuda_get_vram_info(&pre_free, &pre_total);
 
-        // 2026-05-31 GATED no-free-reuse: for the layer-major MLA multi-ubatch prefill, hold the
+        // GATED no-free-reuse: for the layer-major MLA multi-ubatch prefill, hold the
         // attention-critical slots out of gallocr's reuse pool so the frozen single-pass layout is
         // safe for the repeated per-ubatch slice (fixes chunk5 free-reassign collision; KV_DL_ZERO_SCAN
         // clean across 215k). Scoped to THIS alloc only — turned back off immediately so the decode
         // graph alloc is unprotected (else the single-token decode buffer inflates -> long-ctx OOM).
-        // 2026-05-31 DISABLED auto-engage: direct C5 measurement REFUTED PROTECT_REUSE — at chunk4
+        // DISABLED auto-engage: direct C5 measurement REFUTED PROTECT_REUSE — at chunk4
         // (n_kv≥163840) it produces attn_norm=+INF, resid=nan (CORRUPTS the layer input, same as the
         // refuted PIN; the collision is an OOB-write anti-reuse can't fix). It is HARMFUL, not just
         // ineffective, and the old n_kv>=150000 gate would engage for 160k's deep chunk too →
@@ -10663,7 +10663,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         // still works for testing (handled in ggml-alloc free_node). See §11 REFUTATION (0d791552).
         const bool protect_prefill_reuse = false;  // was: is_mla && n_ubatches>1 && dlm_chunk_n_kv>=150000
         if (protect_prefill_reuse) ggml_gallocr_set_protect_reuse(1);
-        // [2026-07-28 M3 wf=1 CODE-DEFAULT no-free-reuse] The M3 wf=1 layer-major garble
+        // The M3 wf=1 layer-major garble
         // (L1 upper-half NaN; gallocr free-then-reassign collision) is only reliably fixed
         // by full no-free-reuse for THIS graph's plan: the targeted Q-pin was GPU-refuted
         // today (pinning one tensor relocates the collision; testII nan=1572864 u=0..6).
@@ -10681,7 +10681,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         }();
         const bool m3_wf1_no_free_reuse = m3_wf1_no_free_reuse_gate &&
                 model.arch == LLM_ARCH_MINIMAX_M3 && wf_bufs_env == 1;
-        // ALLOC-BISECT 2026-08-28 (LLAMA_GALLOC_NO_FREE_REUSE=1, default OFF, ANY arch).
+        // ALLOC-BISECT (LLAMA_GALLOC_NO_FREE_REUSE=1, default OFF, ANY arch).
         // Measured: adding the three COMP_DUMP ggml_set_output() nodes at ONE layer flips DSV4
         // needle recall from MISS ('vault_west_42') to RECALL ('SLATE-QUARRY-8817') on an
         // otherwise identical config -- so the residual failure is sensitive to the gallocr
@@ -10845,7 +10845,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         }
     }
 
-    // 2026-05-31 (parallel-agent LEADING hypothesis): locate each layer's
+    // (parallel-agent LEADING hypothesis): locate each layer's
     // kv_k_store-il SET_ROWS node. If it is ordered AFTER l_out-il (node idx >
     // l_out_idx[il]), the layer range [first_idx, l_out_idx+1) EXCLUDES it, so the
     // K-cache write is never dispatched → staging stays zero for that chunk's rows.
@@ -11507,7 +11507,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         fflush(stderr);
     };
 
-    // FA I/O probe (2026-05-30): dump the FA node's OUTPUT + Q/K/V/mask src cksums for layer il, u.
+    // FA I/O probe dump the FA node's OUTPUT + Q/K/V/mask src cksums for layer il, u.
     // Callable from BOTH the loop path (compute_node_range) AND C1 (graph_compute_per_layer, fast_post_cb)
     // so we can diff the FA's inputs+output for the SAME ubatch under both execution wrappers. If inputs
     // match but output differs => compute_node_range mis-executes the FA (the residual loop-path bug).
@@ -11722,7 +11722,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 v_host_src = (kv_ram[il].v_bytes > 0) ? slot + kv_max_k_bytes : nullptr;
                 k_idx_host_src = (kv_ram[il].k_idx_bytes > 0) ? slot + kv_max_k_bytes + kv_max_v_bytes : nullptr;
             }
-            // 2026-05-31 narrow-upload (env LLAMA_KV_UPLOAD_NARROW, default off): the shared
+            // narrow-upload (env LLAMA_KV_UPLOAD_NARROW, default off): the shared
             // staging is never re-cleared between chunks, so it already holds the prior
             // chunks' K in [0,pos_base). Uploading the FULL kv_ram (which has ZEROS in
             // [pos_base,+)) zero-fills exactly this chunk's new region and races the
@@ -11962,7 +11962,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             if (!k_src) k_src = kv_staging_base;
 
 #ifdef GGML_USE_CUDA
-            // CONTINUATION PROBE (2026-09-10): on a pass that starts after a retained prefix, the
+            // CONTINUATION PROBE on a pass that starts after a retained prefix, the
             // staging buffer held no K for any new position at download time on every layer, while
             // the ubatch positions were right. Count zero rows in this pass's window in BOTH the
             // buffer the download reads and the layer's original per-layer GPU K, so the question
@@ -12066,8 +12066,8 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 cudaEventRecord(compute_evt, (cudaStream_t)cuda_stream);
                 cudaStreamWaitEvent((cudaStream_t)kv_copy_stream_ptr, compute_evt, 0);
                 cudaEventDestroy(compute_evt); ggml_cuda_event_destroy_count_inc();
-                // Phase 22 probe: dump first 16 bytes of GPU staging k_src for layers 6,7
-                // Phase 93 extension: also fire for layers 0-5 with LLAMA_KV_DOWNLOAD_PROBE_LO=1.
+                // probe: dump first 16 bytes of GPU staging k_src for layers 6,7
+                // extension: also fire for layers 0-5 with LLAMA_KV_DOWNLOAD_PROBE_LO=1.
                 {
                     static const char * kvdl_probe_env = std::getenv("LLAMA_KV_DOWNLOAD_PROBE");
                     static const bool kvdl_probe = kvdl_probe_env && kvdl_probe_env[0] != '\0' && kvdl_probe_env[0] != '0';
@@ -12091,7 +12091,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         fflush(stderr);
                     }
                 }
-                // 2026-05-31 localizer (default-off, env LLAMA_KVDL_C5GPU): for layer 1,
+                // localizer (default-off, env LLAMA_KVDL_C5GPU): for layer 1,
                 // probe the GPU STAGING (k_src) at the chunk5 row range [163840,204800)
                 // BEFORE the main D2H. If the staging is already zero there, the clobber
                 // is upstream (upload didn't refill it OR compute stomped it); if the
@@ -12120,7 +12120,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                             }
                             fprintf(stderr, "*** KVDL_C5GPU: il=1 staging chunk5[163840,204800) probed=%d zero=%zu first_zero_row=%lld rb=%zu rc=%lld\n",
                                     probed, zrows, (long long) fz, rb_c5, (long long) rc_c5);
-                            // 2026-05-31 dst-identity + full-staging map: where does chunk5's SET_ROWS
+                            // dst-identity + full-staging map: where does chunk5's SET_ROWS
                             // write land? Print the cache-k dst tensor ptr/extent vs staging base, and
                             // a coarse non-zero map across ALL rows (every 8192) to see if chunk5's K
                             // landed at some OTHER offset (alloc-reuse/wrong-view) vs nowhere.
@@ -12145,7 +12145,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         }
                     }
                 }
-                // 2026-05-31 narrow-download (env LLAMA_KVDL_NARROW, default off): only D2H the
+                // narrow-download (env LLAMA_KVDL_NARROW, default off): only D2H the
                 // rows THIS chunk newly wrote, [pos_base, pos_base+n_new), leaving prior chunks'
                 // rows in kv_ram untouched. Fixes the >=6-chunk export clobber (chunk6 stops
                 // overwriting chunk5's kv_ram region regardless of the staging/D2H mechanism) AND
@@ -12253,7 +12253,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     if (!no_barrier) {
                         if (hard_sync) {
                             // Full host-blocking sync of the copy stream.
-                            // Diagnostic mode for the Phase 145 zero-row bug:
+                            // Diagnostic mode for the zero-row bug:
                             // if event-based barrier isn't enough, this
                             // forces D2H to fully complete before returning,
                             // serializing layers entirely.
@@ -12277,7 +12277,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         return env && env[0] != '\0' && env[0] != '0';
                     }();
                     // The host-side cudaStreamSynchronize is the actual fix for
-                    // the Phase 147 async-D2H race; the scan is just diagnostic.
+                    // the async-D2H race; the scan is just diagnostic.
                     // Default behaviour (ZERO_SCAN=1) syncs only on layers 0–3
                     // and last, which is sufficient when all ubatches have the
                     // same n_tokens (the scheduler issues SET_ROWS in order
@@ -12299,7 +12299,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         const int64_t row_count_64 = k_tensor ? k_tensor->ne[1] : 0;
                         if (row_count_64 > 0) {
                             const size_t row_bytes = nbytes / (size_t) row_count_64;
-                            // 2026-05-31 FIX: scan THIS chunk's written region [pos_base, pos_base+n_new),
+                            // FIX: scan THIS chunk's written region [pos_base, pos_base+n_new),
                             // not rows [0,n_tokens) from the kv_ram BASE. The old code scanned the base
                             // (always chunk0, nonzero) so deep-chunk zeros were NEVER caught — false
                             // "clean". pos_base from seq_pos_max (same as the narrow-download block).
@@ -12327,7 +12327,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         }
                     }
                 }
-                // Phase 22 probe: dump first 16 bytes of host-side k_host_dst (after D2H sync) for layers 6,7
+                // probe: dump first 16 bytes of host-side k_host_dst (after D2H sync) for layers 6,7
                 {
                     static const char * kvdl_probe_env2 = std::getenv("LLAMA_KV_DOWNLOAD_PROBE");
                     static const bool kvdl_probe2 = kvdl_probe_env2 && kvdl_probe_env2[0] != '\0' && kvdl_probe_env2[0] != '0';
@@ -12535,7 +12535,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
 
     const char * no_fast_env = std::getenv("LLAMA_NO_FAST_PATH");
     const bool allow_fast = !(no_fast_env && no_fast_env[0] == '1');
-    // bug#4 FIX (2026-07-18): the single-ubatch fast path (graph_compute_per_layer, single scheduler pass,
+    // bug#4 FIX the single-ubatch fast path (graph_compute_per_layer, single scheduler pass,
     // skips hidden staging) leaves the WF/weight state such that a following stream_local RESIDENT decode
     // reads NaN weights — the resident decode's fresh query is 100% NaN => degenerate '<<<<' output. The
     // multi-ubatch compute_node_range path does NOT have this defect (proven: same 768-tok prefix split into
@@ -12543,7 +12543,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     // path's own comment (below) already warned it is unsafe under KV-RAM. So when a resident decode will
     // follow (stream_local + keep_mmap), route the single-ubatch prefill through the proven multi-ubatch-style
     // path. These prompts are short (< 1 ubatch), so the ~1300->~500 t/s cost is negligible vs correctness.
-    // TASK-A ROOT CAUSE (2026-07-20, keep_mmap=0 '<DDDD'): the same fast-path NaN poisoning fires
+    // TASK-A ROOT CAUSE (keep_mmap=0 '<DDDD'): the same fast-path NaN poisoning fires
     // in the keep_mmap=0 + L1 (LLAMA_WF_DECODE_RESIDENT_MB) config — the streamed pass's OWN
     // per-layer KV commits are NaN for il>=1 while il=0 is valid (AUX_DUMP probe: raw_k il=0
     // norm=191/167 rows/nan=0; il>=1 all-NaN in exactly the written extent; csa/hca/lid caches +
@@ -13149,7 +13149,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     // FULL-slot save complete as well.  =0 retains the implicit graph-CONT
     // write as the deterministic negative A/B.
     const bool glm_dsa_topk_write_coverage_enabled = []() {
-        // REFUTED 2026-07-29: the consumer-stream re-materialize-complete-CONT
+        // REFUTED the consumer-stream re-materialize-complete-CONT
         // approach achieves census COMPLETE (unwritten=0) but regresses 10k+22k
         // to "!!!!" degenerate (races the gather / copies a wrong source extent).
         // Default OFF (opt-in escape hatch). Correct fix = mask/bound the gather
@@ -14947,7 +14947,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         }
     };
 
-    // [TAG_MTP_SHIP_HIDDEN_2026_06_24] Phase A: capture the LAST-LAYER per-token hidden states for the streamed prefix
+    // [TAG_MTP_SHIP_HIDDEN_2026_06_24] capture the LAST-LAYER per-token hidden states for the streamed prefix
     // so the Mac MTP sidecar can warm over a KV-inject session. Env-gated OFF (zero cost/behavior change by default).
     // Indexed by absolute token position (ubatch.pos[0]); fp32 l_out -> fp16. Serialize + receiver wiring follow.
     static const bool ship_mtp_hidden = []() {
@@ -15004,7 +15004,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             return;
         }
 
-        // [DIAG_DUMP_LAYER_LIST 2026-06-25] accept a comma-separated layer list (e.g.
+        // DIAG_DUMP_LAYER_LIST accept a comma-separated layer list (e.g.
         // "10,20,30,40,50") so one prefill run can bisect the first-NaN layer in the
         // DSA-on multi-ubatch path; a single int still dumps {N, N-1} as before. Zero
         // cost when LLAMA_DUMP_LAYER unset.
@@ -15131,7 +15131,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         size_t restore_sizes[PCS_MAX_RESTORES] = { 0, 0 };
         int restore_ref_count = 0;
         int restore_count = 0;
-        // 2026-05-30 MULTI-UB COHERENCE FIX (default-on for MLA multi-ubatch):
+        // MULTI-UB COHERENCE FIX (default-on for MLA multi-ubatch):
         // The broad restore scan below (matching every node-src of l_out shape) D2D-copies the
         // saved hidden into intermediate tensors whose ggml-alloc buffer is REUSED by another live
         // tensor during compute => l_out collapses to ~1/7 magnitude beyond ~offset 1170 within each
@@ -15243,7 +15243,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         ggml_backend_cuda_memcpy_d2d_async(
                             restore_dsts[i], hidden_ptr, restore_sizes[i], cuda_stream);
                     }
-                    // 2026-05-31 C5_HIDIN (env): right after the D2D restore, read the attn_norm
+                    // C5_HIDIN (env): right after the D2D restore, read the attn_norm
                     // INPUT (restore_dsts[0]=A, what Q/K/V read) vs the residual CARRY
                     // (restore_dsts[1]=B, known-healthy 0.074). hidden_load only runs for il>0, so
                     // il<=2 captures layers 1,2 once/chunk at u==0; the 5th il=1 line = chunk5.
@@ -15349,12 +15349,12 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         const char * env = std::getenv("LLAMA_PREFILL_FORCE_SAFE_MLA_MULTIUBATCH");
         return env && env[0] != '\0' && env[0] != '0';
     }();
-    // [M3-GQA EXTENSION 2026-06-24] The ENV override now applies to ANY arch (incl MiniMax-M3 GQA), not just
+    // M3-GQA EXTENSION The ENV override now applies to ANY arch (incl MiniMax-M3 GQA), not just
     // MLA: the same multi-ubatch input-staging K-position corruption that hit GLM-5.2 MLA (needle MARIGOLD->
     // MARMOT) also corrupts M3 GQA streaming-prefill (RTX->Mac needle garble), and is_mla()-gating left M3
     // with NO safe path. The conservative path just disables GPU input pre-staging, which is arch-agnostic.
     // The MLA-only AUTO-enable (imbalanced FA split heuristic) is left unchanged (MLA-specific).
-    // [PERF PROBE 2026-07-11] opt-out: the conservative path disables GPU input pre-staging, so every
+    // PERF PROBE opt-out: the conservative path disables GPU input pre-staging, so every
     // layer x ubatch re-builds + re-uploads inputs — profiled as the prime suspect for DSV4's 6.4s/layer
     // (19.2 tok/s) streaming prefill. Setting LLAMA_PREFILL_SAFE_MLA_MULTIUBATCH_OFF=1 lifts the forcing to
     // QUANTIFY that cost. WARNING: the forcing exists because input staging corrupts K positions on MLA
@@ -15650,7 +15650,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 }
             }
 
-            // Fix view buffers: inherit from view_src. [2026-07-06 DSA staging fix] Walk the view_src CHAIN to
+            // Fix view buffers: inherit from view_src. Walk the view_src CHAIN to
             // the buffered ROOT, not just one level. A DSA-on multi-ubatch sparse-subgraph leaf can be a chained
             // view whose IMMEDIATE view_src also has a NULL buffer (allocation ordering), which the old one-level
             // repair missed — leaving buffer==NULL so ggml_backend_buffer_get_type (ggml-backend.cpp:198) asserts
@@ -15672,7 +15672,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             for (int ni = 0; ni < layer_gf->n_leafs; ni++) {
                 repair_buffer_from_root(layer_gf->leafs[ni]);
             }
-            // [DSA STAGING DIAG 2026-07-06] Any leaf STILL NULL-buffer after the chain repair is the crash
+            // DSA STAGING DIAG Any leaf STILL NULL-buffer after the chain repair is the crash
             // culprit — pinpoint it (name/op) under LLAMA_DIAG_DSA_STAGING so the repro shows the exact sparse
             // tensor to give a real buffer, if the chain-follow above doesn't already cover it.
             if (std::getenv("LLAMA_DIAG_DSA_STAGING")) {
@@ -15688,8 +15688,8 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             }
 
             // Alloc directly (skip reserve — it allocates full-model buffers)
-            // 2026-05-31 same gated no-free-reuse as the main prefill alloc (sublayer-major path).
-            const bool protect_layer_reuse = false;  // 2026-05-31 DISABLED — PROTECT_REUSE refuted+harmful (see main alloc site)
+            // same gated no-free-reuse as the main prefill alloc (sublayer-major path).
+            const bool protect_layer_reuse = false;  // DISABLED — PROTECT_REUSE refuted+harmful (see main alloc site)
             if (protect_layer_reuse) ggml_gallocr_set_protect_reuse(1);
             const bool layer_alloc_ok = ggml_backend_sched_alloc_graph(sched.get(), layer_gf);
             if (protect_layer_reuse) ggml_gallocr_set_protect_reuse(0);
@@ -15968,7 +15968,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         ggml_cuda_dlm_remainder_profile_reset();
     }
     double total_compute_ms = 0, total_hidden_ms = 0, total_wf_ms = 0, total_staging_ms = 0;
-    double total_kvsync_ms = 0, total_postcb_ms = 0;  // [2026-07-06 perf overhead attribution]
+    double total_kvsync_ms = 0, total_postcb_ms = 0;  //
     const bool debug_fa_ktrace = []() {
         const char * env = std::getenv("LLAMA_FA_KTRACE");
         return env && env[0] != '\0' && env[0] != '0';
@@ -16151,14 +16151,14 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         fprintf(stderr, "*** NODE_SCAN armed for layer %d\n", dlm_node_nan_scan_il); fflush(stderr);
     }
     llama_prefill_progress_logf("decode_layer_major: layer 0/%d start (%d ubatches)\n", n_layer, n_ubatches);
-    // KVRAM_FP (2026-05-31): per-chunk fingerprint of kv_ram[1] over ALL accumulated rows, at chunk
+    // KVRAM_FP per-chunk fingerprint of kv_ram[1] over ALL accumulated rows, at chunk
     // ENTRY (post prior-chunk D2H sync@6980). Localizes the 6-chunk clobber: if chunk5's rows (e.g.
     // 163840-204799) are non-zero here at chunk6 entry but zero at export, the clobber is DURING chunk6.
     // Gated on LLAMA_KVRAM_FP — default off, zero cost. Reuses llama_debug_count_zero_rows.
     {
         static const bool kvram_fp = std::getenv("LLAMA_KVRAM_FP") != nullptr;
         if (kvram_fp && kv_mode == LLAMA_KV_RAM && kv_ram.size() > 1) {
-            // 2026-05-31 reframe: scan SEVERAL layers (not just 1) at chunk entry to
+            // reframe: scan SEVERAL layers (not just 1) at chunk entry to
             // determine whether the chunk5-rows-zero clobber is layer-1-specific or
             // general across layers. first-zero index tells which chunk's rows are
             // missing (e.g. 163840 == chunk5 @ b=40960).
@@ -17107,7 +17107,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         if (pcs_fa_v_tensor) {
                             pcs_fa_v_tensor->ne[1] = pcs_fa_nkv;
                         }
-                        // FA MASK-WIDTH FIX (2026-05-30, LLAMA_PREFILL_FA_MASK_FULLWIDTH, default ON):
+                        // FA MASK-WIDTH FIX (LLAMA_PREFILL_FA_MASK_FULLWIDTH, default ON):
                         // shrinking the FA mask ne[0] to the per-ubatch VISIBLE n_kv (pcs_fa_nkv) while the
                         // FA's K stays at the FULL build n_kv (the K shrink above is reverted by saved_k_ne1
                         // for non-final ubatches) leaves K cells [visible..full) UNMASKED => the FA attends
@@ -17139,7 +17139,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         const int mask_tokens = std::min<int>(pcs_fa_mask_n_tokens, (int) pcs_fa_m_tensor->ne[1]);
                         const int mask_visible = std::min<int>(pcs_fa_mask_n_kv_visible, mask_stride);
                         if (mask_stride > 0 && mask_tokens > 0 && mask_visible > 0) {
-                            // DSV4 needle investigation 2026-08-28: does the FA mask actually get
+                            // DSV4 needle investigation does the FA mask actually get
                             // patched with the SLIDING WINDOW, or only with plain causality?
                             // `iswa_direct_f16_mask` picks pcs_fill_iswa_mask_f16_host_pos (windowed,
                             // uses swa_n) over ggml_cuda_generate_causal_mask_f16 (causal ONLY, takes
@@ -17252,7 +17252,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             }, (void*)gpu_backend);
     }
 
-    // [2026-07-28 M3 KTRACE window] LLAMA_FA_KTRACE_MAXLAYER (default 1) extends the trace past L0/L1
+    // LLAMA_FA_KTRACE_MAXLAYER (default 1) extends the trace past L0/L1
     // to localize the FIRST layer whose compute diverges wf=1-vs-wf=2 for the M3 garbage.
     static const int ktrace_maxlayer = []() { const char * e = std::getenv("LLAMA_FA_KTRACE_MAXLAYER"); return (e && e[0]) ? atoi(e) : 1; }();
     auto debug_log_ktrace = [&](int il, int u, int node_start, int node_end, const llama_ubatch & ubatch) {
@@ -17815,7 +17815,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         for (size_t i = 0; i < std::min<size_t>(4, buf.size()); ++i) {
                             first[i] = buf[i];
                         }
-                        // DIAG (2026-05-29): dump per-node bytes for MAGNITUDE diff (cksum is bit-exact
+                        // DIAG dump per-node bytes for MAGNITUDE diff (cksum is bit-exact
                         // and confounded by single-vs-multi batch-tiling fp noise). Tag via env value
                         // (e.g. =single / =multi). Keyed by node index so the two runs align.
                         static const char * nd_dump = std::getenv("LLAMA_PREFILL_NODE_CKSUM_DUMP");
@@ -17961,7 +17961,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         mtp_capture_hidden(il, ubatch);   // [TAG_MTP_SHIP_HIDDEN] fires only at the last layer (env-gated)
 
         debug_dump_l_out(il, u, ubatch, "multi");
-        // 2026-05-31 C5_KCUR probe (default-off, env LLAMA_C5_KCUR): for chunk5 ubatches
+        // C5_KCUR probe (default-off, env LLAMA_C5_KCUR): for chunk5 ubatches
         // (pos0>=163840) at a few layers, print max-abs of Kcur (the K projection = SET_ROWS
         // src) and l_out (layer output). Splits the chunk5-write-miss: Kcur==0 → compute/
         // projection produced zero K (upstream); Kcur!=0 but staging zero → SET_ROWS doesn't land.
@@ -17969,7 +17969,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             static const bool c5kcur = []() { const char * e = std::getenv("LLAMA_C5_KCUR"); return e && e[0] && e[0] != '0'; }();
             const long long c5_pos0 = ubatch.pos ? (long long) ubatch.pos[0] : -1;
             if (c5kcur && c5_pos0 >= 163840 && u == 0 && (il == 0 || il == 1 || il == 2 || il == 30 || il == 60)) {
-                // 2026-05-31 enhanced: report REAL F32 max-abs (no 1.0 fallback ambiguity) +
+                // enhanced: report REAL F32 max-abs (no 1.0 fallback ambiguity) +
                 // raw first floats + data ptr, for kcur projection node, l_out, AND the
                 // residual carry (restored hidden). Distinguishes: residual zero => save/restore
                 // lost the hidden (upstream); residual nonzero + kcur zero => layer collapsed;
@@ -18000,14 +18000,14 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 stats(kcur_dump[il], &km, &kf0, &kf1);
                 stats(l_out[il],     &lm, &lf0, &lf1);
                 stats(residual_tensor[il], &rm, &rf0, &rf1);
-                // 2026-05-31 intermediates: localize WHERE the zero/nan enters layer1's compute
+                // intermediates: localize WHERE the zero/nan enters layer1's compute
                 // (input A is delivered healthy per C5_HIDIN). Vcur (V proj), attn_out (FA output),
                 // ffn_inp (input+attn_out residual). attn_out=nan => FA broke; Kcur=0&Vcur=0 =>
                 // attn_norm/QKV broke; ffn_inp=nan => residual/attn broke.
                 stats(vcur_dump[il],    &vm, &vf0, &vf1);
                 stats(attn_out_dump[il],&am, &af0, &af1);
                 stats(ffn_inp_dump[il], &fm, &ff0, &ff1);
-                // 2026-05-31 localize the bad buffer: attn_norm OUTPUT (shared QKV input) +
+                // localize the bad buffer: attn_norm OUTPUT (shared QKV input) +
                 // kv_cmpr_pe (wkv_a_mqa output, Kcur/Vcur source). attn_norm bad => norm-slot
                 // clobbered; attn_norm healthy + kv_cmpr_pe bad => wkv_a_mqa-slot clobbered.
                 float anm, anf0, anf1, cpm, cpf0, cpf1;
@@ -18803,7 +18803,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             sub_end_v[0] = layer_end[il];
         }
 
-        // ROOT-CAUSE PROBE (2026-05-30): multi-ub loop path populates only kv_ram[0]; L1-26 zero.
+        // ROOT-CAUSE PROBE multi-ub loop path populates only kv_ram[0]; L1-26 zero.
         // Map every SET_ROWS node to its layer compute-range to see if il>0's K-write is OUTSIDE
         // [layer_start[il],layer_end[il]) (=> compute_node_range skips it). Fire once at il==0.
         if (il == 0 && std::getenv("LLAMA_KV_SETROWS_PROBE")) {
@@ -19171,7 +19171,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     bool slm_fa_patched = false;
                     if (s == 0) {
                         auto * kv_ctx = get_attn_kv_ctx_for_layer(il);
-                        // Phase 2.2 angle 19 (2026-05-12): hoist FA_PTR_TRACE OUT of
+                        // angle 19 hoist FA_PTR_TRACE OUT of
                         // the nkv-patch gate. Production defaults disable the patch
                         // (LLAMA_FA_MLA_DISABLE_NKV_PATCH=1) so the prior in-gate
                         // location was dead code. Emit the trace at the outer s==0
@@ -19278,7 +19278,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     ggml_status status = GGML_STATUS_SUCCESS;
                     const int split_end = (s == 0) ? find_store_split(il, sub_start_v[s], sub_end_v[s]) : -1;
                     auto arm_fa_patch = [&]() {
-                        // DSV4 needle 2026-08-28: the mask-patch block inside this lambda never
+                        // DSV4 needle the mask-patch block inside this lambda never
                         // fires (ungated DSV4_FA_MASK marker, 0 firings over a full prefill), and
                         // the pre-existing CAUSAL_SKIP_HOST print is inside `if (fa_nodes[il].raw)`
                         // so its silence cannot distinguish "lambda not called" from
@@ -19532,7 +19532,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     auto t_hidden1 = std::chrono::high_resolution_clock::now();
                     total_hidden_ms += std::chrono::duration<double, std::milli>(t_hidden1 - t_compute1).count();
 
-                    // Phase 1.2 v9 (2026-05-11): env-gated ubatch-boundary drain
+                    // v9 env-gated ubatch-boundary drain
                     // for the sublayer-major MoE path. Codex investigation of the
                     // v8 patch (commit ab484632) showed that draining the whole
                     // scheduler at every (layer, ubatch boundary) = 60*7=420 calls
@@ -19591,7 +19591,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         // (Input staging setup moved before layer loop)
 
         // === K-WRITE-FIRST PRE-PASS (env LLAMA_PREFILL_KWRITE_FIRST=1) ===
-        // FIX for the multi-ubatch >2048 FA bug (2026-05-29): the core SM120 MLA FA
+        // FIX for the multi-ubatch >2048 FA bug the core SM120 MLA FA
         // kernel mishandles the (correct) causal mask when a ubatch's query count
         // >~2048 AND the KV cache still has UNFILLED cells (later ubatches not yet
         // written). Only non-last ubatches hit this; the last ubatch (and single-ub)
@@ -19669,7 +19669,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                             sub_start_v[0], fa_idx, /*node_by_node =*/ false);
                         // CRITICAL: drain before the next ubatch's set_inputs overwrites the
                         // SHARED k_idx/mask leaves. Without this, u's queued SET_ROWS reads
-                        // u+1's k_idx -> writes u's K to wrong cells (the Phase 256 race). The
+                        // u+1's k_idx -> writes u's K to wrong cells (the race). The
                         // main loop drains per-ubatch; the pre-pass must too, or it corrupts.
                         ggml_backend_sched_synchronize(sched.get());
                     }
@@ -19695,9 +19695,9 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             // DIAGNOSTIC: skip non-ub0 ubatches at L1+ to test if ub1's L0 processing
             // corrupts ub0's L1 compute vs ub1's L1+ processing being the culprit
             if (u > 0 && getenv("LLAMA_UB0_ONLY") && il > 0) continue;
-            // Phase 1 v7 (2026-05-12): paranoid pre-ubatch device-wide drain.
+            // v7 paranoid pre-ubatch device-wide drain.
             // Tests the drain-incompleteness hypothesis: if multi-ubatch garbage
-            // disappears when this fires, the existing Phase 256 drain at line
+            // disappears when this fires, the existing drain at line
             // ~10322 (ggml_backend_sched_synchronize) misses some CUDA stream
             // that u=N's compute reads from. Enable via LLAMA_PHASE1V7_DEV_SYNC=1.
             // Default off (no perf cost when disabled).
@@ -19783,7 +19783,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 }
                 auto _t0 = std::chrono::high_resolution_clock::now();
                 if (use_input_staging && use_gpu_mask) {
-                    // BUG#1 FIX (2026-07-16, decode-repro): the DSV4 compressed-plan leaves
+                    // BUG#1 FIX (decode-repro): the DSV4 compressed-plan leaves
                     // (dsv4_*_state_write_idxs/pos/end etc.) are PER-UBATCH but memoized separately
                     // from generic input staging. The L0 save_saved_leafs(u) below captures the HOST
                     // plan leaves, yet this staged branch otherwise skips dlm_set_inputs(ubatch),
@@ -19803,7 +19803,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     ggml_backend_sched_set_skip_input_staging(sched.get(), true);
                 } else {
                     dlm_set_inputs(ubatch);
-                    // [PARTIAL_UB_TOKEN_TAIL 2026-07-02] ROOT-CAUSE FIX for the DSA-on
+                    // PARTIAL_UB_TOKEN_TAIL ROOT-CAUSE FIX for the DSA-on
                     // multi-ubatch illegal memory access (sanitizer: k_get_rows<q8_0> ~7.5TB
                     // OOB; LLAMA_DSA_NODE_SYNC named the node: 'embd' GET_ROWS
                     // src0=token_embd.weight(q8_0) src1=inp_tokens, at the FIRST PARTIAL
@@ -19863,7 +19863,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 } else {
                     ggml_backend_sched_set_skip_input_staging(sched.get(), false);
                 }
-                // [INP_TOKENS_EVERY_LAYER 2026-07-02] Restore the token-embedding index at
+                // INP_TOKENS_EVERY_LAYER Restore the token-embedding index at
                 // EVERY (il,u), not only il==0. In this layer-MAJOR loop the split holding the
                 // 'embd' GET_ROWS (token_embd[inp_tokens], graph node 0) is RE-EXECUTED at the
                 // start of every per-layer node range (the range starts at sub_start_v[0], which
@@ -19880,7 +19880,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     const char * e = std::getenv("LLAMA_PREFILL_RESTORE_TOKENS_EVERY_LAYER");
                     return !(e && e[0] == '0');   // default ON
                 }();
-                // [2026-07-28 GLM long-prompt CRASH fix B] A PARTIAL final ubatch (ubatch.n_tokens <
+                // A PARTIAL final ubatch (ubatch.n_tokens <
                 // build_ubatch.n_tokens) leaves the inp_tokens device/galloc leaf's TAIL holding recycled
                 // DSA float transients = garbage token ids; the embd GET_ROWS then reads a wild q8_0 source
                 // pointer -> CUDA illegal access (getrows.cu:198, no bounds check). The stale-tail clear
@@ -19910,7 +19910,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 // Views of l_out[il-1] were resolved to the allocator address before
                 // hidden_load — they need to be updated to point to the hidden buffer.
                 resolve_view_pointers(gf, sub_start_v[0], sub_end_v[0]);
-                // 2026-05-31 M1 fix (env LLAMA_PREFILL_RERESTORE): at chunk5 (n_kv>=163840)
+                // M1 fix (env LLAMA_PREFILL_RERESTORE): at chunk5 (n_kv>=163840)
                 // resolve_view_pointers re-resolves the MLA attn_norm/QKV input VIEW to a stale
                 // view_src->data, CLOBBERING the just-restored hidden (C5_HIDIN proved input
                 // healthy at restore; C5_INTER proved Kcur+Vcur=0 at compute => attn_norm input
@@ -19934,7 +19934,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             }
             const auto dispatch_setup_t0 = dlm_phase_begin();
 
-            // ROOT-CAUSE FIX (2026-05-29, LLAMA_PREFILL_F16_MASK_REFRESH=1): the FA reads the f16
+            // ROOT-CAUSE FIX (LLAMA_PREFILL_F16_MASK_REFRESH=1): the FA reads the f16
             // mask src[3] (the CAST of the f32 mask leaf). The CAST runs ONCE (not per (il,u)) and
             // need_fresh_inputs gates the f32-leaf set to il==0 — so in the LAYER-MAJOR loop, at L1+ u0
             // the FA reads a STALE f16 mask (the last-armed ubatch's, all-zeros for query0) -> u0
@@ -20015,7 +20015,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 }
             }
 
-            // [2026-07-27 M3 NON-FA F32 MASK DEVICE REFRESH — root-cause fix for the >3072 garbage]
+            //
             // M3 is fa=off => build_attn emits soft_max_ext with an explicit F32 kq_mask and NO
             // FLASH_ATTN_EXT node => fa_nodes[il].raw==nullptr for every layer. Like the KV indices /
             // RoPE positions / f16 FA mask above, the F32 softmax mask's host->device copy is staged
@@ -20052,7 +20052,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             }
 #endif
 
-            // KV ROW-INDEX REFRESH (2026-05-30 ROOT-CAUSE FIX for multi-ubatch streaming garbage):
+            // KV ROW-INDEX REFRESH (ROOT-CAUSE FIX for multi-ubatch streaming garbage):
             // compute_node_range(layer_start[il>0], ...) starts PAST the input-staging copy nodes (which
             // sit inside layer-0's node range), so the GPU k_idxs/v_idxs that the kv_k_store/kv_v_store
             // SET_ROWS consume are STALE for il>0 — frozen at the LAST il==0 ubatch. Result: every ubatch
@@ -20196,7 +20196,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         refresh_idx(node, true);
                     } else if (store_matches_layer(node, "kv_k_idx_store-") ||
                                store_matches_layer(node, "indexer_k_store-")) {
-                        // [KIDX_STORE_REFRESH 2026-07-03] ROOT-CAUSE FIX for the DSA sparse
+                        // KIDX_STORE_REFRESH ROOT-CAUSE FIX for the DSA sparse
                         // multi-ubatch content corruption that survived a24ea74e: the sparse
                         // indexer-K store (cpy_k_idx SET_ROWS, name kv_k_idx_store-<il>)
                         // consumes the SAME per-ubatch k_idxs row-index input as kv_k_store-
@@ -20335,7 +20335,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
 
             {
                 auto * kv_ctx = get_attn_kv_ctx_for_layer(il);
-                // Phase 2.2 angle 19 (2026-05-12) v2: hoist FA_PTR_TRACE OUT of the
+                // angle 19 v2: hoist FA_PTR_TRACE OUT of the
                 // nkv-patch gate (production sets LLAMA_FA_MLA_DISABLE_NKV_PATCH=1,
                 // making the in-gate version dead code on Kimi/MLA). Emit at this
                 // outer scope so we capture FA tensor pointers under production
@@ -20357,7 +20357,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         v_t_o ? v_t_o->data : nullptr, v_t_o ? (long long)v_t_o->ne[1] : -1);
                     fflush(stderr);
                 }
-                // Phase 2.2 angle 20 (2026-05-12): MASK_TRACE. Angle 19 refuted
+                // angle 20 MASK_TRACE. Angle 19 refuted
                 // tensor-pointer aliasing — K/Q/V pointers and ne[1] are identical
                 // across ubatches; only nkv_u changes. With q_ne[1]=2816 and
                 // k_ne[1]=8448, correctness depends entirely on the mask
@@ -20560,7 +20560,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     const char * env = std::getenv("LLAMA_PREFILL_MASK_EVERY_LAYER");
                     return env && env[0] != '\0' && env[0] != '0';
                 }();
-                // [M3-GQA NON-FA F32-MASK FIX 2026-06-24] The "arm ONCE per ubatch at il==0"
+                // M3-GQA NON-FA F32-MASK FIX The "arm ONCE per ubatch at il==0"
                 // optimization is only safe when SOMETHING ELSE refreshes the per-(il,u) mask at
                 // il>0: the FA path has the f16-mask-refresh (LLAMA_PREFILL_F16_MASK_REFRESH, the
                 // FA src[3] f16 tensor) and MLA-direct-causal needs no mask at all. But the
@@ -20834,7 +20834,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     }
                 }
                 pcs_restore_fa_mask_data_pointer();
-                // Phase 2.2 angle 23 (2026-05-12): POST-compute trace. Capture
+                // angle 23 POST-compute trace. Capture
                 // FA output values AND mask values AFTER compute completes for
                 // this ubatch. This is what FA actually wrote / read during
                 // compute (vs the pre-compute MASK_TRACE which read stale GPU
@@ -20843,7 +20843,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     const char * e = std::getenv("LLAMA_PHASE1V7_FA_OUT_TRACE");
                     return e && e[0] != '\0' && e[0] != '0';
                 }();
-                // Phase 2.2 angle 25 (2026-05-12): K-cell persistence trace.
+                // angle 25 K-cell persistence trace.
                 // Sample K buffer fingerprint at u=1's compute time and compare
                 // to u=0's. If u=0's K cells (rows 0..ubatch.n_tokens-1) differ
                 // between u=0 and u=1 compute, K-cell persistence is broken.
@@ -20952,7 +20952,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     // FA output: shape [d_head=ne[0], n_heads=ne[1], n_tokens=ne[2], 1].
                     // Sample row=0 of the output at a few feature dims.
                     double o0=NAN, o1=NAN, o2=NAN, o3=NAN, o_last=NAN;
-                    // Angle 59 (2026-05-13): also sample row=(n_tokens-1) — needed to
+                    // Angle 59 also sample row=(n_tokens-1) — needed to
                     // discriminate kernel paths under causal masking. Row 0 only attends
                     // to K[0] so f32_acc vs half2_acc give same answer there; row=last
                     // attends to K[0..n_tokens-1] which is where the bug surfaces.
@@ -21146,7 +21146,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             auto t_hidden1 = std::chrono::high_resolution_clock::now();
             total_hidden_ms += std::chrono::duration<double, std::milli>(t_hidden1 - t_compute1).count();
 
-            // Phase 256 (2026-05-03): per-ubatch drain to fix the multi-ubatch
+            // per-ubatch drain to fix the multi-ubatch
             // SET_ROWS race. The k_idx, mask, and other input leaves are SHARED
             // across ubatches. set_inputs(ubatch_N+1) writes new data to those
             // leaves before the scheduler has H2D-copied ubatch_N's leaves to GPU.
@@ -21162,12 +21162,12 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             // correctness > parallelism. Disable via LLAMA_PREFILL_NO_UB_DRAIN=1
             // for A/B testing.
             //
-            // Phase 1 v6 (2026-05-11) NOTE: codex hypothesised the LAST ubatch
+            // The LAST ubatch
             // also needed a drain. Tested on Kimi 8k 2-ubatch with
             // LLAMA_PREFILL_DRAIN_LAST_UB=1 — INVALIDATED. Output remained the
             // identical \_\n\_\n garbage at 242 tok/s. The bug is elsewhere
-            // (see memory `project_phase1_v6_codex_drain_hypothesis_2026-05-11`).
-            // Phase 1.2 v9 (2026-05-11, codex investigation): the Phase 256
+            // Further diagnosis is required.
+            // The
             // drain fires at every (layer, non-last-ubatch) = 60*7 = 420 calls
             // for 32k/8ub Kimi. ggml_backend_sched_synchronize is a
             // WHOLE-SCHEDULER drain (drains every backend in the sched). On
@@ -21198,7 +21198,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                     if (legacy_off && legacy_off[0] != '\0' && legacy_off[0] != '0') {
                         return ub_sync_mode_t::off;
                     }
-                    // Default: whole_sched (preserve the Phase 256 behavior that
+                    // Default: whole_sched (preserve the behavior that
                     // shipped before this patch — switch to first_layer_only via
                     // env once validated on multi-size sweep).
                     return ub_sync_mode_t::whole_sched;
@@ -21221,7 +21221,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         // reduces DMA/compute overlap for large batches.
 
         // KV RAM: download updated KV from GPU staging buffer → RAM.
-        // Phase 147 fix: drain the scheduler before kv_download. graph_compute
+        // fix: drain the scheduler before kv_download. graph_compute
         // is async (ggml_backend_sched_graph_compute_async returns before the
         // K SET_ROWS is queued on cuda_stream); without this drain,
         // kv_download's cudaEventRecord(compute_evt, cuda_stream) captures
@@ -21240,7 +21240,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 std::chrono::high_resolution_clock::now() - t_kvs0).count();
         }
 
-        // Phase 264 (2026-05-04): per-ubatch K-cell checksum diagnostic.
+        // per-ubatch K-cell checksum diagnostic.
         // After kv_download fires, kv_ram[il].k_ram holds K cells for all
         // positions [0..total]. For multi-ubatch debugging, compute a checksum
         // per ubatch's position range to detect which ubatch's K writes are
@@ -21269,7 +21269,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         if (ubatch.n_tokens == 0 || !ubatch.pos) continue;
                         const int64_t pos_start = ubatch.pos[0];
                         const size_t n_rows = (size_t) ubatch.n_tokens;
-                        // Phase 265b (2026-05-04): probe inp_pos to detect RoPE
+                        // probe inp_pos to detect RoPE
                         // position drift across ubatches. Expect contiguous
                         // sequential positions [pos_start..pos_start+n_rows-1].
                         // If positions are wrong (e.g., reused from prior ubatch),
@@ -21306,7 +21306,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                                 "*** K_UB_PROBE: layer=%d ubatch=%d pos=[%lld..%lld] n_rows=%zu zero=%zu cksum=0x%016llx\n",
                                 il, u, (long long)pos_start, (long long)(pos_start + (int64_t)n_rows - 1),
                                 n_rows, zero_rows, (unsigned long long)fnv);
-                        // 2026-05-13 multi-ub diagnostic: print first 16 bytes at multiple
+                        // multi-ub diagnostic: print first 16 bytes at multiple
                         // positions within this ubatch's K cell range.
                         if (il == 0 || il == 2) {
                             const size_t probe_rows[] = {0, 100, 500, 1000, 2000, 3000};
@@ -21327,7 +21327,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                         }
                         fflush(stderr);
 
-                        // Phase 1 v7 (2026-05-11): per-4096-cell window checksums.
+                        // v7 per-4096-cell window checksums.
                         // Required to directly compare partial K cells across the
                         // n_ubatches=1 (slow-path) and n_ubatches=2 paths at the
                         // SAME position ranges. The full-range cksum above is for
@@ -21674,7 +21674,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
     // KV RAM: keep KV in RAM between passes. Don't reallocate GPU buffer
     // or upload — the staging buffer stays allocated and KV data persists
     // in kv_ram_layers[] for the next pass.
-    // [2026-07-12] bound by kv_ram.size(): the DSV4 GPU-resident raw-KV path leaves kv_ram_layers
+    // bound by kv_ram.size(): the DSV4 GPU-resident raw-KV path leaves kv_ram_layers
     // EMPTY (staging bypassed), and n_layer (79) also exceeds n_layer_kv (43) — the unguarded loop
     // was an OOB vector read = the post-prefill 0xc0000005 (llama.dll+0xf9f9d). The sum is unused
     // (kept as a debug placeholder), so the guard is behavior-neutral.
@@ -21736,7 +21736,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
         // (llama_kv_cache_iswa inherits llama_memory_i, not llama_kv_cache),
         // causing all ISWA layers to read from the same staging buffer address.
         if (kv_ram_uses_staging && !kv_ram.empty()) {
-            // Phase 139 Bug A recovery: capture each layer's GPU K pointer
+            // Bug A recovery: capture each layer's GPU K pointer
             // BEFORE the repoint loop so we can synchronously re-copy any
             // layer detected as all-zero in k_ram (silent kv_download failure
             // on requests 2+ leaves the Mac receiver with a zero blob for
@@ -21786,7 +21786,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
             fprintf(stderr, "*** KV_REPOINT: re-pointed %d layers to RAM buffers for export\n", repointed);
             fflush(stderr);
 
-            // Phase 139 Bug A recovery: scan ALL active K rows of every
+            // Bug A recovery: scan ALL active K rows of every
             // layer; for any layer that has any all-zero active row,
             // re-issue a synchronous cudaMemcpyDeviceToHost from the
             // pre-repoint GPU pointer. Bounded: O(active_rows × row_bytes)
@@ -22141,7 +22141,7 @@ int llama_context::decode_layer_major(llama_batch & batch, llama_hidden_mode hid
                 }
                 fflush(stderr);
             }
-            // KV_POS_DIFF (2026-05-30): per-POSITION K-cache magnitude to resolve the
+            // KV_POS_DIFF per-POSITION K-cache magnitude to resolve the
             // FA-output-identical (row100) vs KV_MAG-front-mean-28%-lower contradiction.
             // Dumps dequant mean|x| + first 4 K values per probed position. Run single-ub
             // vs multi-ub at the SAME prompt, diff by position to find WHERE (and whether)
@@ -23753,7 +23753,7 @@ size_t llama_state_seq_set_data_ext(llama_context *       ctx,
     return ctx->state_seq_set_data(seq_id, src, size, flags);
 }
 
-// Phase G (2026-05-06): MLA-aware KV capture for KVBlob v2 handoff.
+// MLA-aware KV capture for KVBlob v2 handoff.
 // Mirrors capture_kv_state_blob's MLA setup at llama-context.cpp:2792.
 // Without setting v_trans on the attn caches before state_seq access,
 // the cell layout is incompatible with the legacy state_seq writer and
@@ -23862,7 +23862,7 @@ int32_t llama_decode(llama_context * ctx, llama_batch batch) {
         const char * e = std::getenv("LLAMA_DSV4_WF_DECODE");
         return e && e[0] != '\0' && e[0] != '0';
     }();
-    // GOAL#1 executor-selection fix (2026-07-20, env LLAMA_STREAM_LOCAL_RESIDENT_DECODE, default ON;
+    // GOAL#1 executor-selection fix (env LLAMA_STREAM_LOCAL_RESIDENT_DECODE, default ON;
     // set =0 to restore the old dispatch): in STREAM_LOCAL mode should_use_streaming_for_batch()
     // returns true for EVERY batch, and resident_post_prefill additionally required
     // is_wf_prefill_done(). For prompts <256 tokens the FA-aligned streamed prefix is empty, so
@@ -24150,7 +24150,7 @@ int32_t llama_decode(llama_context * ctx, llama_batch batch) {
                 LLAMA_LOG_ERROR("%s: failed to migrate retained DSV4 state for resident stream_local decode\n", __func__);
                 ret = -1;
             } else {
-                // BUG#2 FIX (2026-07-16): the streamed prefix wrote K cells in the
+                // BUG#2 FIX the streamed prefix wrote K cells in the
                 // FA-ON layout; reading them with the FA-off "conservative" graph is
                 // NOT semantically equivalent for MLA (same mismatch the prefill
                 // stream documents for the Mac decoder: FA-off produces numerically
@@ -24288,7 +24288,7 @@ int32_t llama_decode(llama_context * ctx, llama_batch batch) {
     // decode_streaming returns 1 to signal "batch too small, use normal decode"
     if (ret == 1) {
         if (wf_skip) {
-            // Phase 334 (2026-05-05): when wf_active and decode_streaming
+            // when wf_active and decode_streaming
             // returns 1 (e.g. init_batch FAILED_PREPARE under high NP), we
             // can't fall back to non-streaming decode (weights are sentinel).
             // Returning 0 here previously left output_ids unpopulated and
@@ -24525,15 +24525,15 @@ bool llama_context_trigger_decode_handoff(struct llama_context * ctx) {
 
 // ─── Split-decode per-layer graph execution ────────────────────────────────
 //
-// Phase 1.3 — public C API wrapper over the per-layer graph build/compute
+// public C API wrapper over the per-layer graph build/compute
 // pattern used by decode_streaming (llama-context.cpp:6280+).
 //
 // The graph builder already supports `external_attn_out` and `stop_after_attn`
-// (landed 2026-04-19 in Phase 1.2). This API gives split-decode binaries a
+// (landed in ). This API gives split-decode binaries a
 // stable entry point without exposing llama_context internals.
 //
 // Implementation status:
-//   2026-04-19: API surface only. Implementation deferred to Phase 1.3b —
+//   API surface only. Implementation deferred to
 //   requires building a one-token ubatch, wrapping fp32 host buffers as
 //   GPU-backed ggml tensors for external_input/external_attn_out, and
 //   copying the output tensor back to host. This mirrors the intermediate
@@ -24650,16 +24650,16 @@ struct llama_split_graph {
     std::vector<cudaEvent_t>        input_ready;
     std::vector<cudaEvent_t>        output_ready;
 
-    // Captured CUDA graphs per layer (Phase 2b). layer_cuda_graph[il] holds
+    // Captured CUDA graphs per layer (). layer_cuda_graph[il] holds
     // the cudaGraph_t captured from one build_compute_split_layer(ATTN_ONLY)
     // call for layer il; layer_cuda_exec[il] is the instantiated executable.
     // Launched via cudaGraphLaunch on the compute_stream in
-    // llama_split_graph_launch (Phase 2c).
+    // llama_split_graph_launch ().
     std::vector<cudaGraph_t>        layer_cuda_graph;
     std::vector<cudaGraphExec_t>    layer_cuda_exec;
     bool                            graphs_captured = false;
 
-    // Phase 2d.C1 — per-token pos update via arena piggyback.
+    // per-token pos update via arena piggyback.
     // After capture_layer completes, we query ggml-cuda for the arena offset
     // of the inp_pos staging. The captured graph's H2D copy replays from
     // (arena_base + pos_arena_offset[il]). Writing a new int32 to that
@@ -24668,13 +24668,13 @@ struct llama_split_graph {
     // that layer and capture correctness falls back to the baked-in pos=0.
     std::vector<size_t>             pos_arena_offset;
     std::vector<size_t>             pos_arena_size;   // bytes (n_pos_per_embd*4)
-    // Phase 2d.C3 (iter 19) — per-replay K-cache slot index update.
+    // (iter 19) — per-replay K-cache slot index update.
     // Without this, the fused ROPE+SET_ROWS kernel writes K to slot 0
     // every replay (capture-time slot baked in). Per-token update writes
     // the current token_pos into k_idxs, redirecting the K-write.
     std::vector<size_t>             k_idxs_arena_offset;
     std::vector<size_t>             k_idxs_arena_size;
-    // Phase 2d.C4 (iter 19) — per-replay V-cache slot index update.
+    // (iter 19) — per-replay V-cache slot index update.
     // Same issue as k_idxs: V-cache SET_ROWS bakes slot 0 at capture time.
     // Without this, ALL decode tokens write V to slot 0 → wrong softmax value.
     std::vector<size_t>             v_idxs_arena_offset;
@@ -24683,7 +24683,7 @@ struct llama_split_graph {
     // pageable-to-pinned; in that case C1 is a no-op).
     void *                          pinned_arena_base = nullptr;
 
-    // Phase 2d.C2 — per-token kq_mask update.
+    // per-token kq_mask update.
     // The captured graph's kq_mask H2D copy reads from a HOST buffer at a
     // fixed pointer captured at graph-build time. At replay, the buffer
     // must be updated to reflect the current token_pos's causal mask.
@@ -24713,8 +24713,8 @@ struct llama_split_graph {
 #endif
 
 #ifdef GGML_USE_METAL
-    // Phase 3 Mac mirror of the CUDA event-graph. Uses MTLSharedEvent
-    // (exposed via ggml-metal.h Phase 3 public API) to signal per-layer
+    // Mac mirror of the CUDA event-graph. Uses MTLSharedEvent
+    // (exposed via ggml-metal.h public API) to signal per-layer
     // RX readiness and per-layer TX completion.
     //
     // Layer subgraphs are encoded into a single MTLCommandBuffer, with
@@ -24759,7 +24759,7 @@ struct llama_split_graph * llama_split_graph_create(
         enum llama_split_graph_mode  mode) {
     if (!ctx) return nullptr;
 #if defined(GGML_USE_METAL) && !defined(GGML_USE_CUDA)
-    // Phase 3 Mac-side: allocate per-layer MTLSharedEvents + shared
+    // Mac-side: allocate per-layer MTLSharedEvents + shared
     // staging buffers. Capture/launch still stubbed — this only lays
     // the resource foundation. See docs/split_decode_phase3_metal_design.md.
     {
@@ -24828,7 +24828,7 @@ struct llama_split_graph * llama_split_graph_create(
         const size_t total_bytes = shared_bytes * (size_t)(2 * n_layer + 1);
         LLAMA_LOG_INFO("llama_split_graph_create (Metal): allocated %d MTLSharedEvents pairs + "
                        "%d attn_out + %d hidden shared buffers (%zu KB total). "
-                       "Capture + launch not yet wired — see Phase 3 Option B plan.\n",
+                       "Capture + launch not yet wired — see Option B plan.\n",
                        2*n_layer, n_layer, n_layer+1, total_bytes / 1024);
         return g.release();
     }
@@ -24877,7 +24877,7 @@ struct llama_split_graph * llama_split_graph_create(
     g->v_idxs_arena_offset.resize(n_layer, (size_t)-1);
     g->v_idxs_arena_size.resize(n_layer, 0);
 
-    // Phase 2d: captured graph processes fp32 throughout (res->t_embd is fp32,
+    // captured graph processes fp32 throughout (res->t_embd is fp32,
     // build_compute_split_layer wraps external_input as GGML_TYPE_F32). All
     // per-layer device + host staging buffers are sized at fp32. The wire
     // format is bf16; post_input / get_output do bf16<->fp32 conversion on
@@ -24927,7 +24927,7 @@ int32_t llama_split_graph_launch(
     if (!g) return -2;
     (void)seq_id;
 
-    // 2026-04-21 (EVENT_GRAPH fix): the per-layer WaitEvent+GraphLaunch+EventRecord
+    // (EVENT_GRAPH fix): the per-layer WaitEvent+GraphLaunch+EventRecord
     // chain has been MOVED to llama_split_graph_post_input so it fires AFTER
     // the H2D copy completes and input_ready[il] is recorded on rx_stream.
     // The previous "pre-queue all 78 layers on compute_stream" design was broken:
@@ -24981,7 +24981,7 @@ int32_t llama_split_graph_launch(
         }
     }
 
-    // Phase 2d.C2 — kq_mask update: write the causal mask for token_pos.
+    // kq_mask update: write the causal mask for token_pos.
     // The captured graph's kq_mask H2D copy reads from this host buffer.
     // Without this update, all tokens use the capture-time mask (pos=0 only),
     // causing wrong attention from T=1 onwards (stale mask bug).
@@ -25055,7 +25055,7 @@ int32_t llama_split_graph_post_input(
     }
     const size_t fp32_bytes = (size_t)n_embd * sizeof(float);
 
-    // 2026-04-21 (EVENT_GRAPH fix): queue H2D copy AND compute_stream dispatch
+    // (EVENT_GRAPH fix): queue H2D copy AND compute_stream dispatch
     // from here, AFTER the data is staged. Previously launch() queued all 78
     // layers' WaitEvent+GraphLaunch+EventRecord upfront before any post_input
     // call. CUDA semantics: if cudaEventRecord() has never been called on
@@ -25226,7 +25226,7 @@ int32_t llama_split_graph_capture_layer(
     }
     cudaStream_t ggml_stream = (cudaStream_t)ggml_backend_cuda_get_stream(gpu_backend);
 
-    // Blocker 3 investigation log (2026-04-19):
+    // Blocker 3 investigation log
     //
     // With stages traced (enable via LLAMA_SPLIT_CAP_TRACE=1), the capture
     // advances through: balloc->init, sched_reserve, memory_update,
@@ -25250,7 +25250,7 @@ int32_t llama_split_graph_capture_layer(
     // Next investigation: add cudaStreamIsCapturing probe inside each
     // cudaMalloc / cudaEventRecord call site in ggml-cuda.cu's op dispatch
     // and ggml_cuda_pool_alloc. Log any call where isCapturing == true.
-    // Phase 2b CUDA graph capture — NOW FUNCTIONAL (2026-04-19) after
+    // CUDA graph capture — NOW FUNCTIONAL after
     // landing four upstream fixes:
     //   1. ggml_cuda_set_tensor_copy_stream: TLS stream override so per-
     //      tensor H2D/D2H copies route through the capturing stream.
@@ -25305,7 +25305,7 @@ int32_t llama_split_graph_capture_layer(
         return -102;
     }
     g->ctx->split_capture_stream = (void *)ggml_stream;
-    // Phase 2d: tell build_compute_split_layer to enqueue a D2D copy from
+    // tell build_compute_split_layer to enqueue a D2D copy from
     // res->t_embd (fp32) into device_out[il] so replay populates a stable
     // output buffer. device_out[il] was allocated at fp32 size in
     // split_graph_create.
@@ -25326,26 +25326,26 @@ int32_t llama_split_graph_capture_layer(
     std::vector<float> dummy_out(g->n_embd, 0.0f);
     int32_t inner_rc = g->ctx->build_compute_split_layer(&p, dummy_out.data());
 
-    // Phase 2d.C1 — snapshot arena offset for inp_pos BEFORE the staging log
+    // snapshot arena offset for inp_pos BEFORE the staging log
     // gets cleared by set_tensor_copy_stream(nullptr). This tells us where in
     // the pinned arena to write the per-token pos on replay.
     if (inner_rc == 0) {
         g->pinned_arena_base = ggml_cuda_get_tensor_copy_pinned_base();
         g->pos_arena_offset[il] = ggml_cuda_get_last_staged_offset_size(
             "inp_pos", &g->pos_arena_size[il]);
-        // Phase 2d.C3 (iter 19) — per-replay K-cache slot index update.
+        // (iter 19) — per-replay K-cache slot index update.
         // Without this, the fused ROPE+SET_ROWS kernel writes K to slot 0
         // every replay (capture-time slot baked in). Per-token update writes
         // the current token_pos into k_idxs, redirecting the K-write.
         g->k_idxs_arena_offset[il] = ggml_cuda_get_last_staged_offset_size(
             "k_idxs", &g->k_idxs_arena_size[il]);
-        // Phase 2d.C4 (iter 19) — per-replay V-cache slot index update.
+        // (iter 19) — per-replay V-cache slot index update.
         // Same issue as k_idxs: V-cache SET_ROWS bakes slot 0 at capture time.
         g->v_idxs_arena_offset[il] = ggml_cuda_get_last_staged_offset_size(
             "v_idxs", &g->v_idxs_arena_size[il]);
     }
 
-    // Phase 2d.C2 — snapshot kq_mask host ptr (populated by the kq_mask capture
+    // snapshot kq_mask host ptr (populated by the kq_mask capture
     // hook in build_compute_split_layer above). Only record on first layer (il==0)
     // since all layers share the same kq_mask host buffer.
     if (inner_rc == 0 && il == 0) {
@@ -25416,7 +25416,7 @@ int32_t llama_split_graph_capture_layer(
 
     if (g->pos_arena_offset[il] == (size_t)-1) {
         LLAMA_LOG_WARN("%s: layer %d: could not locate inp_pos in arena "
-                       "(offset=-1). Phase 2d.C1 per-token pos update will "
+                       "(offset=-1). per-token pos update will "
                        "NOT be active — replay uses capture-time pos=0.\n",
                        __func__, il);
     } else {
@@ -25426,7 +25426,7 @@ int32_t llama_split_graph_capture_layer(
 
     if (g->k_idxs_arena_offset[il] == (size_t)-1) {
         LLAMA_LOG_WARN("%s: layer %d: could not locate k_idxs in arena "
-                       "(offset=-1). Phase 2d.C3 K-cache slot update will "
+                       "(offset=-1). K-cache slot update will "
                        "NOT be active — replay writes K to slot 0 every token.\n",
                        __func__, il);
     } else {
@@ -25436,7 +25436,7 @@ int32_t llama_split_graph_capture_layer(
 
     if (g->v_idxs_arena_offset[il] == (size_t)-1) {
         LLAMA_LOG_WARN("%s: layer %d: could not locate v_idxs in arena "
-                       "(offset=-1). Phase 2d.C4 V-cache slot update will "
+                       "(offset=-1). V-cache slot update will "
                        "NOT be active — replay writes V to slot 0 every token.\n",
                        __func__, il);
     } else {
@@ -25506,7 +25506,7 @@ int32_t llama_split_graph_capture_layer(
 #endif
 }
 
-// Phase 3 Option B (Mac Metal): event-gated single-dispatch submit.
+// Option B (Mac Metal): event-gated single-dispatch submit.
 //
 // Encodes onto the Metal queue:
 //   1. event_submit_wait(input_ready[il])   — GPU stalls until RX thread
@@ -25584,7 +25584,7 @@ int32_t llama_split_graph_submit_layer_gated(
 #endif
 }
 
-// Path A Phase E (2026-04-20) — public wrapper for mega-graph single-dispatch.
+// Path A public wrapper for mega-graph single-dispatch.
 int32_t llama_split_graph_launch_mega(
         struct llama_split_graph * g,
         int32_t                    token_pos,
@@ -25699,7 +25699,7 @@ void llama_split_graph_free(struct llama_split_graph * g) {
     if (g->tx_stream)      cudaStreamDestroy(g->tx_stream);
 #endif
 #ifdef GGML_USE_METAL
-    // Phase 3 Mac cleanup: free MTLSharedEvents + per-layer shared
+    // Mac cleanup: free MTLSharedEvents + per-layer shared
     // MTLBuffers. The buffer vectors may be empty (events-only mode) in
     // which case the loops are no-ops.
     if (g->ctx) {
@@ -26361,7 +26361,7 @@ int32_t llama_wait_split_layer_async(struct llama_context * ctx) {
 // decode_streaming (llama-context.cpp:6306-6396) but for a single layer with
 // split-mode flags set on llm_graph_params.
 //
-// Status as of 2026-04-19:
+// Status as of
 //   - Skeleton: in place (one-token batch → balloc → memory context → graph).
 //   - The actual compute path returns -1 until full wiring is verified. Each
 //     building block below has a TODO(phase1.3b) marker pointing to the
@@ -26386,7 +26386,7 @@ int32_t llama_context::build_compute_split_layer(
         return -6;
     }
 
-    // As of 2026-04-19, the custom per-layer path is working — it required
+    // As of the custom per-layer path is working — it required
     // matching llama_decode's exact setup order (sched_reserve + memory_update +
     // output_reserve + mctx->apply()). Validated at cosine similarity 0.998
     // vs reference full decode on the loopback test.
@@ -26524,7 +26524,7 @@ int32_t llama_context::build_compute_split_layer(
     // process one ubatch here so just call once.
     const auto & ubatch = mctx->get_ubatch();
 
-    // FIXED 2026-04-19: the custom path now produces correct output by matching
+    // FIXED the custom path now produces correct output by matching
     // llama_decode's exact setup order. The missing piece was that ALL FOUR of
     // (sched_reserve, memory_update, output_reserve, mctx->apply) are required —
     // partial sets either broke balloc or left scheduler buffers unallocated.
@@ -26590,7 +26590,7 @@ int32_t llama_context::build_compute_split_layer(
         // tensor_set path below would fail mid-capture anyway because it
         // issues cudaMemcpyHostToDevice, treating the device pointer as host).
         if (params->metal_shared_io && params->metal_input_backend_buf) {
-            // Phase 3 Option B: external_input is already on shared Metal
+            // Option B: external_input is already on shared Metal
             // memory (RX thread wrote directly). Bind the in_tensor to the
             // shared backend buffer so the Metal dispatch uses the correct
             // MTLBuffer; no tensor_set needed.
@@ -26609,7 +26609,7 @@ int32_t llama_context::build_compute_split_layer(
         attn_tensor = ggml_new_tensor_2d(wrap_ctx, GGML_TYPE_F32, n_embd, 1);
         ggml_set_name(attn_tensor, "split_external_attn_out");
         if (params->metal_shared_io && params->metal_attn_out_backend_buf) {
-            // Phase 3 Option B: external_attn_out is already on shared Metal
+            // Option B: external_attn_out is already on shared Metal
             // memory (the RX thread's target for this layer). Bind directly
             // to that backend buffer; no tensor_set needed.
             attn_tensor->data = (void *)params->external_attn_out;
@@ -26634,7 +26634,7 @@ int32_t llama_context::build_compute_split_layer(
         return -19;
     }
 
-    // Phase 3 graph cache: per-(layer_id, mode) dedicated llm_graph_result
+    // graph cache: per-(layer_id, mode) dedicated llm_graph_result
     // so can_reuse() hits on subsequent tokens. Enabled via
     // SPLIT_DECODE_GRAPH_CACHE=1. Saves ~380 us of model.build_graph +
     // encoding per layer == ~30 ms/token at 79 layers.
@@ -26672,7 +26672,7 @@ int32_t llama_context::build_compute_split_layer(
     if (!full_graph_diag) {
         layer_gparams.layer_start = params->layer_id;
         layer_gparams.layer_end   = params->layer_id + 1;
-        // BUGFIX 2026-04-20: honor caller-provided external_input even for
+        // honor caller-provided external_input even for
         // layer 0. Previously this force-nulled it at layer 0, causing
         // build_inp_embd to read batch.token[0] (hardcoded to BOS at line
         // ~11558) and leaving the layer-0 residual as `attn_out + tok_embd[BOS]`
@@ -26715,7 +26715,7 @@ int32_t llama_context::build_compute_split_layer(
     // Attempt single-split (all-GPU) only when the CUDA backend supports
     // the op. If any node requires CPU (e.g. get_rows on Q4_K — CUDA
     // doesn't have a kernel for that), we can't force it to GPU without
-    // crashing. In capture mode, hitting an unsupported op means Phase 2b
+    // crashing. In capture mode, hitting an unsupported op means
     // can't succeed for this layer's graph without a ggml-cuda kernel
     // addition.
     if (gpu_backend) {
@@ -26790,7 +26790,7 @@ int32_t llama_context::build_compute_split_layer(
     auto ta12 = t_clock();
     SPLIT_CAP_TRACE("post res->set_inputs");
 
-    // Phase 2d.C2 — kq_mask capture: when a CUDA graph capture is active
+    // kq_mask capture: when a CUDA graph capture is active
     // (split_capture_stream != nullptr), record the kq_mask host data pointer
     // so post_input/launch can update it per token. The captured graph's H2D
     // reads from self_kq_mask->data; updating that buffer before replay
@@ -26890,7 +26890,7 @@ int32_t llama_context::build_compute_split_layer(
     // active and we're just building the graph for later replay, not actually
     // using the output. Skip sync (and the tensor_get below) so nothing lands
     // inside the captured graph that would mess up replay.
-    // Phase 3 Mac: event-based per-layer sync (replaces full-queue
+    // Mac: event-based per-layer sync (replaces full-queue
     // synchronize with ~45ms/token savings). Gated by
     // SPLIT_DECODE_EVENT_SYNC=1. See docs/split_decode_phase3_metal_design.md.
     //
@@ -26910,7 +26910,7 @@ int32_t llama_context::build_compute_split_layer(
         // capture path skips sync
 #ifdef GGML_USE_METAL
     } else if (params->metal_shared_io) {
-        // Phase 3 Option B: caller manages GPU sync via per-layer
+        // Option B: caller manages GPU sync via per-layer
         // output_ready event encoded on the Metal queue AFTER the blit
         // below. No CPU-GPU barrier here — the whole point of Option B.
 #endif
@@ -26949,7 +26949,7 @@ int32_t llama_context::build_compute_split_layer(
     size_t out_bytes = ggml_nbytes(res->t_embd);
     if (out_bytes > emb_bytes) out_bytes = emb_bytes;
 
-    // Phase 3 Step 4: async path. If caller asked to defer read, record
+    // Step 4: async path. If caller asked to defer read, record
     // an event for the GPU completion and return without syncing or
     // reading. Caller must call wait_split_layer_async() before the NEXT
     // build_compute_split_layer call — otherwise sched_reset will
@@ -26989,7 +26989,7 @@ int32_t llama_context::build_compute_split_layer(
     // replay via llama_split_graph_get_output.
 #ifdef GGML_USE_METAL
     if (params->metal_shared_io && params->metal_output_buf && params->metal_output_backend_buf) {
-        // Phase 3 Option B: enqueue a GPU-queue blit from res->t_embd
+        // Option B: enqueue a GPU-queue blit from res->t_embd
         // into the caller-owned shared output buffer. This preserves the
         // layer's output in a stable location before the compute buffer
         // gets reused by the next layer. Runs AFTER graph_compute on the
@@ -27017,7 +27017,7 @@ int32_t llama_context::build_compute_split_layer(
     if (split_capture_stream == nullptr) {
         ggml_backend_tensor_get(res->t_embd, out_buf, 0, out_bytes);
     } else if (split_capture_output_device && split_capture_output_bytes >= out_bytes) {
-        // Phase 2d: enqueue a device-to-device copy so replay actually writes
+        // enqueue a device-to-device copy so replay actually writes
         // the layer output into a stable device buffer the caller can read
         // via llama_split_graph_get_output. Without this, device_out[il] is
         // never populated and get_output returns garbage.
@@ -27046,7 +27046,7 @@ int32_t llama_context::build_compute_split_layer(
     auto ta15 = t_clock();
     // (diag log suppressed — enable LLAMA_LOG_INFO per-call to trace)
     //
-    // KNOWN ISSUE (2026-04-19): On non-MLA architectures (qwen2, glm4moe, etc.)
+    // KNOWN ISSUE On non-MLA architectures (qwen2, glm4moe, etc.)
     // where the split-graph flags are no-ops, per-call outputs are NaN. Root
     // cause: even though t_embd has correct dimensions after the n_outputs fix,
     // the compute produces garbage — likely because (a) my one-token batch
@@ -27109,7 +27109,7 @@ int32_t llama_context::build_compute_split_layer(
 
 // ─── llama_context::build_compute_split_mega ───────────────────────────────
 //
-// Path A Phase D (2026-04-20). Builds ONE cgraph for all n_layer FFN_ONLY
+// Path A . Builds ONE cgraph for all n_layer FFN_ONLY
 // subgraphs via the per-layer external tensor arrays. Submits ONE scheduler
 // compute. Per-layer outputs land in sg->metal_hidden_buf[il+1] via cpy nodes
 // emitted in the graph builder.
@@ -27117,7 +27117,7 @@ int32_t llama_context::build_compute_split_layer(
 // THIS ITERATION: no per-layer event gates in the cmd_buf stream. Caller must
 // ensure all attn_out_buf[il] entries are populated before this is called,
 // OR accept that the GPU may read stale data mid-flight. True pipelining
-// requires Phase D.2 (ggml-metal API to inject events at cgraph node
+// requires .2 (ggml-metal API to inject events at cgraph node
 // boundaries). This iteration validates graph-builder correctness.
 //
 // Requires Metal backend + shared per-layer buffers on sg.
@@ -27324,14 +27324,14 @@ int32_t llama_context::build_compute_split_mega(
 
     res->set_inputs(&ubatch);
 
-    // Path A Phase D.2 — if the split_graph has per-layer events AND the
+    // Path A .2 — if the split_graph has per-layer events AND the
     // caller enabled MEGA_DISPATCH, use the gated graph_compute that
     // injects encodeWaitForEvent / encodeSignalEvent between layer
     // boundaries. This gives the network RX thread the gate to drive
     // mid-mega-graph layer advancement.
     //
     // Identify layer boundaries by scanning the cgraph for nodes with
-    // the "l_out_external_pl-<il>" name emitted in Phase C (the cpy
+    // the "l_out_external_pl-<il>" name emitted in (the cpy
     // that writes layer il's output to metal_hidden_buf[il+1]).
     static const bool mega_dispatch_gated = [](){
         const char * v = std::getenv("SPLIT_DECODE_MEGA_DISPATCH");
@@ -27386,7 +27386,7 @@ int32_t llama_context::build_compute_split_mega(
         if (all_found) {
             // Build segments: [prev_end+1 .. end_il+1) per active layer.
             //
-            // 2026-04-20 race fix: use token_pos-derived explicit targets
+            // race fix: use token_pos-derived explicit targets
             // for wait/signal. Both the GPU encoder and the host signaler
             // (RX thread for input_ready; build_compute_split_mega's own
             // post-sync for output_ready) must agree on the target. Since
@@ -27400,7 +27400,7 @@ int32_t llama_context::build_compute_split_mega(
             int prev_end = -1;
             for (int il = 0; il < n_active_layers; ++il) {
                 segments[il].start_idx     = prev_end + 1;
-                // 2026-04-20: for the FINAL active layer, extend end_idx to
+                // for the FINAL active layer, extend end_idx to
                 // the end of the graph. ggml_backend_sched_alloc_graph may
                 // reorder nodes such that the `l_out_external_pl-<il>` cpy
                 // for the last layer appears AFTER the bounded index
@@ -27508,7 +27508,7 @@ int32_t llama_context::build_compute_split_mega(
                 return -17;
             }
 
-            // 2026-04-20 — workaround for the layer-77 cpy-zero bug.
+            // — workaround for the layer-77 cpy-zero bug.
             // Layers 0-76 write metal_hidden_buf[il+1] via their in-graph
             // cpy nodes (emitted by deepseek2.cpp's external_output_per_layer
             // path). Diagnostics show these cpy's produce the correct bytes

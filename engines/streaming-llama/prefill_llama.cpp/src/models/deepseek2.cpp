@@ -10,7 +10,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
     llm_graph_context(params) {
     const bool is_mla = hparams.is_mla();
 
-    // Phase 1 (iter 29): sparse MLA gate for GLM-5.1 / DeepSeek V3.2 sparse-attention (DSA).
+    // (iter 29): sparse MLA gate for GLM-5.1 / DeepSeek V3.2 sparse-attention (DSA).
     // Decode is wired for n_tokens == 1; prefill gathers a sparse K/V + causal mask.
     // Explicit runtime flags win; legacy env values are resolved once into cparams.
     const bool sparse_mla_enabled = cparams.sparse_mla;
@@ -185,7 +185,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
     ggml_tensor * inp_out_ids = (il_end >= effective_n_layers && !params.stop_after_attn && il_start < il_end && n_outputs > 0)
         ? build_inp_out_ids() : nullptr;
 
-    // [OPTION A / DSA_SHARED_SPARSE_REUSE 2026-07-07] Persist the previous FULL cadence layer's top-k selection so
+    // OPTION A / DSA_SHARED_SPARSE_REUSE Persist the previous FULL cadence layer's top-k selection so
     // the "shared" layers can REUSE it and run SPARSE attention (skipping their own indexer score-GEMM) instead of
     // the dense O(n^2) fallback. env-gated LLAMA_DSA_SHARED_SPARSE_REUSE (default OFF -> byte-identical to the
     // existing dense/sparse paths). prev_full_topk resets to null each forward pass (function re-entered per ubatch).
@@ -258,7 +258,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
         // norm
         cur = build_norm(inpL, model.layers[il].attn_norm, NULL, LLM_NORM_RMS, il);
         cb(cur, "attn_norm", il);
-        // 2026-05-31 PIN_QKV_INPUT (env, default off): at chunk5 (n_kv>=163840) gallocr
+        // PIN_QKV_INPUT (env, default off): at chunk5 (n_kv>=163840) gallocr
         // aliases the attn_norm-output / kv_cmpr_pe compute slot with an n_kv-scaled FA/mask
         // transient at the largest working set, clobbering the shared QKV input → Kcur+Vcur=0
         // for layers>=1 (input is healthy; 3 input-delivery fixes failed → it's the OUTPUT slot).
@@ -275,7 +275,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
 
             const bool is_lite = model.layers[il].wq;
 
-            // Phase 3 (iter 29): capture post-norm q_lora reference for the sparse-MLA
+            // (iter 29): capture post-norm q_lora reference for the sparse-MLA
             // indexer path. wq_b overwrites `q` below with [n_head * n_embd_head_k, n_tokens];
             // the sparse indexer needs the pre-wq_b q_lora ([q_lora_rank, n_tokens]).
             ggml_tensor * q_lora_for_indexer = nullptr;
@@ -283,7 +283,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                 q = ggml_mul_mat(ctx0, model.layers[il].wq_a, cur);
                 cb(q, "q", il);
 
-                // Phase 76: env-gated eps override for MLA q_a / kv_a layernorms.
+                // env-gated eps override for MLA q_a / kv_a layernorms.
                 // mlx_lm/models/deepseek_v3.py hardcodes eps=1e-6 for these two
                 // RMSNorms (independent of config.rms_norm_eps), while llama.cpp
                 // uses the GGUF-declared global value (1e-5 for Kimi K2.6). When
@@ -353,7 +353,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                  ext_factor, attn_factor, beta_fast, beta_slow);
             cb(k_pe, "k_pe", il);
 
-            // Phase 76: env-gated eps override (same as q_a above).
+            // env-gated eps override (same as q_a above).
             {
                 static const float mla_norm_eps = []() {
                     const char * e = std::getenv("LLAMA_DEEPSEEK2_MLA_NORM_EPS");
@@ -409,7 +409,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                 }
                 cb(Vcur, "Vcur", il);
 
-                // DIAG (2026-05-28): persist Kcur/Vcur (MLA cache inputs) at the dump layer so
+                // DIAG persist Kcur/Vcur (MLA cache inputs) at the dump layer so
                 // they can be checksummed — splits multi-ubatch L1 attention divergence into
                 // cache-content-wrong (K/V differ at token 0) vs FA-read-wrong (K/V identical).
                 // Gated by LLAMA_DUMP_LAYER; diagnostic only.
@@ -429,7 +429,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
 
                 ggml_tensor * sparse_attn_out = nullptr;
 
-                // Phase 3 (iter 29): sparse-MLA indexer projections + RoPE (scores not yet consumed).
+                // (iter 29): sparse-MLA indexer projections + RoPE (scores not yet consumed).
                 // Adds indexer K/Q projections, norm, and RoPE on the rope_dim prefix per head
                 // (matching sglang nsa_indexer.py:346). Hadamard + head-gate + score matmul
                 // still land in later phases (3c/3d). Decode and prefill now consume
@@ -516,7 +516,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                         cb(idx_k_full, "indexer_k_full", il);
                     }
 
-                    // [2026-07-28 DSA STORE-DEPS FIX, codex-v4] SET_ROWS writes the indexer/main K
+                    // SET_ROWS writes the indexer/main K
                     // caches through an ALIAS: the cache views consumed by the DSA score / sparse FA
                     // are constructed independently, so the GGML DAG sees NO producer->consumer edge
                     // from the store to its readers. Any scheduler freedom (node-range dispatch,
@@ -531,7 +531,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                     }();
                     ggml_tensor * idx_k_store_dep = nullptr;
 
-                    // Phase 3.5-lite step 3 (iter 29): persist current ubatch's indexer K into the
+                    // lite step 3 (iter 29): persist current ubatch's indexer K into the
                     // dedicated indexer K cache (layer.k_idx), using the SAME slot positions as
                     // the main K cache (inp_attn_k->get_k_idxs()). The store op is added to the
                     // forward graph even though no node reads the cache yet — step 4/5 will
@@ -546,7 +546,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
 
                     const bool sparse_decode = n_tokens == 1;
                     const bool sparse_prefill = n_tokens > 1;
-                    // [DSA_SHARED_CADENCE 2026-07-06] ROOT-CAUSE FIX for GLM-5.2 DSA multi-ubatch incoherence.
+                    // DSA_SHARED_CADENCE ROOT-CAUSE FIX for GLM-5.2 DSA multi-ubatch incoherence.
                     // GLM-5.2's indexer runs a per-layer CADENCE (HF indexer_types): only "full" layers compute
                     // their own top-k; "shared" layers reuse the previous full layer's selection. The RTX ran an
                     // INDEPENDENT ggml_top_k on ALL 78 layers -> the 57 "shared" layers mis-selected keys the model
@@ -629,7 +629,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                     if (sparse_top_k_cap > 0) {
                         sparse_top_k_limit = std::min<uint32_t>(sparse_top_k_limit, (uint32_t) sparse_top_k_cap);
                     }
-                    // [VARIABLE TOP-K 2026-07-07] LLAMA_DSA_TOPK_OVERRIDE sets the top-k directly and can INCREASE it
+                    // VARIABLE TOP-K LLAMA_DSA_TOPK_OVERRIDE sets the top-k directly and can INCREASE it
                     // beyond the model's indexer_top_k (2048) — LLAMA_MLA_SPARSE_TOP_K is a cap (only reduces). A larger
                     // k covers more of a long context so full-sparse recall improves (top-2048 misses mid/late needles
                     // at 20k -> 1/3; 4096 attends to 2x the keys, still far cheaper than dense O(n_kv)). The lambda below
@@ -679,7 +679,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                     ggml_tensor * idx_q_full = ggml_concat(ctx0, idx_q_rope, ggml_cont(ctx0, idx_q_nope_view), 0);
                     cb(idx_q_full, "indexer_q_full", il);
 
-                        // Phase 3.5-lite step 5 (iter 29, REVISED post-audit):
+                        // lite step 5 (iter 29, REVISED post-audit):
                         //   head_gates[h, q_t] = indexer_proj · cur                       [n_idx_head, n_tokens]
                         //   per_head[k_t, q_t, h] = sum_d(idx_k_cache[d, k_t] * idx_q[d, h, q_t])
                         //   per_head *= softmax_scale       (scale BEFORE relu — matters once relu is present)
@@ -714,8 +714,8 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                         const bool sparse_fused_kernel = cparams.sparse_mla_fused_kernel;
                         bool sparse_fused_topk = cparams.sparse_mla_fused_topk;
 
-                        // Phase 42: gate fused kernel on n_tokens > 1 (prefill only).
-                        // Phase 37c measured ~80× faster suffix prefill (9487 vs 119 tok/s)
+                        // gate fused kernel on n_tokens > 1 (prefill only).
+                        // measured ~80× faster suffix prefill (9487 vs 119 tok/s)
                         // but ~2.4× slower decode (3.5 vs 8.3 tok/s) when fused is on for
                         // n_tokens=1. The fused kernel amortizes setup over many queries;
                         // for single-query decode it has higher per-call cost than the
@@ -727,7 +727,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             && idx_k_cache->type == GGML_TYPE_F16
                             && head_gates->type  == GGML_TYPE_F32;
 
-                        // [DSA_LIGHTNING_INDEXER 2026-07-06] env-gated (default OFF) drop-in for the
+                        // DSA_LIGHTNING_INDEXER env-gated (default OFF) drop-in for the
                         // incoherent fused score kernel. The validated deepseek-lid-cuda
                         // GGML_OP_LIGHTNING_INDEXER computes the same
                         //   idx_scores[k,q] = sum_h relu(scale_embd * q_h . k) * w_h
@@ -747,7 +747,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             && (idx_k_cache->type == GGML_TYPE_F16 || idx_k_cache->type == GGML_TYPE_F32)
                             && head_gates->type == GGML_TYPE_F32;
 
-                        // [LID-DIAG 2026-07-06] one-time (first DSA layer, ANY il) proof of
+                        // LID-DIAG one-time (first DSA layer, ANY il) proof of
                         // env-propagation + eligibility, printed regardless of lid_eligible so a
                         // false gate (env not seen, wrong k-type, etc.) is visible. Resolves the
                         // "both A/B passes 2/2 HIT + no marker" ambiguity: use_lid shows whether
@@ -849,7 +849,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             }
                             if (sparse_fused_topk) {
                                 const int top_k = sparse_top_k_for_scores(n_kv_scoring);
-                                // [DSA_TOPK_CAUSAL 2026-07-03] ROOT-CAUSE FIX for the DSA
+                                // DSA_TOPK_CAUSAL ROOT-CAUSE FIX for the DSA
                                 // multi-ubatch prefill content corruption: pass the query
                                 // positions so the kernel masks scores at cache cells
                                 // k > pos[q] to -FLT_MAX BEFORE top-k selection. Without
@@ -989,7 +989,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             cb(idx_scores, "indexer_scores_prefix_baseline", il);
                         }
 
-                        // Phase 3.5-lite step 6a (iter 29): apply causal mask + top_k.
+                        // lite step 6a (iter 29): apply causal mask + top_k.
                         // Reuse the main-attn causal mask (inp_attn_k->get_kq_mask) — it's
                         // -inf at future positions and 0 at causally-valid ones. Shape
                         // is [n_kv_mask, n_tokens, 1, ns] (possibly padded to 256 for FA).
@@ -1034,7 +1034,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             // for first iteration of full-DSA validation. Refine with a
                             // proper position-based mask after the build loop is unblocked.
                             //
-                            // [DSA_TOPK_CAUSAL 2026-07-03] That refinement is now REQUIRED for
+                            // DSA_TOPK_CAUSAL That refinement is now REQUIRED for
                             // prefill: the iter-34 assumptions do NOT hold in the layer-major
                             // multi-ubatch path — (a) valid keys can score <= 0 (gates can be
                             // negative) and rank BELOW thousands of zero cells; (b) at layers
@@ -1076,7 +1076,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                         }
                         ggml_build_forward_expand(gf, topk_indices);
 
-                        // [TOPK_STABLE 2026-07-02] ROOT-CAUSE FIX for the DSA-on multi-ubatch
+                        // TOPK_STABLE ROOT-CAUSE FIX for the DSA-on multi-ubatch
                         // q8_0 k_get_rows illegal-memory-access (7.5 TB OOB, sanitizer.log).
                         //
                         // The pos-causal-mask fix (below) discards the gathered-dense-mask chain
@@ -1111,7 +1111,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             prev_full_topk = topk_indices_stable;
                         }
 
-                        // [2026-07-28 DSA TOPK-STABLE PIN, codex-v5] Layer-major repeatedly executes
+                        // Layer-major repeatedly executes
                         // graph SLICES against gallocr's frozen single-pass lifetime plan; that plan
                         // recycles this CONT's allocation, so ubatch>=1's sparse FA reads recycled/
                         // unwritten pool memory through src[3] (GPU census: launches 1..88 valid,
@@ -1134,13 +1134,13 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                             ggml_set_output(topk_indices_stable);
                         }
 
-                        // Phase 3.5-lite step 6b/6d (iter 29): gather K/V and the matching
+                        // lite step 6b/6d (iter 29): gather K/V and the matching
                         // causal mask rows by topk_indices. Decode uses one sparse stream.
                         // Prefill flattens [top_k, n_tokens] indices, gathers all rows once,
                         // then reshapes to [dim, 1, top_k, n_tokens], i.e. n_tokens
                         // independent one-query streams.
                         const int64_t sparse_pos0 = ubatch.pos ? (int64_t) ubatch.pos[0] : 0;
-                        // [DSA_POS_DIAG 2026-07-06] per-ubatch check: is inp_pos the CURRENT ubatch's
+                        // DSA_POS_DIAG per-ubatch check: is inp_pos the CURRENT ubatch's
                         // positions (ne0==n_tokens, offset-0 view safe) or the FULL prompt (ne0>n_tokens ->
                         // the pos-causal-mask/topk-causal ggml_view_1d(inp_pos,n_tokens,0) reads the WRONG
                         // slice for ubatch u>0 -> misaligned causal mask -> multi-ubatch garble). Prints
@@ -1216,7 +1216,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                     }
                                     cb(sparse_kq_mask, "indexer_sparse_mask", il);
 
-                                    // [DSA_POS_CAUSAL_MASK 2026-06-25] ROOT-CAUSE FIX for GLM-5.2 DSA-on
+                                    // DSA_POS_CAUSAL_MASK ROOT-CAUSE FIX for GLM-5.2 DSA-on
                                     // multi-ubatch garble. The gathered causal mask above reads the main
                                     // kq_mask at the (non-causal) top_k-selected key indices. In the
                                     // multi-ubatch KV-inject path the whole prompt K is pre-stored, so the
@@ -1256,13 +1256,13 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                         // (diff is integer-valued; +0.5 puts the 0/-1 boundary mid-step)
                                         ggml_tensor * valid = ggml_step(ctx0,
                                             ggml_scale_bias(ctx0, diff, 1.0f, 0.5f));
-                                        // [POSCAUSAL_MIN gate 2026-07-02] The WIP min-combine (9f03b832)
+                                        // POSCAUSAL_MIN gate The WIP min-combine (9f03b832)
                                         // was motivated ONLY by "keep the mask_gather chain live so the
                                         // graph/scheduling doesn't shift" — a workaround for the multi-ubatch
                                         // illegal access. That crash is now root-caused elsewhere (partial-
                                         // ubatch inp_tokens tail; see llama-context.cpp
                                         // [PARTIAL_UB_TOKEN_TAIL]), so the workaround rationale is gone.
-                                        // DEFAULT = REPLACE (the 2026-06-25 validated design): exact causal
+                                        // DEFAULT = REPLACE (the validated design): exact causal
                                         // mask by construction, immune to ALL gather garbage (min-combine is
                                         // only immune to future-slot garbage; garbage at a VALID slot would
                                         // wrongly suppress a real key). LLAMA_DSA_POSCAUSAL_MIN=1 re-enables
@@ -1293,7 +1293,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                             sparse_kq_mask = mn;
                                         } else {
                                             // REPLACE: mask = valid*BIG - BIG : 0 where valid, -BIG (~-inf)
-                                            // where not (original 2026-06-25 constants; -1e30 saturates to
+                                            // where not (original constants; -1e30 saturates to
                                             // -inf in the f16 cast, matching the validated single-ubatch path).
                                             ggml_tensor * causal = ggml_scale_bias(ctx0, valid, 1e30f, -1e30f);
                                             causal = ggml_reshape_4d(ctx0, causal, top_k, 1, 1, n_tokens);
@@ -1305,7 +1305,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                         cb(sparse_kq_mask, "indexer_sparse_mask_poscausal", il);
                                     }
 
-                                    // [DIAG_SPARSE_NAN 2026-06-25] env-gated: name the sparse mask +
+                                    // DIAG_SPARSE_NAN env-gated: name the sparse mask +
                                     // the topk indices so the cb_eval LLAMA_LAYER_CMP_DUMP hook can capture them.
                                     {
                                         static const bool diag_sn = []() {
@@ -1316,7 +1316,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                             char dn[64];
                                             snprintf(dn, sizeof(dn), "diagmask-%d", il);  ggml_set_name(sparse_kq_mask, dn);
                                             snprintf(dn, sizeof(dn), "diagtopk-%d", il);  ggml_set_name(topk_indices, dn);
-                                            // [2026-07-06] also dump the top_k INPUT (causal-biased idx_scores) to
+                                            // also dump the top_k INPUT (causal-biased idx_scores) to
                                             // disambiguate: garbage idx_scores for ub>0 => scoring/galloc bug;
                                             // valid idx_scores + garbage topk => ggml_top_k output buffer reuse.
                                             if (idx_scores) { snprintf(dn, sizeof(dn), "diagscore-%d", il); ggml_set_name(idx_scores, dn); }
@@ -1334,7 +1334,7 @@ llm_build_deepseek2::llm_build_deepseek2(const llama_model & model, const llm_gr
                                 goto skip_gather;
                             }
 
-                            // [FA_DECOUPLE 2026-07-07] The sparse fused-FA path (ggml_flash_attn_ext_sparse)
+                            // FA_DECOUPLE The sparse fused-FA path (ggml_flash_attn_ext_sparse)
                             // is a DISTINCT GGML op (GGML_OP_FLASH_ATTN_EXT_SPARSE) with its own
                             // always-compiled CUDA kernel + supports_op (ggml-cuda.cu:6098 = tensor
                             // types/shapes ONLY, no cparams.flash_attn dependency). It builds k_main_4d
@@ -1618,7 +1618,7 @@ post_attn:
             continue;  // next layer — the FFN path is skipped for all layers in this graph
         }
         if (il == effective_n_layers - 1 && inp_out_ids) {
-            // 2026-04-21 (iter 10): In the mega-dispatch path, cur and inpSA
+            // (iter 10): In the mega-dispatch path, cur and inpSA
             // are already external [n_embd, 1] tensors (attn_wraps[il] and
             // in_wraps[il]) containing exactly one row each.  get_rows with
             // inp_out_ids=[0] is a mathematical no-op but it introduces two
@@ -1637,7 +1637,7 @@ post_attn:
             // (no ggml_cont needed — we either skipped get_rows above, or
             // the per-call single-layer graph has no gallocr slot pressure)
         }
-        // DIAG (2026-05-29): dump the L1 attention output (cur, BEFORE the residual
+        // DIAG dump the L1 attention output (cur, BEFORE the residual
         // add) to split the multi-ubatch L1 divergence into attention-compute (cur
         // differs) vs residual/aliasing (cur matches single-ub but ffn_inp differs).
         // Gated by LLAMA_DUMP_LAYER; diagnostic only. NOTE: set_output(cur) keeps the
@@ -1655,7 +1655,7 @@ post_attn:
         ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
         cb(ffn_inp, "ffn_inp", il);
 
-        // DIAG (2026-05-28): persist ffn_inp (post-attention residual) at the dump
+        // DIAG persist ffn_inp (post-attention residual) at the dump
         // layer so it survives allocation and can be checksummed. Lets us split the
         // multi-ubatch L1 divergence into attention (ffn_inp differs) vs MoE-FFN
         // (ffn_inp identical, l_out differs). Gated by LLAMA_DUMP_LAYER; diagnostic only.
@@ -1764,7 +1764,7 @@ post_attn:
         if (params.external_output_per_layer != nullptr) {
             ggml_tensor * out_dst = params.external_output_per_layer[il - il_start];
             if (out_dst != nullptr) {
-                // 2026-04-20: Mark layer 77's `cur` as a graph OUTPUT so
+                // Mark layer 77's `cur` as a graph OUTPUT so
                 // ggml_backend_sched doesn't reuse its compute-buffer slot
                 // for downstream post-loop nodes (result_norm, result_output)
                 // BEFORE the cpy has read from it. Diagnostics showed that

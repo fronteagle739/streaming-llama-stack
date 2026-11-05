@@ -83,7 +83,7 @@ static void ggml_cuda_flash_attn_ext_mma_f16_switch_ncols2(ggml_backend_cuda_con
     // MLA (dkq=576): force GQA opt even with unaligned K->ne[1].
     // Only GQA instances exist for dkq=576. The mask tensor is padded to 256
     // in the graph builder, and out-of-range K entries are zero in the KV cache.
-    // NOMASK(2026-05-30): drop the `mask` requirement so the MLA (dkq=576) GQA path (ncols2>1) is
+    // NOMASKdrop the `mask` requirement so the MLA (dkq=576) GQA path (ncols2>1) is
     // selected even with a null mask (direct_causal inline-mask, >160k unlock). Behavior-identical when
     // mask present. The ncols2>1 selection is required so the kernel's mask-APPLY sites run + use inline m.
     if (K->ne[0] == 576 && max_bias == 0.0f) {
@@ -152,7 +152,7 @@ static void ggml_cuda_flash_attn_ext_mma_f16(ggml_backend_cuda_context & ctx, gg
     const ggml_tensor * mask = dst->src[3];
 
     // QUERY-TILE CAP (env LLAMA_FA_QCHUNK=N, e.g. 2048). FIX for the multi-ubatch
-    // streaming-prefill bug (2026-05-29): the NCOLS=32 MLA FA kernel mishandles the
+    // streaming-prefill bug the NCOLS=32 MLA FA kernel mishandles the
     // (correct) causal mask when a call's query count > ~2048 AND the KV cache has
     // unfilled cells (non-last ubatch). Splitting the FA into <=N-query launches makes
     // each launch q<=N (the regime that is always correct), and is mathematically
@@ -442,7 +442,7 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
                 return BEST_FATTN_KERNEL_NONE;
             }
             // Relax stride requirement: mask is padded to 256 in graph builder.
-            // NOMASK(2026-05-30): allow a NULL mask for MLA under the opt-in env (direct_causal
+            // NOMASKallow a NULL mask for MLA under the opt-in env (direct_causal
             // inline-mask path, >160k unlock). Env-only gate (stable across sched_reserve where
             // op_params[4] may be 0); the graph only nulls the mask for the gated MLA+direct path.
             {
@@ -600,13 +600,13 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
 
 void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     ggml_cuda_set_device(ctx.device);
-    // Phase 97 probe: dump mask shape + first/last fp16 elements for the
+    // probe: dump mask shape + first/last fp16 elements for the
     // first N FA calls (= layer 0..N-1) when LLAMA_FA_MASK_PROBE=1.
     {
         static int fa_probe_count = 0;
         static const char * fa_probe_env = std::getenv("LLAMA_FA_MASK_PROBE");
         static const bool fa_probe = fa_probe_env && fa_probe_env[0] != '\0' && fa_probe_env[0] != '0';
-        // [2026-08-28] Gate on the SHAPE, not just a call count, and print the tensor NAME.
+        // Gate on the SHAPE, not just a call count, and print the tensor NAME.
         //
         // A bare "first 5 calls" cap samples whatever runs first, which is the n_ubatch-sized warmup
         // or max graph -- three separate diagnostics were confounded this way in one session

@@ -88,13 +88,13 @@ GGML_API bool ggml_gallocr_set_reserved_tensors(
         size_t n_tensors);
 GGML_API void ggml_gallocr_clear_reserved_tensors(ggml_gallocr_t galloc);
 
-// 2026-05-31 TARGETED no-free-reuse gate for the layer-major MLA multi-ubatch prefill collision.
+// TARGETED no-free-reuse gate for the layer-major MLA multi-ubatch prefill collision.
 // enable=1 holds attention-critical slots (norm/kv_cmpr/Kcur/Vcur/k_pe/attn_norm) out of gallocr's
 // reuse pool; =0 restores normal reuse. Host scopes this to the prefill graph only (OFF for decode,
 // else the single-token decode buffer inflates -> long-ctx decode OOM). Env LLAMA_PREFILL_PROTECT_REUSE
 // overrides. Default state (-1) behaves as off.
 GGML_API void ggml_gallocr_set_protect_reuse(int enable);
-GGML_API void ggml_gallocr_set_no_free_reuse(int enable);  // [2026-07-28] host-forced full no-free-reuse (M3 wf=1 code default)
+GGML_API void ggml_gallocr_set_no_free_reuse(int enable);  // host-forced full no-free-reuse (M3 wf=1 code default)
 
 // Utils
 // Create a buffer and allocate all the tensors in a ggml_context

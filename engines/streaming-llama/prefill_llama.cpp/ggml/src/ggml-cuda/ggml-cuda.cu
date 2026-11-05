@@ -250,11 +250,11 @@ static void cuda_op_profile_dump() {
         for(const auto&r:rows)fprintf(stderr,"DS4PERF_NODE_PROFILE\t%" PRId64 "\t%.9f\t%s\n",r.second.count,r.second.total_ms,r.first.c_str());
         fprintf(stderr,"DS4PERF_NODE_PROFILE_END\trows=%zu\n",rows.size());
     }
-    fflush(stderr);  // 2026-07-10: the DUMP_EACH/atexit output is lost on Windows force-kill without an explicit flush
+    fflush(stderr);  // the DUMP_EACH/atexit output is lost on Windows force-kill without an explicit flush
 }
 
 // Public C wrapper (exported from ggml-cuda.dll via GGML_BACKEND_API).
-// Phase 1.3: callers in llama.dll invoke this after each prefill when
+// callers in llama.dll invoke this after each prefill when
 // LLAMA_CUDA_OP_PROFILE_DUMP_EACH=1 so we capture per-op CUDA timings
 // without depending on the Windows-flaky atexit path.
 extern "C" GGML_BACKEND_API void ggml_cuda_op_profile_dump_now() {
@@ -551,7 +551,7 @@ extern "C" GGML_BACKEND_API void ggml_cuda_dlm_remainder_profile_dump_now() {
 
 // RAII cudaEvent timer — records elapsed GPU time between construction and destruction.
 // The stop event is recorded lazily on the stream and measured on destruction via synchronize.
-// 2026-05-29: PACE_EVERY_N=4 isolated the per-op cudaEventSynchronize as cheap
+// PACE_EVERY_N=4 isolated the per-op cudaEventSynchronize as cheap
 // (~0.8s total); the OP_PROFILE crutch's ~6s @20k overhead is almost entirely
 // per-op cudaEventCreate/Destroy (8500 ops x4 driver allocs). LLAMA_CUDA_REUSE_EVENTS=1
 // reuses two static events (created once) instead of create/destroy-per-op, keeping
@@ -585,7 +585,7 @@ struct CudaOpTimer {
     ~CudaOpTimer() {
         if (!start_ev) return;
         cudaEventRecord(stop_ev, stream);
-        // Phase 1.2 v14 (2026-05-11): only synchronize when the stream is NOT in
+        // v14 only synchronize when the stream is NOT in
         // graph-capture mode. cudaEventSynchronize is illegal during cudaStream*
         // capture and crashes cudaStreamEndCapture later with "operation failed
         // due to a previous error during capture" (validated at n_ubatches=1 fast
@@ -594,7 +594,7 @@ struct CudaOpTimer {
         // time to overlap NVMe with compute — the actual mechanism behind the
         // 547+ tok/s breakthrough vs 465 baseline at Kimi 32k/8ub.
         //
-        // 2026-05-29: the per-op cudaEventSynchronize is BOTH the pacing (cedes the
+        // the per-op cudaEventSynchronize is BOTH the pacing (cedes the
         // CUDA driver lock to the WF DMA thread) AND ~6s of overhead at 20k (~8500
         // ops). Measured: removing it entirely (OP_PROFILE=0) starves the DMA
         // (wf 22ms->9486ms, 533->438 tps). LLAMA_CUDA_PACE_EVERY_N>1 syncs only
@@ -607,7 +607,7 @@ struct CudaOpTimer {
             int n = (e && e[0]) ? atoi(e) : 1;
             return n >= 1 ? n : 1;
         }();
-        // 2026-05-29: the crutch's real benefit is keeping the NVMe FETCH fast (17 vs
+        // the crutch's real benefit is keeping the NVMe FETCH fast (17 vs
         // 11.7 GB/s) by BLOCKING the host so DirectStorage's CPU I/O threads get
         // scheduled (not CUDA-lock). LLAMA_CUDA_PACE_SLEEP_US>0 replaces the per-op
         // cudaEventSynchronize (which waits the op's full GPU time, ~6s total) with a
@@ -684,7 +684,7 @@ int ggml_cuda_get_device() {
     return id;
 }
 
-// Phase 300 (2026-05-04): track all cudaMalloc calls through ggml_cuda_device_malloc.
+// track all cudaMalloc calls through ggml_cuda_device_malloc.
 // This catches both wrapper allocations AND pool's direct allocations,
 // pinpointing exactly where VRAM is being consumed across cycles.
 static std::atomic<int64_t> g_cuda_device_malloc_bytes{0};
@@ -692,7 +692,7 @@ static std::atomic<int64_t> g_cuda_device_malloc_count{0};
 extern "C" int64_t ggml_cuda_device_malloc_total_bytes() { return g_cuda_device_malloc_bytes.load(); }
 extern "C" int64_t ggml_cuda_device_malloc_total_count() { return g_cuda_device_malloc_count.load(); }
 
-// DS4COMBO fast switch (2026-10-23): an optional process-wide switch arena.
+// DS4COMBO fast switch an optional process-wide switch arena.
 // When enabled before the first device allocation, every ggml_cuda_device_malloc
 // block gets its own VA range inside one cuMemAddressReserve span, backed by
 // cuMemCreate/cuMemMap. suspend() unmaps and releases ALL physical memory of
@@ -1181,7 +1181,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         pool_size -= size;
     }
 
-    // Phase 296: release all cached freed buffers back to the CUDA driver.
+    // release all cached freed buffers back to the CUDA driver.
     void clear() override {
         ggml_cuda_set_device(device);
         for (int i = 0; i < MAX_BUFFERS; ++i) {
@@ -1285,7 +1285,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
             access.location.id = device;
             access.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-            // Phase 80: cuMemSetAccess fails with CUDA_ERROR_NOT_READY on Windows
+            // cuMemSetAccess fails with CUDA_ERROR_NOT_READY on Windows
             // when the device has pending async operations from prior streams.
             // Synchronise the device first so the pool growth can complete.
             (void) cudaDeviceSynchronize();
@@ -1323,7 +1323,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         GGML_ASSERT(ptr == (void *) ((char *)(pool_addr) + pool_used));
     }
 
-    // Phase 296: VMM pool. The reserve_size growth allocations stay mapped;
+    // VMM pool. The reserve_size growth allocations stay mapped;
     // pool_used is the bump pointer. Resetting pool_used reclaims pool space
     // for new allocations without unmapping (which would invalidate descriptors).
     void clear() override {
@@ -1336,7 +1336,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
 
 std::unique_ptr<ggml_cuda_pool> ggml_backend_cuda_context::new_pool_for_device(int                  device,
                                                                                [[maybe_unused]] int stream_no) {
-    // Phase 80: env override to force the legacy pool. The VMM pool's
+    // env override to force the legacy pool. The VMM pool's
     // cuMemSetAccess fails with "device not ready" on Windows when growing
     // past the initial reserve, blocking dynamic n_ubatch resize. The
     // legacy pool uses cudaMalloc directly and has no growth restriction.
@@ -1387,7 +1387,7 @@ ggml_backend_cuda_context::~ggml_backend_cuda_context() {
 
 // cuda buffer
 
-// Phase 299 (2026-05-04): track per-process CUDA buffer alloc/free totals to
+// track per-process CUDA buffer alloc/free totals to
 // surface leaks across streaming-prefill cycles. Wrapper-level counters are
 // the only reliable signal because the leak hides in many sub-100MB allocs.
 static std::atomic<int64_t> g_cuda_buf_alloc_bytes{0};
@@ -1520,7 +1520,7 @@ thread_local cuda_tensor_copy_pinned_arena g_cuda_tensor_copy_pinned;
 // for every set_tensor that staged into the pinned arena during a capture
 // window. Populated in ggml_backend_cuda_buffer_set_tensor when the override
 // is active. Cleared on ggml_cuda_set_tensor_copy_stream(nullptr) alongside
-// the arena reset. Used by split-decode Phase 2d.C1 to locate inp_pos /
+// the arena reset. Used by split-decode to locate inp_pos /
 // inp_kq_mask offsets inside the pinned arena after capture completes.
 struct cuda_tensor_staging_record {
     std::string name;
@@ -1717,7 +1717,7 @@ static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_bac
         return nullptr;
     }
 
-    // Phase 298 (2026-05-04): log every CUDA buffer-type allocation > 100 MB
+    // log every CUDA buffer-type allocation > 100 MB
     // to identify per-request leaks. Gated on env to not spam regular runs.
     if (size > 100ull * 1024 * 1024) {
         const char * trace_env = std::getenv("LLAMA_CUDA_TRACE_BUFFER_ALLOC");
@@ -3437,7 +3437,7 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
 
-    // bug#2 stream_local (2026-07-18): ggml_cuda_mul_mat_id, unlike ggml_cuda_mul_mat, did NOT honor the
+    // bug#2 stream_local ggml_cuda_mul_mat_id, unlike ggml_cuda_mul_mat, did NOT honor the
     // GGML_PREC_F32 op-param, so ggml_mul_mat_set_prec() on an expert matmul was a no-op. At decode
     // (ne2<=4) quantized experts route to MMVQ, at prefill to MMQ/mmq_id - different quantized kernels.
     // Mirror ggml_cuda_mul_mat's force_cublas_prec: when GGML_PREC_F32 is requested on a quantized expert
@@ -6669,7 +6669,7 @@ static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
 
 #ifdef USE_CUDA_GRAPH
-    // [2026-07-28 codex-v4 hardening] Streaming prefill disables CUDA graphs via the
+    // Streaming prefill disables CUDA graphs via the
     // scoped cuda_graph_disable_depth counter rather than GGML_CUDA_DISABLE_GRAPHS.
     // Do not leave the auxiliary-stream graph optimizer active while graph execution
     // itself is force-disabled: graph_compute() would take the non-graph path while
@@ -7043,7 +7043,7 @@ extern "C" GGML_BACKEND_API int64_t ggml_backend_cuda_glm_topk_gather_mask_end(
     return (int64_t) masked_slots;
 }
 
-// Phase 296 (2026-05-04): release all cached freed buffers from per-stream pools.
+// release all cached freed buffers from per-stream pools.
 // Also synchronises the device first so any pending kernels finish before cudaFree.
 size_t ggml_backend_cuda_pool_clear(ggml_backend_t backend) {
     if (!ggml_backend_is_cuda(backend)) {
@@ -7056,7 +7056,7 @@ size_t ggml_backend_cuda_pool_clear(ggml_backend_t backend) {
     return cuda_ctx->clear_pools();
 }
 
-// Phase 302 (2026-05-04): cuda_graphs counter via Meyers-singleton atomic
+// cuda_graphs counter via Meyers-singleton atomic
 // in common.cuh. No class member changes, no concurrency races on the counter
 // itself (the map insertion is still racy but that was already so).
 bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend,size_t bytes) {
@@ -7091,11 +7091,11 @@ size_t ggml_backend_cuda_graphs_clear(ggml_backend_t backend) {
     auto * cuda_ctx = static_cast<ggml_backend_cuda_context *>(backend->context);
     if (!cuda_ctx) return 0;
 #ifdef USE_CUDA_GRAPH
-    // Phase 316i (2026-05-04): drop all stale cuda_graphs entries between
+    // drop all stale cuda_graphs entries between
     // requests. Each entry holds node pointers from the prior request's
     // graph; those pointers reference freed compute-graph memory now.
     // Re-using a stale entry on a colliding new node ptr causes illegal
-    // memory access (Phase 316h symptom). Clearing forces a fresh entry
+    // memory access (symptom). Clearing forces a fresh entry
     // for every node in the next request.
     ggml_cuda_set_device(cuda_ctx->device);
     cudaDeviceSynchronize();
@@ -7237,7 +7237,7 @@ void ggml_backend_cuda_prefill_pipeline_free(void * pipeline) {
     delete p;
 }
 
-// Phase 316b (2026-05-04): private ptr->size map for prefill pinned alloc/free
+// private ptr->size map for prefill pinned alloc/free
 // so the free path can log the matching size without callers passing it.
 static std::mutex & ggml_cuda_pin_size_mtx() {
     static std::mutex m;
@@ -7323,7 +7323,7 @@ void ggml_backend_cuda_prefill_sync_copy_stream(void * pipeline) {
     CUDA_CHECK(cudaStreamSynchronize(p->copy_stream));
 }
 
-// [2026-07-28 STAGING_SYNC probe — GLM-DSA multi-ubatch race A/B] These helpers issue
+// These helpers issue
 // SYNCHRONOUS cudaMemcpy on the legacy NULL stream. ggml's compute streams are created
 // cudaStreamNonBlocking (common.cuh:1476), so the legacy stream has NO ordering edge
 // against them: a staging copy can overwrite gallocr-reused device memory while an
@@ -7802,7 +7802,7 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
                     case GGML_TYPE_Q8_0:
                     case GGML_TYPE_IQ4_NL:  // QFN: n-gram rows (any row width that is a whole number of blocks)
                         return true;
-                    case GGML_TYPE_Q4_K:  // added 2026-04-19 via k_get_rows_q4_K
+                    case GGML_TYPE_Q4_K:  // added via k_get_rows_q4_K
                     case GGML_TYPE_Q5_K:
                         // K-quant get_rows kernels require ne00 to be a
                         // multiple of QK_K (256). Check row size fits.
@@ -8376,7 +8376,7 @@ ggml_backend_t ggml_backend_cuda_init(int device) {
             const char *nodes=getenv("LLAMA_CUDA_OP_PROFILE_NODES");g_node_profile_enabled=nodes&&nodes[0]=='1';
             std::atexit(cuda_op_profile_dump);
             fprintf(stderr, "[CUDA OP PROFILE] enabled — will dump at exit\n");
-            fflush(stderr);  // 2026-07-10: flush so this enable-marker is observable right after startup (env-propagation check)
+            fflush(stderr);  // flush so this enable-marker is observable right after startup (env-propagation check)
         }
     });
 

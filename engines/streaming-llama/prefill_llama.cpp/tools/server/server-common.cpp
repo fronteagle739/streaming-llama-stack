@@ -1075,7 +1075,7 @@ json oaicompat_chat_params_parse(
         // Allowlist BOTH the upstream template-file hash AND the live studio-preset template hash
         // (the studio GLM preset ships its own jinja whose source differs by whitespace/version, so it
         // hashed to 0x4351f3b5381dcdf9 not the file's 0x1b53d1b00da06fb6 — confirmed via SPLICE-ELIG log
-        // 2026-07-22). The two-probe boundary + tail-proof below still validate render behavior per request,
+        // ). The two-probe boundary + tail-proof below still validate render behavior per request,
         // so a stale hash only DISABLES the splice (safe), never mis-splices.
         if (source_hash == 0x1b53d1b00da06fb6ULL || source_hash == 0x4351f3b5381dcdf9ULL) {
             template_family = "glm";
@@ -1207,7 +1207,7 @@ json oaicompat_chat_params_parse(
     if (!raw_user_text.empty()) {
         llama_params["raw_user_text"] = raw_user_text;
     }
-    // v1.10 multi-turn images (USER 2026-06-01): structured conversation [{role,content}]
+    // v1.10 multi-turn images (USER ): structured conversation [{role,content}]
     // (image markers stripped — the receiver's mlx_vlm adds num_images image placeholders to
     // the LAST user message) so the MLX decode receiver rebuilds the FULL multi-turn vlm
     // conversation. Was: only the latest question + raw_image[0] => turn2 saw the wrong image

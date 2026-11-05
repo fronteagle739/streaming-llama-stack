@@ -14,7 +14,7 @@ struct ds4_external_host_cache_v1 {
     void (*clear)(void);
 };
 
-/* v2 (RAMFIX): the caller owns the transfer streams and pinned staging, so
+/* v2 the caller owns the transfer streams and pinned staging, so
  * RAM traffic can run beside DirectStorage instead of in front of it.
  * payload() returns a published slot's locked host bytes for projection k
  * (0 gate, 1 up, 2 down) and refreshes its age; NULL when invalid.

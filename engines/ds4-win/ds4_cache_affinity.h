@@ -8,7 +8,7 @@
 #else
 #define DS4_AFFINITY_FN
 #endif
-/* RAMFIX tier cost: tier 1 (VRAM) pays nothing, tier 2 (RAM) pays ram_cost of the miss
+/* tier cost: tier 1 (VRAM) pays nothing, tier 2 (RAM) pays ram_cost of the miss
  * penalty, anything else (storage) pays all of it. ram_cost 0 is the old boolean rule. */
 static DS4_AFFINITY_FN float ds4_affinity_tier_penalty(uint8_t tier, float lambda, float ram_cost) {
     return tier == 1 ? 0.0f : tier == 2 ? lambda * ram_cost : (tier ? 0.0f : lambda);

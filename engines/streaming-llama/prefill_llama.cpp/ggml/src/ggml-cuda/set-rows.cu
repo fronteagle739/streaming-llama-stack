@@ -322,7 +322,7 @@ void ggml_cuda_op_set_rows(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_I64 || src1->type == GGML_TYPE_I32);
 
-    // 2026-05-31 SETROWS_PROBE (env LLAMA_SETROWS_PROBE): for big K-cache stores
+    // SETROWS_PROBE (env LLAMA_SETROWS_PROBE): for big K-cache stores
     // (dst->ne[1] large), read back the ACTUAL GPU index the kernel will use and
     // the dst pointer. Rate-limited to ~1 line per ubatch (logs when the first
     // index jumps). Reveals whether chunk5's set_rows reads idx>=163840 (correct

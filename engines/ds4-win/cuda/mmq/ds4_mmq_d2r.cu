@@ -3032,9 +3032,7 @@ int ds4_mmq_iq2_xxs_moe_d2r_fused_launch(
 }
 
 // ============================================================================
-// Dense Q8_0 D2R (2026-07-09, proto_gemm_dense_q8_d2r.cu passes 0-5; arc
-// record in local/docs/ds4_d2r_decomposition_analysis_2026-07-08.md "DENSE-Q8
-// D2R PROTO ARC").
+// Dense Q8_0 D2R; tested by proto_gemm_dense_q8_d2r.cu.
 //
 // Reads the kind-5 aligned artifact (CUDA_DERIVED_Q8_0_ALIGNED_DENSE, weight
 // server --repack-q8-aligned, ADDITIVE) in place: [half dq[nblk]][pad to 64B]

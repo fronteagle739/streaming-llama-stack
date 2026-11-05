@@ -291,7 +291,7 @@ def native_launch_config(cfg,argv):
         values[index+1]='{port}'
         return values,port
     argv,preset=list(argv),{}
-    # Per-preset streaming profile and its own N* (owner 2026-10-23): carried in
+    # Per-preset streaming profile and its own N*: carried in
     # the preset's flags, validated against the measured inputs in combo.json.
     for flag in ('--combo-producer-profile','--combo-crossover-tokens'):
         if flag in argv:
@@ -311,7 +311,7 @@ def native_launch_config(cfg,argv):
 
 
 def apply_preset_crossover(cfg,profile,tokens):
-    """Select one measured streaming preset; its N* must equal the owner crossover recomputed from
+    """Select one measured streaming preset; its N* must equal the measured crossover recomputed from
     its measured inputs (r_native_tok_s, r_stream_tok_s, switch_seconds and the optional
     native_intercept_s / stream_fixed_s, both 0 when absent)."""
     table=cfg.get('combo_crossover_profiles') or {}
@@ -435,7 +435,7 @@ def guarded(cfg,config):
     spec=dict(command=command,cwd=str(Path(__file__).resolve().parents[1]),env=env,runtime_root=str(root),task='DS4COMBO',
         gpu_uuid=cfg.get('gpu_uuid'),owned_paging_limit_bytes=paging_limit,
         host_budget_gib=cfg['combo_worker_host_budget_gib'],min_available_gib=cfg['min_available_gib'],job_commit_gib=cfg['job_commit_gib'],timeout_s=None,   # a server has no lifetime cap; requests use the progress-renewed window
-        
+
         owner_pid=owner.pid,owner_created=owner.create_time(),stop=str(root/('server-'+run_id+'.stop')),
         log=str(root/('server-'+run_id+'.log')),receipt=str(root/('server-'+run_id+'.json')),paging_telemetry=True,
         gpu_window_file=str(window),gpu_run_id=run_id,gpu_hold_file=cfg['hold_file'],

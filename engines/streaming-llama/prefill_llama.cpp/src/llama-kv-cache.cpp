@@ -361,7 +361,7 @@ llama_kv_cache::llama_kv_cache(
             v_stream.push_back(has_v ? ggml_view_2d(ctx, v, n_embd_v_gqa, kv_size, v->nb[1], s*v->nb[2]) : nullptr);
         }
 
-        // Phase 3.5-lite (iter 29): allocate indexer K cache for GLM_DSA / sparse-MLA
+        // lite (iter 29): allocate indexer K cache for GLM_DSA / sparse-MLA
         // models. Sized [indexer_head_size, kv_size, n_stream] in fp16. Skipped for
         // models without indexer tensors (hparams.indexer_n_head == 0).
         //
@@ -420,7 +420,7 @@ llama_kv_cache::llama_kv_cache(
         }
     }
 
-    // VIRTUAL KV (2026-09-10, LLAMA_KV_TIER_VIRTUAL_KV=1 with the NVMe tier, CPU placement only): the
+    // VIRTUAL KV (LLAMA_KV_TIER_VIRTUAL_KV=1 with the NVMe tier, CPU placement only): the
     // streaming pass points every layer's K/V/k_idx at the GPU staging before it computes, the tier files
     // hold the rows, and nothing reads the cache's own buffer -- so it is not allocated. At 262144 cells
     // that buffer would be 27 GB of host RAM for GLM-5.3; this is what lets rtx.ctx reach the Mac's.
@@ -1182,7 +1182,7 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
                 //                always insert in the cell with minimum pos
                 bool can_use = cells.is_empty(idx);
 
-                // Phase 320 (2026-05-05): when n_stream==1 and many seqs share
+                // when n_stream==1 and many seqs share
                 // the unified stream, cells accumulate multi-seq ownership
                 // (seq_count > 1) under continuous-batching workloads (NP>=64).
                 // The original `seq_count == 1` constraint rejected these cells,
@@ -1229,15 +1229,15 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
 
             if (n_tested >= cells.size()) {
                 //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
-                break;  // Phase 332: drop out of inner while; second-pass scan below
+                break;  // drop out of inner while; second-pass scan below
             }
         }
 
-        // Phase 332 (2026-05-05): if first-pass scan didn't find enough cells,
+        // if first-pass scan didn't find enough cells,
         // run a second pass that ONLY accepts is_empty cells. The first pass's
-        // can_use logic (seq_count==1 + SWA-evictable, plus Phase 320's
+        // can_use logic (seq_count==1 + SWA-evictable, plus 's
         // multi-seq relaxation) can exhaust scan budget before reaching the
-        // is_empty cells freed by Phase 329's release-clears-KV. The second
+        // is_empty cells freed by 's release-clears-KV. The second
         // pass starts at idx 0 and looks specifically for empty cells, which
         // recently-released slots produced via prompt_clear -> seq_rm.
         if (n_stream == 1 && res.idxs[s].size() < n_tokens) {
@@ -1579,7 +1579,7 @@ void llama_kv_cache::sync_view_pointers() {
                 }
             }
         }
-        // Phase 3.5-lite (iter 29): sync k_idx_stream views too. Missing sync caused
+        // lite (iter 29): sync k_idx_stream views too. Missing sync caused
         // serialization to read from stale null data pointers, producing bit-identical
         // bytes across ALL layers at ALL positions — broke Mac-side sparse decode.
         if (layer.k_idx) {
@@ -1735,7 +1735,7 @@ ggml_tensor * llama_kv_cache::cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggm
     ggml_tensor * result = ggml_set_rows(ctx, k, k_cur, k_idxs);
     ggml_format_name(result, "kv_k_store-%d", il);
 
-    // Phase 148 partial-UB diag: log K SET_ROWS dispatch shape per layer.
+    // partial-UB diag: log K SET_ROWS dispatch shape per layer.
     // With KIMI_PARTIAL_UB=1 the last microbatch has fewer rows than the
     // n_ubatch the graph was built for; this dump localises whether
     // k_cur->ne[1] (token-count) tracks the per-ubatch n_tokens correctly
@@ -1760,7 +1760,7 @@ ggml_tensor * llama_kv_cache::cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggm
             fflush(stderr);
         }
     }
-    // Phase 145: tried ggml_set_output(result) and ggml_set_output(k)
+    // tried ggml_set_output(result) and ggml_set_output(k)
     // to mark the K cache buffer as non-reusable by the gallocr pool.
     // Neither helped — same 7020/28672 zero rows in [1, 12286] pattern.
     // The K cache's actual data lives in kv_staging_buf (allocated
@@ -1778,7 +1778,7 @@ ggml_tensor * llama_kv_cache::cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggm
     return result;
 }
 
-// Phase 3.5-lite (iter 29): indexer K cache get/set for GLM_DSA sparse MLA.
+// lite (iter 29): indexer K cache get/set for GLM_DSA sparse MLA.
 ggml_tensor * llama_kv_cache::get_k_idx(ggml_context * ctx, int32_t il, uint32_t n_kv, const slot_info & sinfo) const {
     const int32_t ikv = map_layer_ids.at(il);
 
@@ -1999,7 +1999,7 @@ void llama_kv_cache::fill_input_k_idxs(std::vector<int64_t> & dst, int64_t n_tot
 }
 
 void llama_kv_cache::set_input_k_idxs(ggml_tensor * dst, const llama_ubatch * ubatch, const slot_info & sinfo) const {
-    // 2026-07-02 (DSA-on multi-ubatch): a graph-input tensor that no live node
+    // (DSA-on multi-ubatch): a graph-input tensor that no live node
     // references is left unallocated by the scheduler (buffer==NULL). Mirrors the
     // llm_graph_input_out_ids::set_input guard: nothing to feed, so skip. Without
     // this, the DSA-on sparse path (where the dense mask/idx inputs can go dead)
@@ -2068,7 +2068,7 @@ void llama_kv_cache::fill_input_v_idxs(std::vector<int64_t> & dst, int64_t n_tot
 }
 
 void llama_kv_cache::set_input_v_idxs(ggml_tensor * dst, const llama_ubatch * ubatch, const slot_info & sinfo) const {
-    // 2026-07-02 (DSA-on multi-ubatch): dead (unreferenced) input -> buffer==NULL. Skip.
+    // (DSA-on multi-ubatch): dead (unreferenced) input -> buffer==NULL. Skip.
     // See set_input_k_idxs note.
     if (!dst->buffer) {
         return;
@@ -2309,7 +2309,7 @@ void llama_kv_cache::set_input_kq_mask(ggml_tensor * dst, const llama_ubatch * u
                                         float soft_mask_alpha, float soft_mask_tau) const {
     const uint32_t n_tokens = ubatch->n_tokens;
 
-    // 2026-07-02 (DSA-on multi-ubatch NULL-buffer staging crash, ROOT CAUSE):
+    // (DSA-on multi-ubatch NULL-buffer staging crash, ROOT CAUSE):
     // The GLM-5.2 DSA-on sparse path builds its own position-derived causal mask
     // (deepseek2.cpp [DSA_POS_CAUSAL_MASK]) and discards the gathered dense mask.
     // With fa=off, self_kq_mask_cnv == self_kq_mask, so the dense self_kq_mask
@@ -2355,7 +2355,7 @@ void llama_kv_cache::set_input_kq_mask(ggml_tensor * dst, const llama_ubatch * u
         set_input_kq_mask_impl<false>(args, data);
     }
 
-    // Phase 2.2 angle 21 (2026-05-12): trace the freshly written CPU mask
+    // angle 21 trace the freshly written CPU mask
     // values to compare against the GPU-side FA mask sampled by MASK_TRACE.
     // If this shows correct causal triangular mask but the GPU FA mask is
     // wrong, the bug is in the CPU→GPU CPY+CAST pipeline. If THIS also
@@ -2379,7 +2379,7 @@ void llama_kv_cache::set_input_kq_mask(ggml_tensor * dst, const llama_ubatch * u
         }
     }
 
-    // LLAMA_FA_KTRACE (2026-06-01 broadened): fire for EVERY batch (was gated to
+    // LLAMA_FA_KTRACE (broadened): fire for EVERY batch (was gated to
     // pos0∈{0,512,4096} which never matched the image batch at pos0=19). Reports whether
     // the PADDING region [actual_kv, n_kv) — the 132 stale cells the image's 380->512
     // GGML_PAD creates — is correctly masked (-inf) or leaks finite (attended) values into
@@ -2638,7 +2638,7 @@ ggml_cgraph * llama_kv_cache::build_graph_shift(llm_graph_result * res, llama_co
 void llama_kv_cache::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
     GGML_UNUSED(flags);
 
-    // Phase G diag (2026-05-06): trace state_write entry on streaming-prefill
+    // diag trace state_write entry on streaming-prefill
     // MLA models to find the exact crash site.  No-op overhead unless env set.
     const char * dbg = std::getenv("LLAMA_HANDOFF_DEBUG");
     const bool trace = dbg && dbg[0] != '\0' && dbg[0] != '0';
@@ -2982,7 +2982,7 @@ void llama_kv_cache::state_write_data(llama_io_write_i & io, const cell_ranges_t
                 const void * kdata = k ? k->data : nullptr;
                 const void * kbase = (k && k->view_src) ? k->view_src->data : kdata;
                 uint32_t cksum = 0;
-                // [2026-07-12] host-read only when the buffer is host-resident: with DSV4's GPU-resident
+                // host-read only when the buffer is host-resident: with DSV4's GPU-resident
                 // raw KV (REPOINT bypass), k->data is a CUDA device pointer — this raw loop was the
                 // post-prefill 0xc0000005 (dump fault VA == cache_k_l0 GPU base). The real export writer
                 // is safe (ggml_backend_tensor_get); only this diagnostic dereferenced directly.
@@ -3389,7 +3389,7 @@ bool llama_kv_cache::state_read_meta(llama_io_read_i & io, uint32_t strm, uint32
 }
 
 bool llama_kv_cache::state_read_data(llama_io_read_i & io, uint32_t strm, uint32_t cell_count, const slot_info & sinfo) {
-    // VIRTUAL KV (2026-09-10): the tensors have no buffer of their own; nothing can be restored into them.
+    // VIRTUAL KV the tensors have no buffer of their own; nothing can be restored into them.
     for (const auto & layer : layers) {
         if (layer.k && layer.k->data == nullptr) {
             LLAMA_LOG_ERROR("%s: the KV tensors are virtual (LLAMA_KV_TIER_VIRTUAL_KV); a state blob cannot be restored into them\n", __func__);

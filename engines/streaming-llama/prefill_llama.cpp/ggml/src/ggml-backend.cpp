@@ -2285,7 +2285,7 @@ static enum ggml_status ggml_backend_sched_compute_node_range_impl(
                     continue;
                 }
 
-                // NOTE (2026-05-29): this per-input host drain was hypothesised to be the
+                // NOTE this per-input host drain was hypothesised to be the
                 // dominant layer-major streaming cost and gated off via
                 // LLAMA_PREFILL_STREAM_NO_COPY_DRAIN — REFUTED: removing it made prefill
                 // SLOWER (104.8 vs 141 tok/s) AND corrupted state (decode "Invalid input
@@ -2421,7 +2421,7 @@ static enum ggml_status ggml_backend_sched_compute_node_range_impl(
                     ++*backend_compute_calls;
                 }
                 if (ec != GGML_STATUS_SUCCESS) { return ec; }
-                // FA-node output dump (2026-05-30, LLAMA_FA_NODE_DUMP): read the __fattn__-{il} output
+                // FA-node output dump (LLAMA_FA_NODE_DUMP): read the __fattn__-{il} output
                 // cksum RIGHT AFTER it computes (before downstream FFN reuses the buffer) to compare the
                 // LOOP-path FA output vs the fast/C1 path (eval_cb hooks the same in graph_compute_per_layer).
                 {

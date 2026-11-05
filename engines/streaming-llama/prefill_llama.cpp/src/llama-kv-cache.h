@@ -235,7 +235,7 @@ public:
     ggml_tensor * cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggml_tensor * k_idxs, int32_t il, const slot_info & sinfo) const;
     ggml_tensor * cpy_v(ggml_context * ctx, ggml_tensor * v_cur, ggml_tensor * v_idxs, int32_t il, const slot_info & sinfo) const;
 
-    // Phase 3.5-lite (iter 29): indexer K cache accessors for GLM_DSA sparse MLA.
+    // lite (iter 29): indexer K cache accessors for GLM_DSA sparse MLA.
     // Returns a view / store op for the per-layer indexer K cache. Callable only when
     // hparams.indexer_n_head > 0 AND layer.k_idx was allocated (otherwise returns nullptr).
     // Layout parallels get_k / cpy_k but operates on layer.k_idx (single-head, fp16).
@@ -260,13 +260,13 @@ public:
     // emplace the ubatch context into slot: [sinfo.idxs[0...ubatch.n_tokens - 1]]
     void apply_ubatch(const slot_info & sinfo, const llama_ubatch & ubatch);
 
-    // STREAMING CONTINUATION (2026-09-10): mark cells [0, n) as used by seq_id at positions 0..n-1
+    // STREAMING CONTINUATION mark cells [0, n) as used by seq_id at positions 0..n-1
     // without data, so that a batch continuing a prefix the host/NVMe tier holds is placed by
     // find_slot at cell == position (the layer-major prefill's row layout). Cells already used
     // must already carry exactly that position and seq. Returns false if it cannot.
     bool reserve_prefix_cells(llama_seq_id seq_id, uint32_t n);
 
-    // STREAMED EXPORT (2026-09-10): the byte layout state_write_data emits for stream strm (types and
+    // STREAMED EXPORT the byte layout state_write_data emits for stream strm (types and
     // row sizes per layer, in layer order), so the NVMe tier can stream the same bytes from its row
     // files. has_k_idx_state mirrors state_write_data's decision.
     struct export_layer_layout {
@@ -329,7 +329,7 @@ private:
         std::vector<ggml_tensor *> k_stream;
         std::vector<ggml_tensor *> v_stream;
 
-        // Phase 3.5-lite (iter 29): indexer K cache for GLM_DSA sparse MLA.
+        // lite (iter 29): indexer K cache for GLM_DSA sparse MLA.
         // Allocated only when hparams.indexer_n_head > 0; nullptr otherwise.
         // Shape: [indexer_head_size, kv_size, n_stream] (fp16 — indexer scoring
         // accuracy matters for correct topk picks; q8_0 would degrade selection).
@@ -486,7 +486,7 @@ public:
     ggml_tensor * cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggml_tensor * k_idxs, int32_t il) const;
     ggml_tensor * cpy_v(ggml_context * ctx, ggml_tensor * v_cur, ggml_tensor * v_idxs, int32_t il) const;
 
-    // Phase 3.5-lite (iter 29): indexer K cache wrappers.
+    // lite (iter 29): indexer K cache wrappers.
     // Forwarded to llama_kv_cache::{get,cpy}_k_idx with the current slot_info.
     ggml_tensor * get_k_idx(ggml_context * ctx, int32_t il) const;
     ggml_tensor * cpy_k_idx(ggml_context * ctx, ggml_tensor * k_idx_cur, ggml_tensor * k_idxs, int32_t il) const;

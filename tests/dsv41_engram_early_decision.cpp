@@ -32,7 +32,7 @@ int main() {
     expect(throws([] { ed::parse_iops("0"); }) && throws([] { ed::parse_iops("12k"); }) && throws([] { ed::parse_iops("-5"); }) &&
            throws([] { ed::parse_iops("999"); }), "IOPS out of range or malformed is an error");
 
-    // Measured requests (bin-eg gate, 2026-10-24).
+    // Measured requests (bin-eg gate, ).
     const auto r16 = ed::decide(488608, ed::default_iops, ed::cold_gap_s);
     expect(r16.early && r16.requests == 488608 && r16.predicted_s > 4.88 && r16.predicted_s < 4.89 && r16.gap_s == 5.0,
            "16K cold (488,608 requests, 4.89 s <= 5 s): early (measured -5 s)");

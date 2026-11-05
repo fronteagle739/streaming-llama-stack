@@ -57,7 +57,7 @@ GGML_BACKEND_API void ggml_backend_metal_capture_next_compute(ggml_backend_t bac
 GGML_BACKEND_API ggml_backend_reg_t ggml_backend_metal_reg(void);
 
 // ============================================================================
-// Split-decode Phase 3: MTLSharedEvent-based event API for event-gated
+// Split-decode MTLSharedEvent-based event API for event-gated
 // single-graph decode on Mac. Mirrors the Windows-side CUDA event API.
 // See docs/split_decode_phase3_metal_design.md for architecture details.
 // ============================================================================
@@ -82,7 +82,7 @@ GGML_BACKEND_API void ggml_backend_metal_event_signal_host(ggml_backend_t backen
 // the TX thread to wait for per-layer compute output to land.
 GGML_BACKEND_API void ggml_backend_metal_event_wait_host(ggml_backend_t backend, ggml_metal_event_t ev);
 
-// 2026-04-20 (split-decode mega gate fix): race-free wait/signal pair
+// (split-decode mega gate fix): race-free wait/signal pair
 // where the caller provides the target value (usually token_idx + 1).
 // Both encoder and signaler derive the same target from the same input,
 // so there's no shared counter that both sides race to fetch_add. The
@@ -99,7 +99,7 @@ GGML_BACKEND_API void ggml_backend_metal_event_wait_host_value  (ggml_backend_t 
 // event's signaledValue transitions after all prior GPU work is done.
 // Equivalent to cudaEventRecord on the default stream. Use this instead
 // of ggml_backend_synchronize to enable per-layer non-blocking sync in
-// Phase 3 split-decode: the host then calls event_wait_host to block
+// split-decode: the host then calls event_wait_host to block
 // only until GPU finishes the relevant layer, without a full-queue sync.
 GGML_BACKEND_API void ggml_backend_metal_event_record(ggml_backend_t backend, ggml_metal_event_t ev);
 
@@ -109,14 +109,14 @@ GGML_BACKEND_API void ggml_backend_metal_event_record(ggml_backend_t backend, gg
 // is the event's current expected value — the caller typically bumps it
 // via event_signal_host (from network RX thread) or a matching cmd_buf's
 // encodeSignalEvent. Equivalent to cudaStreamWaitEvent. Used by the
-// Phase 3 Option B single-dispatch path to gate per-layer compute on
+// Option B single-dispatch path to gate per-layer compute on
 // input-data arrival without the CPU-GPU barrier cost.
 GGML_BACKEND_API void ggml_backend_metal_event_submit_wait(ggml_backend_t backend, ggml_metal_event_t ev);
 
 // Enqueue a blit copy from src tensor to dst tensor on the Metal queue.
 // Both tensors must have ->buffer set to Metal backend buffers and
 // identical byte size. Runs after any previously-submitted work on the
-// queue (including graph_compute). Does NOT wait. Used by Phase 3
+// queue (including graph_compute). Does NOT wait. Used by
 // Option B to snapshot a layer's compute-buffer output into a stable
 // per-layer shared MTLBuffer so the next layer's compute can reuse the
 // compute buffer without clobbering the previous layer's result.
@@ -125,7 +125,7 @@ GGML_BACKEND_API bool ggml_backend_metal_cpy_tensor_async(
         const struct ggml_tensor * src,
         struct ggml_tensor * dst);
 
-// Path A Phase D.2 (2026-04-20) — segmented graph_compute with per-segment
+// Path A .2 — segmented graph_compute with per-segment
 // event gates. Serially encodes each segment's node range into its own
 // cmd_buf, optionally preceded by encodeWaitForEvent(wait_event) and
 // followed by encodeSignalEvent(signal_event). Commits all segments to
@@ -144,7 +144,7 @@ struct ggml_metal_gated_segment {
     int end_idx;                       // one past last node index (exclusive)
     ggml_metal_event_t wait_event;     // non-null: encodeWaitForEvent before compute
     ggml_metal_event_t signal_event;   // non-null: encodeSignalEvent after compute
-    // 2026-04-20 (race fix): if non-zero, encode wait/signal with these
+    // (race fix): if non-zero, encode wait/signal with these
     // explicit target values rather than the shared ev->value fetch_add
     // counter. MUST be used when wait_event is host-signaled (via
     // event_signal_host_value with the same target) AND the encoder runs
@@ -152,7 +152,7 @@ struct ggml_metal_gated_segment {
     // target strictly increases across successive calls on the same event.
     uint64_t wait_target;
     uint64_t signal_target;
-    // 2026-04-21 (iter 9 / inp_out_ids fix): if fill_buf != NULL, issue a
+    // (iter 9 / inp_out_ids fix): if fill_buf != NULL, issue a
     // Metal blit fillBuffer:range:value:0 for fill_len bytes at fill_offs in
     // fill_buf BEFORE this segment's compute encoder. Used to reset the
     // inp_out_ids slot (offset 0 of the compute buffer) to int32=0 before
@@ -170,7 +170,7 @@ GGML_BACKEND_API bool ggml_backend_metal_graph_compute_gated(
         int n_segments,
         const struct ggml_metal_gated_segment * segments);
 
-// 2026-04-21 (iter 9): return the id<MTLBuffer> (as void*) and byte offset
+// (iter 9): return the id<MTLBuffer> (as void*) and byte offset
 // within that buffer for a tensor that lives in a Metal backend buffer.
 // Used by llama-context.cpp to populate fill_buf/fill_offs for gated-segment
 // inp_out_ids fix. Returns NULL/0 if tensor is not in a Metal buffer.

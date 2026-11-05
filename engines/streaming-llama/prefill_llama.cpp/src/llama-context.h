@@ -229,7 +229,7 @@ struct llama_context {
     LLAMA_API void     set_kv_tier_prompt_tokens(const std::vector<llama_token> & tokens);
     LLAMA_API uint32_t kv_tier_restore_prefix(const std::vector<llama_token> & req_tokens, uint32_t lcp_min);
     LLAMA_API bool     kv_tier_prefix_ready(uint32_t n_past) const;
-    // Delta routing (2026-09-10): how many leading tokens of `tokens` the decode receiver holds
+    // Delta routing how many leading tokens of `tokens` the decode receiver holds
     // resident (0 when it cannot be asked), and the rows the tier holds for the open conversation.
     LLAMA_API uint32_t kv_decoder_resident_prefix(const llama_token * tokens, size_t n);
     LLAMA_API uint32_t kv_tier_held_rows() const;
@@ -335,7 +335,7 @@ struct llama_context {
     // Out-of-line + exported so server-context.cpp can call it via llama.dll.
     LLAMA_API void clear_kv_ram_state();
 
-    // TASK A (streamed-KV visibility, 2026-07-20): re-upload the KV-RAM host mirrors
+    // TASK A (streamed-KV visibility, ): re-upload the KV-RAM host mirrors
     // (K / V / sparse-indexer K_IDX per layer) back into the GPU cache tensors at the
     // streaming-prefill -> resident-decode boundary. The layer-major pass D2H-downloads
     // every layer's cache into the mirrors and leaves the GPU cells stale, so the
@@ -496,7 +496,7 @@ struct llama_context {
     uint32_t get_prefill_handoff_img_pos_start()  const { return prefill_handoff_img_pos_start; }
     // v1.9 small-image-forward: stash the RAW image bytes (PNG/JPEG) so the receiver runs
     // mlx_vlm generate() on them locally. prompt_text/tokens (set_prefill_handoff_prompt)
-    // carry the question. See GROUND_TRUTH §11 (USER 2026-06-01).
+    // carry the question. See GROUND_TRUTH §11 (USER ).
     void set_prefill_handoff_raw_image(const uint8_t * data, size_t n, const std::string & question) {
         if (data && n > 0) {
             prefill_handoff_raw_image.assign(data, data + n);
@@ -608,9 +608,9 @@ struct llama_context {
     // decode_layer_major can reset+re-drive the WF per ubatch in the C1 fast-path-multiub mode.
     void set_prefill_active_wf(void * wf) { prefill_active_wf = wf; }
 
-    // Phase 328 (2026-05-05): persistent gpu_buf_a/b for WF cache reuse.
+    // persistent gpu_buf_a/b for WF cache reuse.
     // The original per-request alloc/free at llama-prefill-stream.cpp:1316
-    // changes VAs across requests, which Phase 250 found triggers GSP
+    // changes VAs across requests, which found triggers GSP
     // wedge when LLAMA_PREFILL_WF_REUSE_CACHED_DANGEROUS=1. Persisting the
     // buffers (allocate once, reuse across all decode_streaming calls,
     // free only at context destroy) keeps VAs stable so WF descriptors
@@ -853,17 +853,17 @@ struct llama_context {
     bool set_sampler(llama_seq_id seq_id, llama_sampler * sampler);
 
   public:
-    // Phase 1.3 — split-decode per-layer graph execution.
+    // split-decode per-layer graph execution.
     // Mirrors the per-layer pattern in decode_streaming() but for a single layer
     // with split-mode flags. Called by the public C API llama_build_compute_split_layer.
     // Returns 0 on success, negative on error (see enum in llama.h).
     int32_t build_compute_split_layer(const struct llama_split_layer_params * params,
                                        float * out_buf,
                                        bool    defer_read = false);
-    // Phase 3 Step 4: finalize a deferred-read submit (event_wait + tensor_get).
+    // Step 4: finalize a deferred-read submit (event_wait + tensor_get).
     int32_t wait_split_layer_async();
 
-    // Path A Phase D (2026-04-20) — mega-graph split-decode launch.
+    // Path A mega-graph split-decode launch.
     // Builds ONE cgraph for all n_layer FFN_ONLY subgraphs using the per-layer
     // external tensor arrays on `sg` (attn_out_buf[], hidden_buf[]). ONE call
     // to model.build_graph + ONE scheduler compute. Per-layer outputs land in
@@ -916,7 +916,7 @@ struct llama_context {
     // context's backend list.
     ggml_backend_t get_cuda_backend() const;
 
-    // Metal backend on this context (or nullptr if none). Phase 3 Mac
+    // Metal backend on this context (or nullptr if none). Mac
     // split_graph mirror needs this analogous to get_cuda_backend.
     ggml_backend_t get_metal_backend() const;
 
@@ -948,13 +948,13 @@ struct llama_context {
     // Pointer to cudaStream_t (void* so the header is usable without CUDA types).
     void *                                           split_capture_stream = nullptr;
 
-    // Phase 3 Mac event-based sync: opaque MTLSharedEvent allocated on
+    // Mac event-based sync: opaque MTLSharedEvent allocated on
     // first use by build_compute_split_layer when SPLIT_DECODE_EVENT_SYNC=1.
     // Replaces per-layer ggml_backend_synchronize with encode_signal +
     // event_wait_host — saves ~45 ms/token on Mac FFN loop.
     void *                                           split_sync_event = nullptr;
 
-    // Phase 3 Step 4 async submit state. Set by
+    // Step 4 async submit state. Set by
     // llama_submit_split_layer_async; consumed by llama_wait_split_layer_async.
     // Only one layer submit in flight at a time. wrap_ctx and batch are
     // freed immediately in the submit path — once graph_compute returns,
@@ -964,7 +964,7 @@ struct llama_context {
     struct ggml_tensor *                             async_pending_t_embd = nullptr;
     size_t                                           async_pending_out_bytes = 0;
 
-    // Phase 2d.C1 — during capture, build_compute_split_layer normally skips
+    // during capture, build_compute_split_layer normally skips
     // the final ggml_backend_tensor_get (D2H) because that copy would land in
     // the captured graph with an invalid host destination. When this device
     // pointer is non-null, the capture path instead enqueues a D2D copy from
@@ -974,7 +974,7 @@ struct llama_context {
     void *                                           split_capture_output_device = nullptr;
     size_t                                           split_capture_output_bytes  = 0;
 
-    // Phase 2d.C2 — during capture, build_compute_split_layer records the
+    // during capture, build_compute_split_layer records the
     // host pointer for the kq_mask tensor so the replay path can update it
     // per token. Set to the self_kq_mask->data pointer during set_inputs.
     // kq_mask is a HOST buffer (is_host) so the captured graph's H2D copy
@@ -1030,7 +1030,7 @@ struct llama_context {
     bool    dsv4_prefill_fingerprint_done = false;
     void *  cached_wf              = nullptr;  // wf_context * cached across batches
     void *  prefill_active_wf      = nullptr;  // non-owning; active WF during prefill (C1 per-ubatch reset)
-    // Phase 328 (2026-05-05): persistent compute buffers for WF cache reuse.
+    // persistent compute buffers for WF cache reuse.
     // Allocated lazily on first prefill_stream call, freed at context destroy.
     ggml_backend_buffer_t persist_gpu_buf_a = nullptr;
     ggml_backend_buffer_t persist_gpu_buf_b = nullptr;
@@ -1084,7 +1084,7 @@ struct llama_context {
 
     // NVMe KV tier (docs/KV_TIER_DESIGN.md): with LLAMA_KV_TIER_DIR set, every layer's new rows are
     // also written once to the conversation's row files by the copyout worker (pageable mode is
-    // forced). Phase 1 shadows the pageable mirror and verifies against it; later phases read the
+    // forced). shadows the pageable mirror and verifies against it; later phases read the
     // continuation, the export and the post-relaunch restore from the files instead of host RAM.
     bool                       kv_storage_tier = false;
     std::shared_ptr<llama_kv_tier> kv_tier;
@@ -1243,14 +1243,14 @@ struct llama_context {
     // handoff artifact (the question becomes the KVA prompt_text for the receiver's mlx_vlm generate).
     std::vector<uint8_t> prefill_handoff_raw_image;
     std::string          prefill_handoff_raw_image_question;
-    // Phase 5.3 (2026-05-12): seq_id we actually exported from in the last
+    // seq_id we actually exported from in the last
     // capture_kv_state_blob call. Differs from prefill_handoff_capture_seq_id
     // when streaming-prefill TB wrote cells with seq_id=0 and the multi-slot
     // direct export fell back to legacy seq_cp(0). Used to set
     // meta.source_slot_id correctly so the receiver routes the import.
     llama_seq_id prefill_handoff_exported_seq_id = -1;
 
-    // Prefill strategy + token relay (Phase 3/4)
+    // Prefill strategy + token relay ()
     int32_t     prefill_strategy = 0;
     int32_t     prefill_crossover_tokens = 0;
     std::string token_stream_host;
@@ -1291,7 +1291,7 @@ struct llama_context {
     // decode_layer_major (env LLAMA_PREFILL_SHIP_MTP_HIDDEN=1) so the Mac MTP sidecar (layer-78 NextN) can warm its own
     // KV over a KV-inject session — which otherwise lacks the prompt's hidden states and so disables MTP (receiver
     // mtp_can_run gate). fp16, row-major [n_tokens][n_embd], indexed by absolute token position. Serialized into the KV
-    // artifact and consumed by the receiver as full_hidden. Phase A of MTP-on-KV-inject.
+    // artifact and consumed by the receiver as full_hidden. of MTP-on-KV-inject.
     std::vector<uint16_t> mtp_streamed_hidden;        // fp16, mtp_streamed_hidden_n_tokens * n_embd
     int64_t               mtp_streamed_hidden_n_tokens = 0;
     int64_t               mtp_streamed_hidden_n_embd   = 0;

@@ -152,7 +152,7 @@ EXPORT uint64_t slstack_flashinfer_native_ffn_workspace(int tokens){
 #ifdef SLSTACK_FI_SLOT_LAYOUT
 // Refuse a bad packed-slot call before any kernel can read outside the pool.
 static int slot_pool_fault(const char *what,long long a,long long b){
-    std::fprintf(stderr,"DSVFIX_SLOT_BOUNDS_FAULT %s: %lld versus %lld\n",what,a,b);
+    std::fprintf(stderr,"FLASHINFER_SLOT_BOUNDS_FAULT %s: %lld versus %lld\n",what,a,b);
     return int(cudaErrorInvalidValue);
 }
 static int check_slot_pool(const void *weights,const char *name,int n,int k,int slots){
@@ -160,7 +160,7 @@ static int check_slot_pool(const void *weights,const char *name,int n,int k,int 
     const auto start=reinterpret_cast<CUdeviceptr>(weights);
     const auto error=cuMemGetAddressRange(&base,&size,start);
     if(error!=CUDA_SUCCESS){
-        std::fprintf(stderr,"DSVFIX_SLOT_BOUNDS_FAULT %s: address range query failed with %d\n",name,int(error));
+        std::fprintf(stderr,"FLASHINFER_SLOT_BOUNDS_FAULT %s: address range query failed with %d\n",name,int(error));
         return int(cudaErrorInvalidValue);
     }
     const auto needed=uint64_t(slots)*(uint64_t(n)*k/2+uint64_t(n)*k/32);
@@ -204,7 +204,7 @@ static int native_ffn(const void *gate,const void *up,const void *down,
     const bool trace=slots&&trace_enabled;
     auto stage_start=std::chrono::steady_clock::now();
     #define STAGE(name) do{if(trace){TRY(cudaStreamSynchronize(stream));const auto now_=std::chrono::steady_clock::now();\
-        std::fprintf(stderr,"DSVFIX_STAGE %s ms=%.3f\n",name,std::chrono::duration<double,std::milli>(now_-stage_start).count());std::fflush(stderr);stage_start=now_;}}while(0)
+        std::fprintf(stderr,"FLASHINFER_STAGE %s ms=%.3f\n",name,std::chrono::duration<double,std::milli>(now_-stage_start).count());std::fflush(stderr);stage_start=now_;}}while(0)
 #ifdef SLSTACK_FI_SLOT_LAYOUT
     if(slots){
         if(weight_slots>384)return slot_pool_fault("weight slots",weight_slots,384);

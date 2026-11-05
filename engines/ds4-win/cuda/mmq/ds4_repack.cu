@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
-/* [merge 2026-08-16] This vendored upstream file assumed POSIX and stopped MSVC at
+/* This vendored upstream file assumed POSIX and stopped MSVC at
  * `fatal error C1083: Cannot open include file: 'sys/mman.h'`. The port already ships the shim it
  * needs -- ds4_win32.h defines mmap/munmap (-> ds4_win32_mmap/_munmap) plus PROT_READ, MAP_SHARED,
  * MAP_PRIVATE and MAP_FAILED, and it is __cplusplus-guarded with extern "C", so it is safe to include
@@ -76,7 +76,7 @@ bool ds4_repack_map_file(const char *log_prefix, const char *path, ds4_repack_fi
         return false;
     }
     m.size = (uint64_t)st.st_size;
-    /* [merge 2026-08-16] st_blksize is POSIX; Windows `struct _stat64` has no such member.
+    /* st_blksize is POSIX; Windows `struct _stat64` has no such member.
      * Guarding rather than shimming is behaviour-preserving here: direct_align feeds ONLY the
      * O_DIRECT path below, which is `#if defined(__linux__) && defined(O_DIRECT)`, and the one other
      * consumer (line ~319) additionally requires `m.direct_fd >= 0`. On Windows direct_fd is never

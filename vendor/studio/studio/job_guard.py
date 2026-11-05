@@ -1,6 +1,6 @@
 # Shared public integration implementation.
-# Source body unchanged; only this two-line provenance header added.
-"""Ownership and cancellation for the shared TRAINFIX paging guard.
+# Executable behavior retained; distributed comments may differ.
+"""Ownership and cancellation for the shared process paging guard.
 
 All blocking work runs independently of the monitor. Only processes launched
 through this guard (and their verified descendants) are eligible for teardown.

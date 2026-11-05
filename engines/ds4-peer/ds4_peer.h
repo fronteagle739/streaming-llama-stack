@@ -235,7 +235,7 @@ ds4_peer_listener *ds4_peer_listener_start_service(
         const ds4_peer_service *service, char *err, size_t errlen);
 void ds4_peer_listener_stop(ds4_peer_listener *listener);
 
-/* PING is the only post-handshake control frame in Phase 2.  The listener
+/* PING is the only post-handshake control frame in .  The listener
  * echoes its body verbatim, making the framing path observable without KV. */
 int ds4_peer_ping(int fd, const void *body, size_t body_len,
                   char *err, size_t errlen);

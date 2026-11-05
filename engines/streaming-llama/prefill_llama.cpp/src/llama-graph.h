@@ -455,7 +455,7 @@ public:
 
     std::unique_ptr<llm_graph_input_attn_kv_iswa> inp_raw;
 
-    // DSV4-OWNED raw-window mask (2026-08-28). The generic ISWA mask reaches the compressed
+    // DSV4-OWNED raw-window mask . The generic ISWA mask reaches the compressed
     // attention through `self_kq_mask_swa_cnv = ggml_cast(leaf, F16)`, a node built ONCE at the
     // graph HEAD. The streaming-prefill executor computes per-layer node RANGES, so that node is
     // not re-executed for later layers and reads back as 65536 ZEROS while the leaf it casts from
@@ -665,13 +665,13 @@ struct llm_graph_params {
     // For models that support split-decode (currently: deepseek2 / GLM_DSA family).
     ggml_tensor * external_attn_out = nullptr;
 
-    // Mega-graph split-decode support (Path A, 2026-04-20): when set (and
+    // Mega-graph split-decode support (Path A, ): when set (and
     // external_attn_out is null), the graph builder emits ALL layers in the
     // [layer_start, layer_end) range as a SINGLE cgraph with per-layer
     // external attention output tensors. Each layer il reads from
     // external_attn_out_per_layer[il - layer_start]. Used to build one
     // mega-graph whose compute is then run as ONE dispatch — the Mac
-    // analog of RTX's Phase 2d.C1 per-layer CUDA-graph replay.
+    // analog of RTX's per-layer CUDA-graph replay.
     //
     // If external_input_per_layer is non-null, the graph reads layer il's
     // input from external_input_per_layer[il - layer_start] instead of
@@ -1089,7 +1089,7 @@ struct llm_graph_context {
 
     llm_graph_input_attn_k  * build_attn_inp_k() const;
 
-    // Phase 3.5-lite (iter 29): sparse-MLA indexer K cache view.
+    // lite (iter 29): sparse-MLA indexer K cache view.
     // Returns a view of the per-layer indexer K cache sized to the current n_kv
     // ([idx_head_size, n_kv]) for the active stream, or nullptr if the model has no
     // indexer tensors or the cache context isn't a llama_kv_cache_context.
@@ -1103,17 +1103,17 @@ struct llm_graph_context {
     // the smaller reserve-time shape and crash at runtime with cpy.cu:384.
     ggml_tensor * build_inp_indexer_k_max(int il) const;
 
-    // Phase 3.5-lite: wrapper for storing current-ubatch indexer K values into the cache.
+    // lite: wrapper for storing current-ubatch indexer K values into the cache.
     // k_idx_cur shape: [idx_head_size, 1, n_tokens] or [idx_head_size, n_tokens].
     // Callers must pass the same k_idxs as used for main K storage (slot positions).
     // Returns the set_rows op tensor to be added to the graph, or nullptr if no cache.
     ggml_tensor * build_sparse_store_indexer_k(ggml_tensor * k_idx_cur, ggml_tensor * k_idxs, int il) const;
 
-    // Phase 3.5-lite step 6c: wrapper for storing current main K before sparse decode gather.
+    // lite step 6c: wrapper for storing current main K before sparse decode gather.
     // This mirrors build_attn(llm_graph_input_attn_k)::cpy_k without forcing dense attention.
     ggml_tensor * build_sparse_store_main_k(ggml_tensor * k_cur, ggml_tensor * k_idxs, int il) const;
 
-    // Phase 3.5-lite step 6b: main K cache view for sparse gather consumption.
+    // lite step 6b: main K cache view for sparse gather consumption.
     // Returns the mctx->get_k(il) view (4D [n_embd_head_k, n_head_kv, n_kv, ns]) so the
     // caller can gather rows by topk indices without needing the full llama_kv_cache_context
     // definition in the model graph translation units.

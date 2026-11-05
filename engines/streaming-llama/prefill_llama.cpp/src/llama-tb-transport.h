@@ -69,7 +69,7 @@ bool llama_tb_transport_send_artifact_bytes(const uint8_t *              data,
                                              llama_tb_transfer_result *   result,
                                              std::string *                error);
 
-// Pull-based variant (2026-09-10, streamed export): the artifact bytes are produced on demand by
+// Pull-based variant (streamed export): the artifact bytes are produced on demand by
 // `pull`, which fills dst with the next bytes (at most cap; n_out == 0 means finished) and returns
 // false on error. total_bytes must be the exact stream length (it goes into SESSION_START and
 // KV_SEGMENT_BEGIN). Single stream only: the receiver reassembles chunks in arrival order.
@@ -80,7 +80,7 @@ bool llama_tb_transport_send_artifact_stream(uint64_t                     total_
                                              llama_tb_transfer_result *   result,
                                              std::string *                error);
 
-// Delta shipping (2026-09-10): ask the decode receiver (on the KV port) how many leading tokens of
+// Delta shipping ask the decode receiver (on the KV port) how many leading tokens of
 // `tokens` its resident cache holds. One short TCP connection: HELLO, QUERY_PREFIX_CACHE (the int32
 // token ids), PREFIX_CACHE_REPLY (hit u8, cached_len u32, session_id u64). cached_len is 0 on a miss.
 // A receiver that does not understand the query never replies; the timeout then means "ship all".
@@ -119,9 +119,9 @@ bool llama_tb_transport_control_server_accept_one(
     llama_tb_prefix_cache_lookup_fn       lookup_fn,
     std::string *                         error);
 
-// Phase 6 helper: copies through an explicit host staging hop to emulate remote slab relay.
+// helper: copies through an explicit host staging hop to emulate remote slab relay.
 void llama_tb_transport_weight_relay_copy(const uint8_t *src, uint8_t *dst, size_t size);
 
-// Phase 6 helper: obtain a weight chunk from the configured remote source mode.
+// helper: obtain a weight chunk from the configured remote source mode.
 // Returns true and fills dst on success.
 bool llama_tb_transport_fetch_weight_chunk(const uint8_t * src, size_t size, std::vector<uint8_t> & dst, std::string * error);

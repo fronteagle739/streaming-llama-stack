@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
     fillk<<<512, 256>>>((unsigned *)dB, maxB / 4, 0x5A5Au);
     CHECK(cudaDeviceSynchronize());
 
-    /* MoE-equiv shapes + the dense-q8 census shapes (cmdq8shape15 2026-07-09):
+    /* MoE-equiv shapes + the dense-q8 census shapes (cmdq8shape15 ):
      * q_b [32768x1024], o_proj [4096x8192], sexp gate/up [2048x4096],
      * sexp down [4096x2048], all at N=4096 chunk tokens. */
     const int shapes[][3] = { {4096, 24576, 2048}, {2048, 24576, 4096},

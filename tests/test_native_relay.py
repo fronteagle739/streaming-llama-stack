@@ -1,4 +1,4 @@
-"""PAIRFIX: the receiver's direct-TCP relay forwards bytes unchanged and fails loudly."""
+"""the receiver's direct-TCP relay forwards bytes unchanged and fails loudly."""
 import socket
 import threading
 import unittest

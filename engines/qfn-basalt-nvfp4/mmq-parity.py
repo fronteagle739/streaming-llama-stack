@@ -423,7 +423,7 @@ def gpu_checks(lease):
     copy2d=base.bind(c.lib,'cudaMemcpy2DAsync',[P,C.c_size_t,P,C.c_size_t,C.c_size_t,C.c_size_t,I,P])
     result=dict(dll_sha256_before=before,abi=abi(),bank_bytes=512*BLOB,cases=[],
                 numerical_policy='Published dynamic D4-F32 q8, s_down before hidden quantization; not mode2 bitexact; full-model quality pending')
-    result['acceptance_policy']='Owner-reviewed oracle isolation 2026-11-02: same2e-4/1e-2 on actualGPUHq CPUdouble down, Hrelative1e-5, independent PTX-RCP1ULP/RN-multiply quant certificate with strict code result separate; original independent-pipeline perroute errors/breaches retained, not claimed passed'
+    result['acceptance_policy']='Oracle isolation policy: same2e-4/1e-2 on actualGPUHq CPUdouble down, Hrelative1e-5, independent PTX-RCP1ULP/RN-multiply quant certificate with strict code result separate; original independent-pipeline perroute errors/breaches retained, not claimed passed'
     result['original_failure_trace_sha256']='d45d814e3d491bf00f487e28fa7313cbf591392bb97506f26ba456bdb02d1045'
     result['historical_pipeline_original_gate_pass']=False
     result['historical_pipeline_failure']=dict(tokens=16385,token=16384,route=0,slot=256,relative_rms=.0007196544248086102,normalized_max=.0005889875013784771)

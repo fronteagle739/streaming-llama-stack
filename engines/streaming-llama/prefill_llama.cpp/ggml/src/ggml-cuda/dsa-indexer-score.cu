@@ -394,7 +394,7 @@ static __device__ void dsa_topk_select_range(
     __syncthreads();
 }
 
-// [DSA_TOPK_CAUSAL 2026-07-03] Position-causal score masking BEFORE top-k selection.
+// DSA_TOPK_CAUSAL Position-causal score masking BEFORE top-k selection.
 // ROOT-CAUSE FIX for the GLM-5.2 DSA multi-ubatch prefill content corruption: the
 // indexer scored the FULL n_kv cell range with no causal mask (iter-34 "tradeoff"),
 // so cache cells NOT YET WRITTEN for the current (layer, ubatch) — zeros at layer 0,
@@ -531,7 +531,7 @@ static __global__ void dsa_topk_select_coverage_kernel(
     }
 }
 
-// [DSA coverage-weighted 2026-07-08] Env-gated strict-5/5 weighted coverage selector. Uniform bands cap
+// DSA coverage-weighted Env-gated strict-5/5 weighted coverage selector. Uniform bands cap
 // at 4/5 (fine bands miss the oldest needle; coarse bands lump the middle). Non-uniform ranges + quotas fit
 // the empirical constraints: oldest OCTILE [0,1/8) gets 3/8*K (targets the earliest needle in a small range),
 // three middle quarters get 1/8*K each (256 proven enough for 25/50/75), recent octile [7/8,1) gets 1/4*K
@@ -700,7 +700,7 @@ static void dsa_indexer_score_cublas(
     const int k_slab = explicit_k_slab>0?explicit_k_slab:(k_slab_env > 0 ? k_slab_env : n_kv);
     const int dot_rows = (k_slab < n_kv) ? k_slab : n_kv;
 
-    // 2026-07-02 (DSA OOM fix, Job 2): the transient dot / Q_chunk pool buffers
+    // (DSA OOM fix, Job 2): the transient dot / Q_chunk pool buffers
     // scaled with the FULL ubatch n_q, so at ctx>=32768 with a single large
     // ubatch (n_q ~= 4044) dot_alloc = k_slab * HEAD_CHUNK * n_q * 4B reached
     // ~8.5 GB (k_slab=16384) and, stacked with WF + the compute buffer,
@@ -741,7 +741,7 @@ static void dsa_indexer_score_cublas(
         const float * G_slab_ptr = G_d + (size_t) q0 * H;
         float       * S_slab_ptr = S_d + (size_t) q0 * n_kv;
 
-        // [DSA_SCORE_CAUSAL_TILE 2026-07-10, Codex xhigh] when P_h is provided, skip GEMM/accum for
+        // DSA_SCORE_CAUSAL_TILE  , Codex xhigh when P_h is provided, skip GEMM/accum for
         // key rows > the max causal pos in this query slab. Those cells are k>pos[q] for EVERY query
         // here, so they stay 0 (memset) and the later dsa_causal_mask_scores_kernel rewrites them to
         // -FLT_MAX exactly as before => bitwise-identical S_d, all top-k selectors unchanged. Boundary
@@ -995,7 +995,7 @@ void ggml_cuda_op_dsa_indexer_topk(ggml_backend_cuda_context & ctx, ggml_tensor 
     dim3 grid(n_q, 1, 1);
     dim3 block(DSA_INDEXER_TOPK_BLOCK, 1, 1);
 
-    // [DSA_TOPK_CAUSAL 2026-07-03] pos for the post-score causal mask; hoisted above the score call so
+    // DSA_TOPK_CAUSAL pos for the post-score causal mask; hoisted above the score call so
     // the optional causal-tiling (below) can also use it. pos in-bounds read only (ne[0]>=n_q asserted).
     const int32_t * P_d = nullptr;
     if (pos != nullptr) {
@@ -1004,7 +1004,7 @@ void ggml_cuda_op_dsa_indexer_topk(ggml_backend_cuda_context & ctx, ggml_tensor 
         P_d = (const int32_t *) pos->data;
     }
 
-    // [DSA_SCORE_CAUSAL_TILE 2026-07-10] env-gated, default-off, bitwise-lossless: copy pos to host so
+    // DSA_SCORE_CAUSAL_TILE env-gated, default-off, bitwise-lossless: copy pos to host so
     // dsa_indexer_score_cublas can skip GEMM/accum for causally-invalid key rows (see its comment).
     static const bool causal_tile_env = []() {
         const char * env = getenv("LLAMA_DSA_SCORE_CAUSAL_TILE");
@@ -1038,7 +1038,7 @@ void ggml_cuda_op_dsa_indexer_topk(ggml_backend_cuda_context & ctx, ggml_tensor 
         dsa_causal_mask_scores_kernel<<<grid, block, 0, stream>>>(S_d, P_d, n_kv, n_q);
     }
 
-    // [DSA coverage 2026-07-08] Env-gated stratified coverage top-k: reserves per-causal-band
+    // DSA coverage Env-gated stratified coverage top-k: reserves per-causal-band
     // quota so old/middle content-relevant keys are not crowded out of the reused sparse top-k
     // by recent keys (fixes FULL-mode long-context needle drop at fixed K). Default OFF ->
     // byte-identical to the exact-global dsa_topk_select_kernel. Marker: LLAMA_DSA_TOPK_COVERAGE_BANDS.

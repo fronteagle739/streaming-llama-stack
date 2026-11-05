@@ -3,8 +3,7 @@
 // ---------------------------------------------------------------------------
 // Persistent (oMLX-style) KV-artifact store for the RTX streaming-prefill fork.
 //
-// Engine A / Phases A1+A2 of front-eagle-stack's
-// `.planning/PERSISTENT_KV_CACHE_PLAN_2026-06-10.md`.
+// Persistent artifact storage preserves the canonical prompt and KV payload.
 //
 // What it does: caches the existing v1.5+ KV artifact bytes VERBATIM (header +
 // canonical prompt token IDs + KV payload) to disk, keyed by a content

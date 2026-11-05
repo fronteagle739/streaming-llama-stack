@@ -145,7 +145,7 @@ typedef struct ds4_gpu_decode_profile_snapshot {
      * definition in ds4_cuda.cu: the struct is declared in BOTH files and NOTHING in the toolchain
      * compares them - separate translation units, extern "C" linkage, plain pointer parameter.
      *
-     * [2026-08-20] This comment used to say a divergence "fails the build in ds4.c with a
+     * This comment used to say a divergence "fails the build in ds4.c with a
      * misleading 'too few arguments' error". That is only true when ds4.c happens to READ a field
      * the header lacks. The silent cases are the dangerous ones, and they build clean:
      *   .cu larger than .h -> ds4_gpu_decode_profile_get() assigns sizeof(.cu struct) bytes into a

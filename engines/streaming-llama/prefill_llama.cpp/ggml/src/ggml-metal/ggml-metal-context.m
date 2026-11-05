@@ -1,5 +1,5 @@
 #import "ggml-metal-context.h"
-#import "ggml-metal.h"  // for struct ggml_metal_gated_segment (Path A Phase D.2)
+#import "ggml-metal.h"  // for struct ggml_metal_gated_segment (Path A .2)
 
 #import "ggml-impl.h"
 #import "ggml-backend-impl.h"
@@ -228,7 +228,7 @@ void ggml_metal_synchronize(ggml_metal_t ctx) {
     // wait for any backend operations to finish
     if (ctx->cmd_buf_last) {
         [ctx->cmd_buf_last waitUntilCompleted];
-        // Phase 49: GPU timing probe — print actual GPU execution time after wait.
+        // GPU timing probe — print actual GPU execution time after wait.
         {
             static bool gpu_timing = false;
             static dispatch_once_t gpu_timing_once;
@@ -588,7 +588,7 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
         }
     }
 
-    // Phase 49: GPU timing probe — print actual GPU wall-clock time per graph_compute call.
+    // GPU timing probe — print actual GPU wall-clock time per graph_compute call.
     // GPUStartTime/GPUEndTime = actual GPU execution time in seconds.
     // Gated on GGML_METAL_GPU_TIMING=1 so default behavior unchanged.
     {
@@ -670,7 +670,7 @@ enum ggml_status ggml_metal_graph_compute_gated(
         // Keep the memory residency set alive for GPU access duration.
         ggml_metal_device_rsets_keep_alive(ctx->dev);
 
-        // 2026-04-20: honor capture_next_compute even on the gated path.
+        // honor capture_next_compute even on the gated path.
         // Without this, GGML_METAL_CAPTURE=1 wouldn't trigger for mega-
         // dispatch (which goes through this function instead of the
         // standard ggml_metal_graph_compute).
@@ -821,7 +821,7 @@ enum ggml_status ggml_metal_graph_compute_gated(
                 }
             }
 
-            // 2026-04-21 (iter 9): fill inp_out_ids slot with 0 before compute.
+            // (iter 9): fill inp_out_ids slot with 0 before compute.
             // gallocr aliases intermediate float tensors to offset 0 of the
             // compute buffer (same slot as inp_out_ids) across layers 0..N-2,
             // leaving a garbage float there by the time the last-layer segment

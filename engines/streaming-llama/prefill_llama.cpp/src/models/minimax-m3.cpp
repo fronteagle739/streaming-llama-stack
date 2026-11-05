@@ -110,7 +110,7 @@ llm_build_minimax_m3::llm_build_minimax_m3(const llama_model & model, const llm_
 
             cb(Qcur, "Qcur", il);
 
-            // [2026-07-28 M3 wf=1 TARGETED FIX — gallocr reuse-collision on L1 Qcur]
+            //
             // Layer-major executes graph slices repeatedly using a gallocr lifetime plan derived
             // from one full, in-order graph evaluation. With ONE WF slab (LLAMA_WF_GPU_BUFS=1) that
             // allocation layout lets layer 1's final Qcur slot be recycled; after a partial
@@ -249,7 +249,7 @@ llm_build_minimax_m3::llm_build_minimax_m3(const llama_model & model, const llm_
                     // ("topk budget INCLUDES them"; where(local,1e29) then where(init,1e30) so init wins on
                     // overlap) and the MLX _msa_general_mask. The OLD path added force ON TOP of the natural
                     // top-topk (rank<topk OR forced) -> selected topk+#forced blocks, diverging from the
-                    // oracle/MLX (which select topk total) at partial coverage. Cross-check 2026-06-24.
+                    // oracle/MLX (which select topk total) at partial coverage. .
                     if (init_blk > 0 || local_blk > 0) {
                         ggml_tensor * bidx = ggml_repeat(ctx0,
                             ggml_reshape_2d(ctx0, ggml_arange(ctx0, 0.0f, (float) n_blocks, 1.0f), n_blocks, 1), K2(0.0f));

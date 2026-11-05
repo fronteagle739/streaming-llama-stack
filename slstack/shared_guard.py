@@ -121,8 +121,8 @@ def supervise(spec):
     paging_limit = owned_paging_limit_bytes(spec)
     if paging_limit is not None and not spec.get('paging_telemetry'):
         raise ValueError('An explicit owned-paging limit requires paging telemetry')
-    for name, pin in {'job_guard.py':'56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648',
-                      # The reviewed 59c3f5f bounded diagnostics retain every
+    for name, pin in {'job_guard.py':'f323a66355e32ef7738c7f905be9ca7b39d2ce3963856de6f7d7c0ea80372068',
+                      # The bounded diagnostics retain every
                       # original enforcement statement; pin that actual body.
                       'job_paging.py':'72e613722e3dcb1fbb8ebf8cd948b8ddca3b063606ab494a473808d0b11a31ef'}.items():
         source = (ROOT/'vendor/studio/studio'/name).read_bytes().split(b'\n',2)[2].replace(b'\r\n',b'\n')

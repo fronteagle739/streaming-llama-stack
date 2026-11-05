@@ -237,12 +237,12 @@ typedef struct ggml_metal_event * ggml_metal_event_t;
 
 void ggml_metal_event_encode_signal     (ggml_metal_event_t ev, ggml_metal_cmd_buf_t cmd_buf);
 void ggml_metal_event_encode_wait       (ggml_metal_event_t ev, ggml_metal_cmd_buf_t cmd_buf);
-// 2026-04-20 (split-decode coherence): bumps ev->value BEFORE encoding wait
+// (split-decode coherence): bumps ev->value BEFORE encoding wait
 // so target matches the next host/GPU signal. Needed when wait is encoded
 // before the paired signal has run.
 void ggml_metal_event_encode_wait_prebump(ggml_metal_event_t ev, ggml_metal_cmd_buf_t cmd_buf);
 
-// 2026-04-20 (split-decode mega gate fix): race-free wait/signal pairing
+// (split-decode mega gate fix): race-free wait/signal pairing
 // where BOTH sides derive the same target from a caller-supplied value
 // (e.g. token index). Use when encoder and host-signaler run on independent
 // threads and may interleave across tokens. Fundamentally different from
@@ -261,7 +261,7 @@ void ggml_metal_event_encode_signal_value (ggml_metal_event_t ev, ggml_metal_cmd
 void ggml_metal_event_signal_host_value   (ggml_metal_event_t ev, uint64_t target);
 void ggml_metal_event_wait_host_value     (ggml_metal_event_t ev, uint64_t target);
 
-// Phase 3 host-side signaling/waiting on the underlying MTLSharedEvent.
+// host-side signaling/waiting on the underlying MTLSharedEvent.
 // Used by split-decode's network RX/TX threads to release GPU work that
 // is waiting on encodeWaitForEvent, without spinning up a command buffer.
 void ggml_metal_event_signal_host(ggml_metal_event_t ev);

@@ -609,7 +609,7 @@ static int run_sampled_generation(ds4_engine *engine, const cli_config *cfg, con
     bool have_greedy_next = false;
     int greedy_next = -1;
     const double t_decode0 = cli_now_sec();
-    /* [2026-08-18] STEADY-STATE DECODE READOUT, always on.
+    /* STEADY-STATE DECODE READOUT, always on.
      *
      * The single "generation: N t/s" figure averages in the FIRST decode token, which on this
      * engine costs 5.1-11.4 SECONDS against a ~101 ms warm token - 65-96x, and 20-26% of the wall
@@ -623,7 +623,7 @@ static int run_sampled_generation(ds4_engine *engine, const cli_config *cfg, con
     double t_after_first = 0.0;
     int gen_at_first = 0;
     long decode_iters = 0;
-    /* [2026-08-18] LAST-HALF RATE = the real POST-WARMUP decode rate.
+    /* LAST-HALF RATE = the real POST-WARMUP decode rate.
      *
      * Dropping the first token is not enough. This engine's expert cache is still filling well past
      * 256 tokens - a 255-token run was measured still rising - so "steady-state over tokens 2..N" is
@@ -1668,7 +1668,7 @@ static int run_chat_turn(ds4_engine *engine, cli_config *cfg, repl_chat *chat,
     bool have_greedy_next = false;
     int greedy_next = -1;
     const double t_decode0 = cli_now_sec();
-    /* [2026-08-18] STEADY-STATE DECODE READOUT, always on.
+    /* STEADY-STATE DECODE READOUT, always on.
      *
      * The single "generation: N t/s" figure averages in the FIRST decode token, which on this
      * engine costs 5.1-11.4 SECONDS against a ~101 ms warm token - 65-96x, and 20-26% of the wall
@@ -1682,7 +1682,7 @@ static int run_chat_turn(ds4_engine *engine, cli_config *cfg, repl_chat *chat,
     double t_after_first = 0.0;
     int gen_at_first = 0;
     long decode_iters = 0;
-    /* [2026-08-18] LAST-HALF RATE = the real POST-WARMUP decode rate.
+    /* LAST-HALF RATE = the real POST-WARMUP decode rate.
      *
      * Dropping the first token is not enough. This engine's expert cache is still filling well past
      * 256 tokens - a 255-token run was measured still rising - so "steady-state over tokens 2..N" is

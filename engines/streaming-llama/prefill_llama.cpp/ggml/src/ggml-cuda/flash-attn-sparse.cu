@@ -3,17 +3,17 @@
 // v4/v5: custom scalar WMMA kernels (scalar gather, no tensor cores)
 // v6:    patched dense MMA kernel with per-row indices gather (tensor cores preserved)
 
-// [FA_VKQ_F32_ACC_SPARSE 2026-07-07] The v6 sparse kernel reuses the dense MMA template
+// FA_VKQ_F32_ACC_SPARSE The v6 sparse kernel reuses the dense MMA template
 // flash_attn_ext_f16_sparse (fattn-mma-f16.cuh). On SM120 (Blackwell) with the MLA sparse
 // shape DKQ=576/DV=512/ncols=64, the cumulative half2 VKQ accumulator saturates over the
-// 50+ MLA layers → attractor-collapse garbage (observed 2026-07-07: -fa on all-sparse v6 =
+// 50+ MLA layers → attractor-collapse garbage (observed -fa on all-sparse v6 =
 // MISS `)0)` at 216 tok/s while the unfused path is coherent at 136). Phase22 angle47's fix
 // gates an fp32 VKQ accumulator behind `#if defined(LLAMA_FA_VKQ_F32_ACC)` — a COMPILE-TIME
 // macro (NOT a runtime env), so no launcher flag could ever enable it. Define it here (before
 // fattn-mma-f16.cuh) so the sparse template instantiation uses fp32 accumulation. The header's
 // use_f32_acc condition (DKQ==576 && DV==512 && ncols==64 && cols_per_warp!=8) restricts it to
 // exactly this MLA sparse shape; all other shapes keep the half2 path unchanged.
-// [2026-08-27] DISABLED HERE TOO. The fp32 VKQ accumulator is not the fix for this shape --
+// DISABLED HERE TOO. The fp32 VKQ accumulator is not the fix for this shape --
 // it is the defect. test-backend-ops on hsk=576/hsv=512 (the same MLA shape this file
 // instantiates) goes 86/144 -> **144/144, zero failures** when it is off, and the dense
 // end-to-end path goes from token soup to exact needles at 53k. See fattn-mma-f16.cuh.
@@ -92,7 +92,7 @@ static __host__ __device__ __forceinline__ size_t sparse_fa_align_up(size_t x, s
     return (x + align - 1) & ~(align - 1);
 }
 
-// [SPARSE_FA_V6_TILE_ALIGNED_GRID 2026-07-10, Codex xhigh] Pick a block count that DIVIDES
+// SPARSE_FA_V6_TILE_ALIGNED_GRID  , Codex xhigh Pick a block count that DIVIDES
 // ntiles_total so the v6 sparse-FA launch avoids the flash_attn_stream_k_fixup seam path
 // (which otherwise runs on nearly every ub=512 sparse launch since max_blocks_per_sm*nsm
 // rarely divides ntiles_total). Prefers a divisor near max_blocks that still keeps all SMs fed.
@@ -834,7 +834,7 @@ void ggml_cuda_op_flash_attn_ext_sparse_v6(
 
     cudaStream_t stream = ctx.stream();
 
-    // [2026-07-28 DSA_SERIALIZE probe, codex-v4] Diagnostic only: drain every producer
+    // Diagnostic only: drain every producer
     // stream immediately before the index-gather consumer. Default OFF.
     //   clean      => an upstream producer/consumer stream edge is missing
     //   error HERE => an upstream producer already issued the invalid access
@@ -853,7 +853,7 @@ void ggml_cuda_op_flash_attn_ext_sparse_v6(
         CUDA_CHECK(cudaDeviceSynchronize());
     }
 
-    // [2026-07-28 INDEX AUDIT probe] LLAMA_DSA_INDEX_AUDIT=1: sync-copy the indices
+    // LLAMA_DSA_INDEX_AUDIT=1: sync-copy the indices
     // tensor to host before the gather and report invalid entries (value outside
     // [0, n_kv_rows)) per launch. Names WHERE the garbage indices come from:
     // padded/unwritten q rows vs corrupt real rows. Diagnostic only, default OFF.
@@ -1009,7 +1009,7 @@ void ggml_cuda_op_flash_attn_ext_sparse_v6(
         prepared_mask : (const char *) mask->data;
     const int32_t indices_stride = (int32_t) (indices->nb[1] / sizeof(int32_t));
 
-    // [2026-07-28 SPARSE_IDX_SANITIZE_V1] Legacy fallback for non-GLM callers
+    // Legacy fallback for non-GLM callers
     // and GLM_TOPK_GATHER_MASK_V1=0. The production GLM path arrives with
     // prepared -1 indices and bypasses this clamp-to-row-0 sanitizer.
     const int phys_kv_rows = (int) k->ne[2];

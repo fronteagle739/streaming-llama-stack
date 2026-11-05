@@ -423,7 +423,7 @@ void ggml_cuda_cpy(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, gg
         }
         fflush(stderr);
     }
-    // [Z1A_MASK_ROW_PREFIX 2026-08-27] Allow a ROW-PREFIX copy instead of asserting.
+    // Z1A_MASK_ROW_PREFIX Allow a ROW-PREFIX copy instead of asserting.
     //
     // Proven root cause of the dense+FA crash on glm-dsa (Z1a == Z4): arm_fa_patch
     // (llama-context.cpp:16025) calls pcs_set_compact_2d_shape on fa_nodes[il].raw->src[3],

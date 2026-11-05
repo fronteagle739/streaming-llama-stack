@@ -184,9 +184,9 @@ int main(int argc, char ** argv) {
     ctx_http.post("/embedding",           ex_wrapper(routes.post_embeddings)); // legacy
     ctx_http.post("/embeddings",          ex_wrapper(routes.post_embeddings));
     ctx_http.post("/v1/embeddings",       ex_wrapper(routes.post_embeddings_oai));
-    // Phase 327 (2026-05-05): seq_cp endpoint for fenrir shared-prefix orchestration
+    // seq_cp endpoint for fenrir shared-prefix orchestration
     ctx_http.post("/v1/seq_cp",           ex_wrapper(routes.post_seq_cp));
-    // Phase G (2026-05-05): KVBlob v2 backend-agnostic prefill->decode handoff.
+    // KVBlob v2 backend-agnostic prefill->decode handoff.
     // Spec: <runtime-path>
     ctx_http.post("/v1/handoff/export_kvblob_v2", ex_wrapper(routes.post_handoff_export_kvblob_v2));
     ctx_http.post("/v1/handoff/import_kvblob_v2", ex_wrapper(routes.post_handoff_import_kvblob_v2));

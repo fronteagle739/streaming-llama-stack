@@ -44,7 +44,7 @@ from typing import Dict, List, Optional, Tuple
 # keystream search and to validate the final decode.
 _CLEAN_NAME = re.compile(r"^[A-Za-z0-9_.]+$")
 # A VLM-wrapper checkpoint also carries the vision stack, which lives OUTSIDE the text
-# namespace. Measured 2026-08-11 on Kimi-K2.7-Code-MLX-Q3.5-INF: with the Kimi text grammar in
+# namespace. on Kimi-K2.7-Code-MLX-Q3.5-INF: with the Kimi text grammar in
 # place, 2558 of 2897 names decoded and exactly 339 kept failing validation regardless of which
 # text names were added -- those are the vision-tower / projector tensors, which decode fine but
 # were rejected by this namespace whitelist.
@@ -196,7 +196,7 @@ def _expected_name_grammar(config: dict) -> List[bytes]:
     # hc_head.*). Kimi-K2.x is a different architecture entirely: mlx_vlm's kimi_k25
     # LanguageModel wraps mlx_lm.models.deepseek_v3.DeepseekV3Model, and every tensor is
     # additionally prefixed "language_model.". Feeding DSV4 names to a Kimi checkpoint made
-    # 2890 of 2897 names fail to decode (measured 2026-08-11), because the keystream can only
+    # 2890 of 2897 names fail to decode (), because the keystream can only
     # be extended by names that actually occur.
     #
     # Names derived from the module definitions, not guessed:

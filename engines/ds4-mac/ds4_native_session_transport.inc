@@ -46,11 +46,11 @@ typedef struct {
     ds4_ns_batch*q_head,*q_tail;uint32_t q_count,batch_source;char q_error[256];
     /* Incremental owner hashes of synced+queued rows (generation thread). */
     bool chain_valid;uint32_t chain_pos;CC_SHA256_CTX chain_tokens,chain_append[8];
-    /* One timing line per synchronization (DECODEFIX instrumentation). */
+    /* One timing line per synchronization. */
     bool report_pending;uint32_t report_position,report_tokens,report_queued;unsigned report_force,report_async;
     double last_sync_return,report_prev_ms,report_ready_ms,report_work_ms,report_total_ms;
-    double verify_rate; /* DECODEFIX2: measured producer owner-verify bytes/s */
-    bool remote_accepted; /* DECODEFIX2: Studio answered 202 to the start POST, so remote state exists */
+    double verify_rate; /* measured producer owner-verify bytes/s */
+    bool remote_accepted; /* Studio answered 202 to the start POST, so remote state exists */
     char last_failure[DS4_NS_DETAIL_CAP]; /* why the RTX path last failed (its own text), for the recovery notices */
 } ds4_ns_session;
 static void ds4_ns_anchor_free(ds4_ns_anchor*a){free(a->logits);free(a->state);memset(a,0,sizeof(*a));}
@@ -145,14 +145,14 @@ static bool ds4_ns_command(ds4_ns_session*s,ds4_nf_io*io,const char*body,size_t 
 static bool ds4_ns_simple(ds4_ns_session*s,ds4_nf_io*io,const char*op,const ds4_native_checkpoint*base,ds4_ns_reply*r){
     char text[8192];ds4_ns_text b={text,sizeof(text),true};ds4_ns_command_prefix(&b,s,op);
     if(base){ds4_ns_put(&b,",\"base\":");ds4_ns_checkpoint_text(&b,base);}
-    /* PAIRFIX: ask for the BF16-stored compressed/index owners as BF16 bits; the
+    /* ask for the BF16-stored compressed/index owners as BF16 bits; the
      * import widens them back to the canonical F32 bytes before loading/verifying. */
     if(!strcmp(op,"export_initial"))ds4_ns_put(&b,",\"wire_encoding\":\"bf16-compressed-index-v1\"");
     ds4_ns_put(&b,"}");
     if(!b.ok||!ds4_ns_command(s,io,text,(size_t)(b.p-text),r))return false;
     s->sequence++;return true;
 }
-/* ---- Ordered asynchronous RTX catch-up (DECODEFIX) ----------------------
+/* ---- Ordered asynchronous RTX catch-up ----------------------
  * The generation thread snapshots each <=128-row delta at a token boundary
  * and returns to decoding. One worker sends the snapshots in order through the
  * unchanged apply_decode_delta protocol. A failure stops the worker, keeps the
@@ -273,7 +273,7 @@ static int ds4_ns_file_read(void*ud,char*dst,int n){
     size_t want=(uint64_t)n<s->remaining?(size_t)n:(size_t)s->remaining;if(want>65536)want=65536;
     return ds4_ns_read(ud,dst,want)?(int)want:-1;
 }
-/* PAIRFIX BF16 wire: canonical-F32 reader over a stream whose BF16-stored owner
+/* BF16 wire: canonical-F32 reader over a stream whose BF16-stored owner
  * spans carry only their upper 16 bits. Regions are canonical byte ranges. */
 typedef struct {ds4_ns_stream*wire;uint64_t at;uint32_t count;uint64_t begin[64],end[64];unsigned char half[32768];} ds4_ns_bf16_stream;
 static int ds4_ns_bf16_file_read(void*ud,char*dst,int n){
@@ -455,7 +455,7 @@ static bool ds4_ns_local_continuation(ds4_ns_session*s,ds4_session*session,
     return (!image_count||ds4_session_vision_prefix_matches(session,images,image_count))&&
         ds4_ns_local_work(s->config->local_prefill_max,live,(uint32_t)tokens->len,extends);
 }
-/* PAIRFIX: millisecond phase ledger for the paired prefill (diagnostic log only). */
+/* millisecond phase ledger for the paired prefill (diagnostic log only). */
 #define DS4_NS_PHASE(name) do{const double phase_now=ds4_nf_now();fprintf(stderr,"NATIVE_SESSION_PHASE_MS phase=\"%s\" ms=%.3f\n",phase,(phase_now-phase_t)*1000);phase_t=phase_now;phase=(name);}while(0)
 static int ds4_ns_prefill(ds4_ns_session*s,ds4_session*session,const ds4_tokens*tokens,
                            const ds4_vision_span*images,size_t image_count,
@@ -771,8 +771,8 @@ static int ds4_ns_decode_async(ds4_ns_session*s,ds4_session*session,uint32_t pos
     if(position==tip)return 0;
     if(position<tip||position-tip>128){snprintf(err,cap,"catch-up position %u outside tip %u..+128",position,tip);goto bad;}
     const uint32_t pending=position-tip;
-    /* DECODEFIX2 catch-up policy (owner: stream small deltas unless that costs decode,
-     * otherwise one clean transfer after the reply). stream: snapshot from 32 rows when the
+    /* Catch-up policy: stream small deltas or defer transfer until the reply ends.
+     * stream: snapshot from 32 rows when the
      * worker is idle and send at once. defer: snapshot only at the 128-row producer bound,
      * hold every send until the reply ends (forced sync) or the next join; with the current
      * 128-row producer limit the end transfer is a burst of <=128-row deltas. */
@@ -793,7 +793,7 @@ bad:fprintf(stderr,"native session failure phase=decode catch-up detail=%s\n",er
 }
 static int ds4_ns_decode_sync(ds4_ns_session*s,ds4_session*session,uint32_t position,bool force,
                                ds4_nf_cancel_fn cancel,void*ud,char*err,size_t cap){
-    if(s&&!s->started&&!s->poisoned)return 0; /* DECODEFIX2 lazy: no RTX session yet, nothing to catch up */
+    if(s&&!s->started&&!s->poisoned)return 0; /* lazy: no RTX session yet, nothing to catch up */
     if(!s||!s->started||s->poisoned)return ds4_nf_error(err,cap,"native decode session unavailable");
     const double entered=ds4_nf_now();ds4_ns_sync_report(s,entered);
     const double prev=s->last_sync_return>0?(entered-s->last_sync_return)*1000:-1;

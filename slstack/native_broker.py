@@ -255,7 +255,7 @@ class OwnedProducer:
             # import / acknowledgment intervals. Initial time includes startup.
             self.prefill_timings=[dict(operation='startup_and_initial_prefill',
                 tokens=len(request['tokens'])//4,seconds=time.monotonic()-prefill_started)]
-            # PAIRFIX: broker-side startup steps before the producer process (seconds).
+            # broker-side startup steps before the producer process (seconds).
             self.prefill_timings[0]['broker_steps_seconds']={name:round(t-startup[k][1],4) for k,(name,t) in enumerate(startup[1:])}
             timing_file=directory/'prefill-timings.json'
             atomic_json(timing_file,self.prefill_timings)

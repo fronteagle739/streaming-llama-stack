@@ -467,7 +467,7 @@ struct llama_context_params {
     const char * prefill_kv_artifact_path; // optional KV artifact path for handoff/export
     const char * prefill_tb_session_dir;   // optional TB session directory
 
-    // Prefill strategy + token relay (Phase 3/4)
+    // Prefill strategy + token relay ()
     int32_t      prefill_strategy;            // 0=auto, 1=mac, 2=rtx
     int32_t      prefill_crossover_tokens;    // 0=auto-compute from model size
     const char * token_stream_host;           // Mac token stream address for relay
@@ -997,7 +997,7 @@ LLAMA_API size_t llama_state_seq_set_data_ext(struct llama_context * ctx,
                                               llama_seq_id           dest_seq_id,
                                               llama_state_seq_flags  flags);
 
-// Phase G (2026-05-06): KVBlob v2 handoff capture.
+// KVBlob v2 handoff capture.
 //
 // Wraps capture_kv_state_blob's MLA-aware setup so external callers
 // (e.g., the /v1/handoff/export_kvblob_v2 server endpoint) can pull KV
@@ -1694,7 +1694,7 @@ struct llama_split_layer_params {
     int32_t token_pos;                   // Position in KV sequence.
     int32_t seq_id;                      // Sequence id (default 0).
 
-    // Phase 3 Option B (Mac Metal): shared-buffer I/O mode. When set, the
+    // Option B (Mac Metal): shared-buffer I/O mode. When set, the
     // external_input and external_attn_out pointers above must be bases of
     // pre-allocated Metal shared MTLBuffers (not host scratch). The
     // corresponding ggml_backend_buffer_t handles must be supplied so the
@@ -1718,7 +1718,7 @@ LLAMA_API int32_t llama_build_compute_split_layer(
         const struct llama_split_layer_params * params,
         float * out_buf);
 
-// Phase 3 Mac single-graph: submit a layer's compute without blocking for
+// Mac single-graph: submit a layer's compute without blocking for
 // completion. Encodes an event_record after the graph_compute cmd_buf so
 // the host can wait later via llama_wait_split_layer_async. out_buf is
 // remembered on the context; the actual memcpy happens in
@@ -1822,7 +1822,7 @@ LLAMA_API int32_t llama_embed_token(
 // events to advance the compute stream layer-by-layer.
 //
 // Expected impact: cuts per-layer framework overhead from ~1 ms to ~10 us
-// on both Windows CUDA and Mac Metal, closing the 2-3x gap to the Phase 0
+// on both Windows CUDA and Mac Metal, closing the 2-3x gap to the
 // split-decode ceiling. See docs/split_decode_event_graph_plan.md.
 //
 
@@ -1912,7 +1912,7 @@ LLAMA_API int32_t llama_split_graph_capture_layer(
         struct llama_split_graph * g,
         int32_t                    il);
 
-// Phase 3 Option B — single-dispatch submit with per-layer event gates
+// Option B — single-dispatch submit with per-layer event gates
 // and shared-MTLBuffer I/O. Encodes:
 //   1. encodeWaitForEvent(g->metal_input_ready[il])
 //   2. graph_compute for layer il with external_attn_out bound to
@@ -1935,7 +1935,7 @@ LLAMA_API int32_t llama_split_graph_submit_layer_gated(
         int32_t                    token_pos,
         int32_t                    seq_id);
 
-// Path A Phase E (2026-04-20) — mega-graph single-dispatch launch.
+// Path A mega-graph single-dispatch launch.
 // Builds ONE cgraph for all n_layer FFN_ONLY subgraphs and computes it
 // via the gated ggml-metal API (per-layer encodeWaitForEvent/SignalEvent
 // on the Metal queue). Caller must call llama_split_graph_create with
@@ -1960,7 +1960,7 @@ LLAMA_API int32_t llama_split_graph_launch_mega(
         int32_t                    token_pos,
         int32_t                    seq_id);
 
-// Phase 3 Option B accessors — ffn-server RX/TX threads use these to
+// Option B accessors — ffn-server RX/TX threads use these to
 // signal/wait events and read/write the per-layer shared MTLBuffers
 // without needing direct access to the Metal backend handle.
 
@@ -1981,7 +1981,7 @@ LLAMA_API void llama_split_graph_wait_output_ready_host(
         struct llama_split_graph * g,
         int32_t                    il);
 
-// 2026-04-20 race-free variants: caller supplies an explicit `target`
+// race-free variants: caller supplies an explicit `target`
 // (e.g. token_pos + 1). GPU-side encode_wait / encode_signal encoded
 // inside build_compute_split_mega use the same target. Must be used
 // with MEGA_DISPATCH because the encoder runs on the main thread while

@@ -8,7 +8,7 @@ ggml_cgraph * clip_graph_kimivl::build() {
     // blurs the downsample. Match the reference.
     ggml_tensor * learned_pos_embd = resize_position_embeddings(GGML_SCALE_MODE_BICUBIC);
 
-    // 2026-05-31: Kimi-K2.6 (model_type kimi_k25) vision uses INTERLEAVED 2D-RoPE: adjacent complex
+    // Kimi-K2.6 (model_type kimi_k25) vision uses INTERLEAVED 2D-RoPE: adjacent complex
     // pair k = (q[2k], q[2k+1]) is rotated by the WIDTH position when k is even and the HEIGHT
     // position when k is odd (freq θ^(-4*(k/2)/d_head)), i.e. head-dim layout [W0,H0,W1,H1,...]
     // (exactly mlx_vlm kimi_k25 Rope2DPosEmb/apply_rope). clip.cpp's build_rope_2d is HALF-SPLIT and

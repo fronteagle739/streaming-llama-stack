@@ -59,6 +59,7 @@ def test_production_qfn_launch_delivers_controls_to_real_guarded_child(tmp_path,
         'host_budget_gib': .25, 'min_available_gib': 6, 'job_commit_gib': 1,
         'env_overrides': chosen})
     engine = QfnEngine(cfg)
+    engine.command()  # Resolve the same launch defaults before substituting the stand-in.
     code = 'import json,os,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({k:os.environ.get(k) for k in json.loads(sys.argv[2])}))'
     engine.command = lambda: [sys.executable, '-B', '-c', code, str(output), json.dumps(list(chosen))]
     job = engine.launch()

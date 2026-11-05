@@ -127,7 +127,7 @@ struct server_tokens {
 
     // v1.9 small-image-forward: the RAW encoded image bytes (PNG/JPEG) for this request, kept
     // so the RTX can forward them to the decode receiver (mlx_vlm generate() locally) for SMALL
-    // image prompts. Populated by process_mtmd_prompt. See GROUND_TRUTH §11 (USER 2026-06-01).
+    // image prompts. Populated by process_mtmd_prompt. See GROUND_TRUTH §11 (USER ).
     std::vector<raw_buffer> raw_image_files;
     // v1.9 small-image-forward: the BARE user question text (no chat template / image markers),
     // forwarded as prompt_text so the receiver's mlx_vlm apply_chat_template can re-wrap it
@@ -201,7 +201,7 @@ public:
 
     bool empty() const { return tokens.empty(); }
 
-    // 2026-05-31 vision path A: true if this request contains image/media chunks.
+    // vision path A: true if this request contains image/media chunks.
     // Used to force image requests onto the RTX full-KV export+handoff (the only
     // path that ships the image-derived kv_ram) instead of PROMPT-DIRECT (which
     // skips KV capture and would drop the image, leaving the decoder to hallucinate).

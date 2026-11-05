@@ -6833,9 +6833,8 @@ done:
 /* ---------------------------------------------------------------------------
  * /debug/prefill - resident prefill cost map for the V4.1 prefill campaign.
  *
- * prefill/PLAN.md Phase 1 was planned as ~8 ds4-bench processes, each paying a
- * 294 GiB weight load (104 s cold) to read one start-up environment variable.
- * Every one of those switches is now a lever (prefill_8k_chunk,
+ * Resident controls avoid reloading the 294 GiB model for each measurement.
+ * Each switch is available as a lever (prefill_8k_chunk,
  * prefill_decoder_suffix, prefill_stage_profile, q8_prefill_profile), so the
  * whole map can run inside one resident server: set the levers, reset the
  * kernel ledger, prefill, dump the ledger, read the frontier logits.
@@ -15623,7 +15622,7 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
     if (kv_cache_slot_enabled(s,slot) && cached == 0 &&
         old_pos >= s->kv.opt.min_tokens) {
         /* ES1: the outgoing store below runs an eviction pass, and on
-         * 2026-09-24 that pass unlinked the 434,928-token checkpoint the
+         * that pass unlinked the 434,928-token checkpoint the
          * incoming 435,563-token prompt was about to restore (a superseded
          * waypoint of the outgoing chain, the ladder's cheapest victim), so
          * the prompt prefilled from ctx=0.  Pin the incoming prompt's best
@@ -26620,7 +26619,7 @@ static void test_kv_ladder_select_pattern(void) {
             TEST_ASSERT((uint64_t)depths[i] * 7ull > (uint64_t)last * 5ull);
         }
     }
-    /* coverage: for the 2026-08-21 shape (divergence at 146090), a usable
+    /* coverage: for the shape (divergence at 146090), a usable
      * rung at or below the divergence point must survive, and it must not be
      * catastrophically far below it (worst case one ratio step: >= 5/7). */
     uint32_t best = 0;
@@ -26633,14 +26632,14 @@ static void test_kv_ladder_select_pattern(void) {
      * sum to 2.8x the frontier and the geometric tail brings the kept set to
      * 4.6x (10 of 29 rungs), against 14.5x un-thinned.  GLM's original bound
      * (< 3x) is arithmetically unsatisfiable and fails there too (V4.1 port,
-     * 2026-09-14). */
+     * ). */
     uint64_t total = 0, unthinned = 0;
     for (int i = 0; i < N; i++) { unthinned += depths[i]; if (keep[i]) total += depths[i]; }
     TEST_ASSERT(total < 5ull * frontier);
     TEST_ASSERT(2 * total < unthinned);
 }
 
-/* Reproduces the 2026-09-14 turn-1 failure at the kvstore layer, with no
+/* Reproduces the turn-1 failure at the kvstore layer, with no
  * prefill: a live agentic session near the compaction threshold has just
  * written its checkpoint ladder, the disk is full, and a stale anchor from an
  * idle chat sits alongside.  Before the base-decay fix the never-reused anchor
@@ -26716,7 +26715,7 @@ static void test_kv_ladder_survives_compaction_pressure(void) {
     rmdir(dir);
 }
 
-/* ES1 defect 1 reproducer (Mac log 2026-09-24 16:48:37-39).  A request missed
+/* ES1 defect 1 reproducer (Mac log 16:48:37-39).  A request missed
  * the live KV (live=451398, prompt=435563, common=435387).  The server stored
  * the outgoing live session first ("reason=evict"); that store's eviction pass
  * unlinked the 434,928-token checkpoint that was the incoming prompt's best

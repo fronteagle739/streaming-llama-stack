@@ -2346,7 +2346,7 @@ extern "C" {
     //   q_full:  F32 [D, H, n_q]
     //   gates:   F32 [H, n_q]    (already pre-scaled by 1/sqrt(H))
     //   pos:     I32 [>= n_q] query positions (optional, may be NULL).
-    //            [DSA_TOPK_CAUSAL 2026-07-03] When present, score[k, q] is
+    //            DSA_TOPK_CAUSAL When present, score[k, q] is
     //            masked to -FLT_MAX for cache cells k > pos[q] BEFORE top-k,
     //            so unwritten/stale cells cannot crowd causally valid keys
     //            out of the fixed top-k budget.

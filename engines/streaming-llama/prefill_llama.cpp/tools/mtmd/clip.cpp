@@ -161,7 +161,7 @@ struct clip_ctx {
 
     clip_ctx(clip_context_params & ctx_params) {
         flash_attn_type = ctx_params.flash_attn_type;
-        // 2026-06-01: force the manual full-F32 attention path (no F16 K/V cast) to test
+        // force the manual full-F32 attention path (no F16 K/V cast) to test
         // whether MoonViT's massive-activation precision loss is the vit_out fidelity gap.
         if (std::getenv("LLAMA_CLIP_DISABLE_FLASH")) {
             flash_attn_type = CLIP_FLASH_ATTN_TYPE_DISABLED;
@@ -284,7 +284,7 @@ ggml_tensor * clip_graph::resize_position_embeddings(uint32_t interpolation_mode
     // MoonViT — the AesSedai Kimi-K2.6 mmproj ships v.position_embd.weight as
     // [1152, 64, 64]). Detect which so n_per_side is the grid side in BOTH cases:
     // for the 3D form ne[1] IS the side (do not take sqrt — that gave 8 instead of
-    // 64 and crashed the reshape below).  2026-05-31.
+    // 64 and crashed the reshape below).  .
     const bool is_3d     = ggml_n_dims(pos_embd) >= 3;
     const int  n_per_side = is_3d ? (int) pos_embd->ne[1]
                                   : (int) std::sqrt((double) pos_embd->ne[1]);
@@ -642,7 +642,7 @@ ggml_tensor * clip_graph::build_attn(
         const auto n_head   = q->ne[2];
 
         ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
-        // 2026-06-01: MoonViT (kimi_k25) develops massive activations; F16 attention
+        // MoonViT (kimi_k25) develops massive activations; F16 attention
         // accumulation loses precision and compounds across 27 blocks. Force F32.
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
 
@@ -1181,10 +1181,10 @@ struct clip_model_loader {
                         // TODO: check kimivl preprocessor for exact values
                         hparams.set_limit_image_tokens(8, 1024);
                         hparams.set_warmup_n_tokens(256); // avoid OOM on warmup
-                        // 2026-05-31: kimi_k25 vision blocks use exact (erf) GELU in the MLP, not the
+                        // kimi_k25 vision blocks use exact (erf) GELU in the MLP, not the
                         // tanh approximation that use_gelu->FFN_GELU selects. Override for parity.
                         hparams.ffn_op = FFN_GELU_ERF;
-                        // 2026-05-31: KimiVL/MoonViT is SigLIP-initialized and uses SigLIP
+                        // KimiVL/MoonViT is SigLIP-initialized and uses SigLIP
                         // normalization (image_mean = image_std = 0.5 -> pixels mapped to [-1,1]).
                         // Both the AesSedai and unsloth mmprojs correctly bake [0.5,0.5,0.5] into the
                         // GGUF (loaded above), so do NOT override here — an earlier OpenAI-CLIP override
@@ -3255,7 +3255,7 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, str
             } break;
         case PROJECTOR_TYPE_KIMIVL:
             {
-                // 2026-05-31 reference-parity (HF processing_kimi_vl, pad_input=True): KEEP native
+                // reference-parity (HF processing_kimi_vl, pad_input=True): KEEP native
                 // resolution (downscale ONLY if the pre-merge patch count exceeds in_token_limit),
                 // resize with BICUBIC, then pad bottom/right to the merge*patch boundary with BLACK
                 // (top-left placement, no letterbox scale). This reproduces the mlx-vlm reference grid
@@ -3867,7 +3867,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             } break;
         case PROJECTOR_TYPE_KIMIVL:
             {
-                // 2026-05-31: kimi_k25 uses INTERLEAVED 2D-RoPE applied via explicit cos/sin tables
+                // kimi_k25 uses INTERLEAVED 2D-RoPE applied via explicit cos/sin tables
                 // (see kimivl.cpp add_pos). pair k in [0,d_head/2): angle = (k even ? width_pos :
                 // height_pos) * theta^(-4*(k/2)/d_head). [kimi_rope_cos/sin are [d_head/2, n_pos].]
                 const int n_patches_per_col = image_size_width / patch_size;
@@ -4002,7 +4002,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         }
     }
 
-    // 2026-05-31 layer-bisect: per-node eval callback (fires DURING compute with valid data,
+    // layer-bisect: per-node eval callback (fires DURING compute with valid data,
     // before buffer reuse) -> reliable magnitude trace through the 27 blocks.
     if (std::getenv("LLAMA_VISION_DUMP_VITOUT")) {
         ggml_backend_sched_set_eval_callback(ctx->sched.get(),

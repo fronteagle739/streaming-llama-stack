@@ -551,7 +551,7 @@ bool recv_all_bytes_timeout(tb_socket_t fd, uint8_t * dst, size_t size, int time
 
 bool send_tbp_frame(tb_socket_t fd, uint16_t msg_type, uint16_t flags, uint64_t session_id, uint64_t stream_id, uint64_t seq_no,
                     const uint8_t * payload, size_t payload_bytes, std::string * error) {
-    // KV chunks carry no payload CRC unless LLAMA_PREFILL_TB_CHUNK_CRC=1 (2026-09-10): the byte-wise
+    // KV chunks carry no payload CRC unless LLAMA_PREFILL_TB_CHUNK_CRC=1 the byte-wise
     // CRC over every chunk ran in series with the socket write and capped a 6.3 GB export at ~330 MB/s
     // on a wire that carries ~750; no receiver verified it (the Mac reads and discards the field).
     static const bool chunk_crc = []() {
@@ -814,7 +814,7 @@ bool send_artifact_over_tcp(const uint8_t * src_data, size_t src_size, const std
         tb_socket_t fd = TB_SOCKET_INVALID;
         // Default 60 x 1s. Overridable because the receiver may still be LOADING the decode model when the
         // RTX side connects — a ~432GB GGUF (MiniMax-M3) takes several minutes to come up on :9100, and a
-        // 60s window made every such switch fail (observed 2026-07-11). The studio launcher sets
+        // 60s window made every such switch fail (observed ). The studio launcher sets
         // LLAMA_TB_CONNECT_RETRIES per preset for huge Mac-side models.
         static const int max_retries = [] {
             const char * env = getenv("LLAMA_TB_CONNECT_RETRIES");
@@ -909,7 +909,7 @@ bool send_artifact_over_tcp(const uint8_t * src_data, size_t src_size, const std
     size_t src_offset = 0;
     std::vector<uint8_t> chunk(chunk_bytes);
     uint32_t chunks_sent = 0;
-    // Pulled streams (2026-09-10): the producer reads the next chunks from the NVMe tier on its own
+    // Pulled streams the producer reads the next chunks from the NVMe tier on its own
     // thread into a small ring while this thread sends, so the disk read and the socket write overlap
     // instead of alternating (measured 319 MB/s alternating on a 6.3 GB export; the wire does ~750).
     struct ring_slot { std::vector<uint8_t> buf; size_t n = 0; bool ready = false; bool last = false; };
@@ -1060,7 +1060,7 @@ bool send_artifact_over_tcp(const uint8_t * src_data, size_t src_size, const std
         // these copies, and nothing frees them either -- pending_chunks.clear() is inside the same
         // dead branch. Every chunk therefore accumulated for the whole transfer.
         //
-        // Measured 2026-09-03 on a real 832,518,542-byte handoff: 199 chunks of ~4.2 MB, so ~832 MB
+        // on a real 832,518,542-byte handoff: 199 chunks of ~4.2 MB, so ~832 MB
         // of retained heap, a second memcpy per chunk, and a first-touch page fault over all of it,
         // for data no code path could ever consume. The transport moved 332 MB/s where a plain TCP
         // socket over the same wire (bridge100 -> en0, 10GbE) measured 750 MB/s both-sides-agreeing.

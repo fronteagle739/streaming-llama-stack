@@ -4,7 +4,7 @@
 // optionally 512 B). Rows on the same or adjacent aligned sectors merge up to
 // a byte cap (64 KiB).
 // Rows marked in an optional hit bitmap are already resident and are skipped.
-// PAIRFIX scan geometry: a nonzero `gap` also merges rows whose aligned
+// scan geometry: a nonzero `gap` also merges rows whose aligned
 // sectors are up to `gap` bytes apart (the gap bytes are read and ignored), so
 // a dense row set becomes a few large sequential reads instead of one random
 // read per row. gap 0 is the original same-or-adjacent-sector rule.

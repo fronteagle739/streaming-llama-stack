@@ -59,7 +59,7 @@ struct llama_decode_handoff_runtime {
 
     bool transport_required = false;
 
-    // Token relay + KV sync (Phase 3)
+    // Token relay + KV sync ()
     std::string token_stream_host;
     int32_t     token_stream_port      = 0;
     int32_t     kv_sync_batch_size     = 512;
@@ -110,7 +110,7 @@ struct llama_decode_handoff_plan {
     std::string fallback_reason;
     std::vector<llama_decode_layer_map_entry> layer_map;
 
-    // Token relay + KV sync (Phase 3)
+    // Token relay + KV sync ()
     std::string token_stream_host;
     int32_t     token_stream_port      = 0;
     int32_t     kv_sync_batch_size     = 512;
@@ -186,7 +186,7 @@ class llama_decode_executor_i {
         status = "publish_kv_artifact_bytes not supported for this executor; fall back to file path";
         return false;
     }
-    // Pull-based publish (2026-09-10): the artifact bytes are produced on demand (the NVMe tier's row
+    // Pull-based publish the artifact bytes are produced on demand (the NVMe tier's row
     // files), so nothing the size of the artifact exists in RAM. Default: unsupported.
     virtual bool publish_kv_artifact_stream(uint64_t total_bytes, const llama_tb_pull_fn & pull,
                                             const llama_decode_handoff_plan & plan, std::string & status,
@@ -195,7 +195,7 @@ class llama_decode_executor_i {
         status = "publish_kv_artifact_stream not supported for this executor";
         return false;
     }
-    // Delta shipping (2026-09-10): how many leading tokens of this sequence the decoder already
+    // Delta shipping how many leading tokens of this sequence the decoder already
     // holds resident. Default: unknown (ship everything).
     virtual bool query_decoder_prefix(const int32_t * tokens, size_t n_tokens,
                                       const llama_decode_handoff_plan & plan,

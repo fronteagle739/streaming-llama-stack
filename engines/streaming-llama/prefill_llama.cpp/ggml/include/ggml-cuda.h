@@ -40,14 +40,14 @@ GGML_BACKEND_API void ggml_backend_cuda_get_device_memory(int device, size_t * f
 GGML_BACKEND_API bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size);
 GGML_BACKEND_API void ggml_backend_cuda_unregister_host_buffer(void * buffer);
 
-// Phase 296 (2026-05-04): release all cached freed buffers from the backend's
+// release all cached freed buffers from the backend's
 // per-stream memory pools back to the CUDA driver. Use between long-running
 // graph executions (e.g. between streaming-prefill requests) to prevent the
 // legacy pool from accumulating 20+ GB of cached freed buffers across cycles,
 // which causes OOM on subsequent prefills. Returns total bytes released.
 GGML_BACKEND_API size_t ggml_backend_cuda_pool_clear(ggml_backend_t backend);
 
-// Phase 299 (2026-05-04): per-process CUDA buffer alloc/free tracking.
+// per-process CUDA buffer alloc/free tracking.
 // Counters increment in alloc_buffer and decrement in the wrapper destructor.
 // Use to spot leaks across streaming-prefill cycles: alloc - free should equal
 // (live count's worth of) currently-held buffers. If alloc keeps growing
@@ -56,13 +56,13 @@ extern "C" GGML_BACKEND_API int64_t ggml_backend_cuda_buffer_alloc_total();
 extern "C" GGML_BACKEND_API int64_t ggml_backend_cuda_buffer_free_total();
 extern "C" GGML_BACKEND_API int64_t ggml_backend_cuda_buffer_live_count();
 
-// Phase 300 (2026-05-04): per-process cudaMalloc accounting via
+// per-process cudaMalloc accounting via
 // ggml_cuda_device_malloc. Catches both wrapper AND pool direct allocations,
 // pinpointing whether the leak is in wrapper code or pool code.
 extern "C" GGML_BACKEND_API int64_t ggml_cuda_device_malloc_total_bytes();
 extern "C" GGML_BACKEND_API int64_t ggml_cuda_device_malloc_total_count();
 
-// Phase 301 (2026-05-04): cuda_graphs map accounting + clear API.
+// cuda_graphs map accounting + clear API.
 // Each unique graph first_node_ptr creates a ggml_cuda_graph holding device
 // resources (instance buffers, kernel arg buffers). Returns current map size.
 GGML_BACKEND_API size_t ggml_backend_cuda_graphs_count(ggml_backend_t backend);
@@ -97,7 +97,7 @@ GGML_BACKEND_API enum ggml_status ggml_backend_cuda_graph_launch_prepared_parent
 // stream capture. No graph, tensor allocation or arithmetic is executed.
 GGML_BACKEND_API bool ggml_backend_cuda_graphs_reserve(ggml_backend_t backend, size_t bytes);
 
-// Phase 304 (2026-05-04): per-process cudaEventCreate / cudaStreamCreate counts
+// per-process cudaEventCreate / cudaStreamCreate counts
 // from the file-scope Meyers-singleton atomics in common.cuh. Counts only the
 // call sites we've explicitly hooked (currently: streaming-prefill event
 // creates in llama-context.cpp — the suspected per-cycle leak source).
@@ -108,7 +108,7 @@ extern "C" GGML_BACKEND_API int64_t ggml_cuda_stream_create_total();
 extern "C" GGML_BACKEND_API void ggml_cuda_event_create_count_inc();
 extern "C" GGML_BACKEND_API void ggml_cuda_event_destroy_count_inc();
 extern "C" GGML_BACKEND_API void ggml_cuda_stream_create_count_inc();
-// Phase 306 (2026-05-04): pinned host memory tracking. cudaMallocHost on
+// pinned host memory tracking. cudaMallocHost on
 // Windows consumes GPU page-table entries that show up in cudaMemGetInfo
 // as VRAM "free" decrease, even though physical memory is host RAM. Tracking
 // alloc - free totals shows whether pinned memory is the per-cycle leak.
@@ -141,7 +141,7 @@ GGML_BACKEND_API void ggml_cuda_set_tensor_copy_stream(void * stream);
 
 // Return the base address of the thread-local pinned staging arena used by
 // buffer_set_tensor when the tensor-copy-stream override is active. Used by
-// split-decode Phase 2d.C1: captured cudaGraph H2D copies replay from stable
+// split-decode captured cudaGraph H2D copies replay from stable
 // offsets inside this arena, so writing new values at (base + offset) before
 // cudaGraphLaunch updates the pos/mask inputs seen by the replay.
 // Returns NULL if the arena has not been allocated yet (first call to
@@ -260,7 +260,7 @@ GGML_BACKEND_API bool   ggml_backend_cuda_switch_arena_status(size_t * live_byte
 // into the compute buffer with no staging/D2D. Mirrors ggml_backend_cpu_buffer_from_ptr.
 GGML_BACKEND_API ggml_backend_buffer_t ggml_backend_cuda_buffer_from_ptr(int device, void * ptr, size_t size);
 
-// Phase 1.3 (2026-05-11): on-demand dump of the CUDA per-op profile counters
+// on-demand dump of the CUDA per-op profile counters
 // (collected when LLAMA_CUDA_OP_PROFILE=1 is set at server start). Windows
 // graceful-shutdown does not reliably fire the std::atexit-registered dump,
 // so call this directly (e.g. from decode_streaming on prefill completion

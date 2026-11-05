@@ -12,12 +12,12 @@ struct llama_kv_prompt_payload {
     // The receiver re-prefills these cells via an embd batch (Metal F32 FA) instead of
     // injecting the RTX's degraded F16-VKQ image K/V. See GROUND_TRUTH §11.
     std::vector<float>   image_embd;
-    // --- v1.9 (small-image-forward, 2026-06-01): RAW image bytes (PNG/JPEG) ---
+    // --- v1.9 (small-image-forward, ): RAW image bytes (PNG/JPEG) ---
     // When non-empty (+ FLAG_RAW_IMAGE), the receiver processes this SMALL image prompt
     // END-TO-END LOCALLY via mlx_vlm generate() on these raw bytes (no RTX clip/prefill
-    // degradation). prompt_text carries the question. See GROUND_TRUTH §11 (USER 2026-06-01).
+    // degradation). prompt_text carries the question. See GROUND_TRUTH §11 (USER ).
     std::vector<uint8_t> raw_image;
-    // --- v2.0 (MTP-on-KV-inject, 2026-06-24): per-token LAST-LAYER hidden states (fp16) for the streamed prefix,
+    // --- v2.0 (MTP-on-KV-inject, ): per-token LAST-LAYER hidden states (fp16) for the streamed prefix,
     // appended at the very END of the payload (after raw_image). mtp_hidden_n_tokens * mtp_hidden_n_embd uint16 values,
     // row-major [token][embd]. Lets the receiver warm the MTP sidecar (layer-78 NextN) over a KV-inject session, which
     // otherwise lacks the prompt's hidden states and so disables MTP. Gated on FLAG_MTP_HIDDEN + format_minor >= 9.
@@ -69,7 +69,7 @@ struct llama_kv_artifact_metadata {
     uint32_t streamed_prefix_token_count = 0; // logical prompt prefix already covered by imported KV
     // --- v1.6 extension (format_minor >= 6) ---
     uint64_t pd_session_id              = 0; // PROMPT-DIRECT cache hit: Mac-side snapshot handle (0 = not a hit)
-    // --- v1.7 extension (format_minor >= 7) — Phase 5.3 (2026-05-12) ---
+    // --- v1.7 extension (format_minor >= 7) — --
     int32_t  source_slot_id             = -1; // RTX-side slot index that produced this blob.
                                               // -1 = unset (legacy single-slot path).
                                               // Mac receiver may use this to demultiplex
@@ -77,17 +77,17 @@ struct llama_kv_artifact_metadata {
                                               // decode sessions when kv_unified is true.
                                               // Without Mac-side support, Mac ignores this
                                               // and behaves as legacy seq_id=0.
-    // --- v1.8 extension (format_minor >= 8) — ship-embeddings (2026-06-01) ---
+    // --- v1.8 extension (format_minor >= 8) — ship-embeddings ---
     // When img_cell_count > 0, the prompt payload carries img_cell_count*img_n_embd f32
     // image embeddings; the receiver re-prefills those cells [img_pos_start, +img_cell_count)
     // via an embd batch (correct Metal F32 FA) instead of using the RTX's F16-VKQ image K/V.
     uint32_t img_cell_count             = 0;  // # image cells (embedding rows); 0 = no image embd
     uint32_t img_n_embd                 = 0;  // embedding dim per cell (= model n_embd)
     uint32_t img_pos_start              = 0;  // absolute sequence position of the first image cell
-    // --- v2.0 extension (format_minor >= 9) — MTP-on-KV-inject (2026-06-24) ---
+    // --- v2.0 extension (format_minor >= 9) — MTP-on-KV-inject ---
     uint32_t mtp_hidden_n_tokens        = 0;  // # hidden rows (= streamed prefix token count); 0 = no MTP hidden states
     uint32_t mtp_hidden_n_embd          = 0;  // hidden dim per row (= model n_embd)
-    // --- v2.1 extension (format_minor >= 10) — delta shipping (2026-09-10) ---
+    // --- v2.1 extension (format_minor >= 10) — delta shipping ---
     // The decoder already holds cells [0, base_prefix_cells) of this sequence (it said so when the
     // prefill server asked); the payload's cells start at that position and are appended there.
     uint32_t base_prefix_cells          = 0;
@@ -112,15 +112,15 @@ constexpr uint32_t LLAMA_KV_ARTIFACT_FLAG_IMAGE_EMBD    = 1u << 4;
 // (PNG/JPEG) at the very END; the receiver runs mlx_vlm generate() on them locally. The
 // raw-image byte count is stored in the v1.8 image header's reserved_img (4th) field.
 constexpr uint32_t LLAMA_KV_ARTIFACT_FLAG_RAW_IMAGE     = 1u << 5;
-// MTP_HIDDEN (v2.0, 2026-06-24): the payload carries fp16 per-token last-layer hidden states at the very END (after
+// MTP_HIDDEN (v2.0, ): the payload carries fp16 per-token last-layer hidden states at the very END (after
 // raw_image), sized mtp_hidden_n_tokens*mtp_hidden_n_embd. The receiver warms the MTP sidecar with them over a
 // KV-inject session (which otherwise lacks the prompt hidden states). See mtp_hidden_n_tokens/n_embd in metadata.
 constexpr uint32_t LLAMA_KV_ARTIFACT_FLAG_MTP_HIDDEN    = 1u << 6;
-// NO_CRC (2026-09-10, streamed export): payload_crc32 is 0 and was not computed. The RTX streams the
+// NO_CRC (streamed export): payload_crc32 is 0 and was not computed. The RTX streams the
 // payload straight from the NVMe tier's row files while the header has already gone out; a CRC would
 // need a second pass over the files. Readers skip the check when this bit is set.
 constexpr uint32_t LLAMA_KV_ARTIFACT_FLAG_NO_CRC        = 1u << 7;
-// DELTA (v2.1, 2026-09-10): base_prefix_cells > 0; the payload carries only the cells the decoder lacks.
+// DELTA (v2.1, ): base_prefix_cells > 0; the payload carries only the cells the decoder lacks.
 constexpr uint32_t LLAMA_KV_ARTIFACT_FLAG_DELTA         = 1u << 8;
 // Native DSV4.1 payload adapter. Uses the existing v2.1 delta envelope;
 // the payload is interpreted by its model-specific native state adapter.

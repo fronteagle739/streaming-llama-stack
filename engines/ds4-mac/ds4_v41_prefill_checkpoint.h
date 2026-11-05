@@ -19,7 +19,7 @@
 #include <stdlib.h>
 
 /* Two 32k sweeps per completed boundary: the completing sweep measured about
- * +7 s over a ~70 s deep chunk (Mac log, 2026-09-24 11:34:46), so roughly +5 %
+ * +7 s over a ~70 s deep chunk (Mac log, 11:34:46), so roughly +5 %
  * on a long cold prefill in exchange for losing at most ~64k tokens on a
  * cancel.  DS4_V41_PREFILL_CHECKPOINT_TOKENS overrides it (0 = off). */
 #define DS4_V41_PREFILL_CHECKPOINT_DEFAULT_TOKENS 65536u

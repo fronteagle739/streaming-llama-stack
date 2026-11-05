@@ -844,7 +844,7 @@ static inline cublasHandle_t cuda_cublas_for_tier(int logical_tier) {
  * Design ported from the Entrpi/ds4 batched-serving fork's per-layer
  * decode graph work (fork commits abe26575, 2200c675, 9caaa508; author
  * Entrpi <entrpi@proton.me>), re-implemented against upstream's decode
- * body.  Phase 1 captures the two position-independent islands of each
+ * body.  captures the two position-independent islands of each
  * decode layer:
  *   island 0: layer top (hc pre-norm, mixes, QKV projections), ending
  *             before the position-dependent QKV rope.

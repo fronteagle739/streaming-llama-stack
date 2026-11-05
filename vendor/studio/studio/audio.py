@@ -1,5 +1,5 @@
 # Shared public integration implementation.
-"""Daemon-side audio manager (Phase 1: ASR + TTS + voice clone).
+"""Daemon-side audio manager (ASR + TTS + voice clone).
 
 The heavy ML engines (faster-whisper / chatterbox) live in a DEDICATED venv (``STUDIO_AUDIO_PYTHON``,
 default dev audio venv); this module — imported into the lightweight daemon — only orchestrates
@@ -84,8 +84,7 @@ def hq_audio_python() -> str:
 _HQ_ENGINES = ("dots", "moss")
 # Approx transient HOST RAM each HQ engine needs DURING load (measured ~7GB dots / ~18GB MOSS, + headroom).
 # Used by the pre-flight fit check so an HQ engine that can't fit free RAM fails with a clear message
-# instead of OOM-ing the whole box (user 2026-06-15: "make sure the audio model doesnt immediately try to
-# eat all the ram"). Override the guard with STUDIO_AUDIO_SKIP_FIT_CHECK=1.
+# before loading a model that would exhaust host RAM. Override with STUDIO_AUDIO_SKIP_FIT_CHECK=1.
 _HQ_HOST_RAM_GB = {"dots": 8.0, "moss": 19.0}
 
 
@@ -187,13 +186,13 @@ def _worker_env(engine: Optional[str] = None) -> dict:
         env["HF_HOME"] = hf_home
     # The worker runs with the Hugging Face hub offline, so a bare model size ("large-v3-turbo") can
     # only load from a cache. Use the installed local faster-whisper folder, the same one world voice
-    # and the mic monitors use, unless the owner configured a model explicitly.
+    # and the mic monitors use, unless the user configured a model explicitly.
     if "STUDIO_AUDIO_ASR_MODEL" not in os.environ:
         from .world_voice import _asr_model_default
         local_asr = _asr_model_default()
         if local_asr:
             env["STUDIO_AUDIO_ASR_MODEL"] = local_asr
-    # Per-service GPU assignment (user 2026-06-09): pin the audio worker to the user's chosen card.
+    # Per-service GPU assignment: pin the audio worker to the user's chosen card.
     # The worker reads STUDIO_AUDIO_GPU_INDEX and applies CUDA_DEVICE_ORDER=PCI_BUS_ID +
     # CUDA_VISIBLE_DEVICES before importing torch/CTranslate2, so the index is an nvidia-smi PCI-bus
     # index. An explicit environment override wins over the saved assignment.
@@ -233,8 +232,7 @@ def _gemma_stt_model() -> Optional[str]:
 
 
 def stt_engines() -> list[str]:
-    """Selectable speech-to-text engines (user 2026-06-15: "audio-capable models like gemma 2/4/12b
-    selectable STT options"). 'whisper' = faster-whisper (default); 'gemma-audio' is offered when an
+    """Selectable speech-to-text engines, including configured audio-capable Gemma models. 'whisper' = faster-whisper (default); 'gemma-audio' is offered when an
     audio-capable gemma model is configured via STUDIO_STT_GEMMA_MODEL. Always returns at least whisper."""
     engines: list[str] = []
     try:
@@ -276,8 +274,7 @@ def status(force: bool = False) -> dict:
             _avail_cache.update(ts=now, value=result)
             return dict(result)
         # FAST availability: just check the package FILES are present in the venv(s). NO slow
-        # model-importing subprocess (user 2026-06-15: "a check that the files are there should be
-        # fine; it can pop up an error if it fails on import"). Heavy import / model-load failures
+        # model-importing subprocess. Heavy import / model-load failures
         # surface at synthesize()/transcribe() time, so this status never times out or flakes.
         def _present(venv_py: str, import_name: str) -> bool:
             """Is ``import_name`` importable from ``venv_py``'s site-packages? Handles a normal package
@@ -285,7 +282,7 @@ def status(force: bool = False) -> dict:
             (``pip install -e``) — which leaves NO dir in site-packages, only a ``.dist-info`` /
             ``.egg-link`` / ``__editable__*.pth`` reference. The old ``is_dir()`` check reported editable
             installs (e.g. MOSS-TTS) as ABSENT even though ``import`` works, so the GUI hid them
-            (integration audit 2026-06-16)."""
+            with a package-directory-only check."""
             try:
                 sp = Path(venv_py).resolve().parent.parent / "Lib" / "site-packages"
                 if not sp.is_dir():

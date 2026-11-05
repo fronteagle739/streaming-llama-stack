@@ -4467,7 +4467,7 @@ int ggml_metal_op_count_equal(ggml_metal_op_t ctx, int idx) {
 }
 
 //
-// DSA (DeepSeek Sparse Attention) — Phase M1 skeleton
+// DSA (DeepSeek Sparse Attention) implementation skeleton
 //
 // These three ops (GGML_OP_DSA_INDEXER_SCORE, GGML_OP_DSA_INDEXER_TOPK,
 // GGML_OP_FLASH_ATTN_EXT_SPARSE) currently abort on Metal — their MSL kernels
@@ -4691,7 +4691,7 @@ int ggml_metal_op_flash_attn_ext_sparse(ggml_metal_op_t ctx, int idx) {
         /*.o_nb0    =*/ op->nb[0], /*.o_nb1=*/ op->nb[1], /*.o_nb2=*/ op->nb[2], /*.o_nb3=*/ op->nb[3],
     };
 
-    // Phase 29 (UNTESTED): env-gated v2 dispatch. v2 processes 4 indices in
+    // (UNTESTED): env-gated v2 dispatch. v2 processes 4 indices in
     // parallel per outer iteration via 4 SIMD-groups. Default off → v1 path.
     static const bool sparse_fa_v2 = []() {
         const char * env = std::getenv("LLAMA_METAL_SPARSE_FA_V2");
@@ -4728,7 +4728,7 @@ int ggml_metal_op_flash_attn_ext_sparse(ggml_metal_op_t ctx, int idx) {
 }
 
 size_t ggml_metal_op_dsa_indexer_topk_extra_tmp(const ggml_tensor * op) {
-    // Phase M3 will use a [n_kv, n_q] f32 scratch for indexer scores before top-k.
+    // Indexer top-k will use a [n_kv, n_q] f32 scratch for indexer scores before top-k.
     // n_kv = src[0]->ne[1]; n_q = src[1]->ne[2].
     if (op->op != GGML_OP_DSA_INDEXER_TOPK) {
         return 0;

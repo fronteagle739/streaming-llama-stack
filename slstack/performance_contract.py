@@ -112,7 +112,7 @@ def regression(baseline, current):
     if any(baseline.get(k) != current.get(k) or baseline.get(k) is None for k in identity):
         raise ValueError('Regression gate requires matched fixture, length, settings, pack and protocol')
     if baseline['protocol'] != 'warm-short-then-different-prompt-same-process':
-        raise ValueError('Regression gate requires the owner warm protocol')
+        raise ValueError('Regression gate requires the warm second-prompt protocol')
     if baseline['clock']!='native-second-prompt-open-and-run' or baseline['prompt_data_policy']!='after-warm-up':
         raise ValueError('Regression gate requires full second-prompt accounting and deferred prompt data')
     controls = baseline['control_tok_s']

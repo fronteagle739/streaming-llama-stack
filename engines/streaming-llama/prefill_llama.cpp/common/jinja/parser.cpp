@@ -444,7 +444,7 @@ private:
         // Handle member expressions recursively
         auto member = parse_member_expression(parse_primary_expression());
         return is(token::open_paren)
-            ? parse_call_expression(std::move(member)) // foo.x()
+            ? parse_call_expression(std::move(member)) // foo.x()()
             : std::move(member);
     }
 

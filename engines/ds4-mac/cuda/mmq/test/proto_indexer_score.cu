@@ -1272,7 +1272,7 @@ __global__ static void indexer_scores_multiseq_v5c32_kernel(
 // in main reports the real result because this hint is not a guarantee.
 // ---------------------------------------------------------------------------
 
-/* bounds sweep on .15 (2026-07-18): (128,6) 200.1 µs / (128,8) 187.8 µs
+/* bounds sweep on .15 (128,6) 200.1 µs / (128,8) 187.8 µs
  * regs 64, idempotence holds / (128,12) 200.3 µs regs 40, spill cliff.
  * Interior optimum = 8 blocks; occupancy stopped paying linearly past
  * ~50% (pipes ~35%) — the per-CTA stage->MMA->scale-fold dependency
@@ -2228,7 +2228,7 @@ static void run_shape(const char *shape_name, uint32_t n_comp, int do_timing,
 }
 
 // ---------------------------------------------------------------------------
-// NT4 batch-invariance leg (engine-integration proof, 2026-07-19).  The
+// NT4 batch-invariance leg (engine-integration proof, ).  The
 // engine's multiseq decode batches ride grid.y with a distinct (seq, pos)
 // per token; every oracle leg above runs n_tokens=1, so this leg proves the
 // V5D kernel's per-token addressing directly: a 4-token batch must

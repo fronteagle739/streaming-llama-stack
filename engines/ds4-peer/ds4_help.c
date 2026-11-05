@@ -248,7 +248,7 @@ static void print_distributed(FILE *fp, const help_colors *c) {
     title(fp, c, "Tensor Parallelism");
     fputc('\n', fp);
 #if defined(_WIN32)
-    /* [merge 2026-08-16] ds4_tp.c is POSIX-only (netdb.h, sys/uio.h, netinet/*), so the Windows build
+    /* ds4_tp.c is POSIX-only (netdb.h, sys/uio.h, netinet/*), so the Windows build
      * links ds4_tp_win32.c, whose 42 entry points all fail loudly. Every flag below therefore
      * hard-errors here. Say so in the help rather than advertising options that cannot work -
      * documenting a flag the binary rejects is its own small lie. */

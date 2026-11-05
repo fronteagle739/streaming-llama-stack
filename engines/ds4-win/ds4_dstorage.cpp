@@ -399,7 +399,7 @@ bool ensure_gpu_queue(void) {
     desc.Priority = g_demand_priority;
     desc.Name = "ds4-expert-stream-gpu";
     desc.Device = g_d3d_device;
-    /* [2026-08-18] FIXED: every extra queue used to land in slot 1 and leak.
+    /* FIXED: every extra queue used to land in slot 1 and leak.
      *
      * The old body wrote `g_gpu_queues[g_gpu_queue_count + 1] = q`, but this function early-returns
      * when g_gpu_queue_count != 0, so at this point it is ALWAYS 0 - making the index a constant 1.
@@ -524,7 +524,7 @@ extern "C" int ds4_ds_init_from_fd(int fd) {
         }
     }
 
-    /* [2026-08-20 FIX] CONFIGURE DIRECTSTORAGE UNCONDITIONALLY.
+    /* CONFIGURE DIRECTSTORAGE UNCONDITIONALLY.
      *
      * This block used to run only `if (threads_env && threads_env[0])`, so in the SHIPPED default -
      * where nobody sets DS4_DS_SUBMIT_THREADS - DStorageSetConfiguration1 was NEVER CALLED AT ALL.
@@ -685,7 +685,7 @@ extern "C" int ds4_ds_batch_add(uint64_t file_offset, uint32_t bytes, void *dst_
     return 1;
 }
 
-/* [2026-08-20] Is the GPU-destination arena RESOURCE still alive?
+/* Is the GPU-destination arena RESOURCE still alive?
  *
  * ds4_ds_prefill_arenas_create() calls gpu_arena_release() to make room for R4's prefill arenas,
  * which destroys g_gpu_arena and the CUDA external-memory mapping derived from it. The CUDA side
@@ -1015,7 +1015,7 @@ extern "C" int ds4_ds_prefill_waves_check_errors(void) {
     return 1;
 }
 
-/* [2026-08-20] DS4_GPU_ADD_REASON_V1.
+/* DS4_GPU_ADD_REASON_V1.
  * This function has seven ways to return 0 and NONE of them logged anything, so a refusal here
  * surfaced only as `skipped++; break` in the CUDA prepass, which abandons the layer and drops every
  * expert to a synchronous pread. Measured: on requests 2+ the prepass enters all 43 layers, stages
@@ -1059,7 +1059,7 @@ extern "C" int ds4_ds_batch_add_gpu(
     return 1;
 }
 
-/* [2026-08-16] SPLIT submit from wait.
+/* SPLIT submit from wait.
  *
  * WHY: profiling a 16K prefill showed the `load` phase is 93.5% of streaming prefill time (26,492 ms
  * of 28,346 ms over 172 layer-batches) while the GPU sat ~80% idle and the RAID ran at ~15% of its
@@ -1071,7 +1071,7 @@ extern "C" int ds4_ds_batch_add_gpu(
  * ds4_ds_batch_submit_wait() is preserved below as submit(); wait(), so every existing caller is
  * bit-for-bit unchanged. Nothing overlaps yet - see the note on ds4_ds_batch_submit().
  */
-/* [2026-08-16] TWO-SLOT RING so a second batch can be built while the first is in flight.
+/* TWO-SLOT RING so a second batch can be built while the first is in flight.
  *
  * `g_batch` stays the FILL buffer, so ds4_ds_batch_add/count/reset are untouched. submit() moves the
  * filled batch into a free in-flight slot (std::move keeps the DSTORAGE_REQUEST objects alive for
@@ -1081,7 +1081,7 @@ extern "C" int ds4_ds_batch_add_gpu(
  * Two slots is the minimum that overlaps layer N+1's fetch with layer N's compute, and the sweep
  * already showed 1792 MiB per slot (3584 total, host staging - not VRAM) is measured-safe, so each
  * slot keeps the known-best size rather than halving to 896 (which costs 9% on its own). */
-/* [2026-08-18] DEPTH IS NOW A KNOB. Measured: every DirectStorage rate this program reports equals
+/* DEPTH IS NOW A KNOB. Measured: every DirectStorage rate this program reports equals
  * batch_size / batch_latency exactly (24.8 MiB/1.928 ms = 12.55 GiB/s; 33.0/2.246 = 14.35; a 1.4 GiB
  * load batch = 14.4), i.e. the queue completes ONE batch at a time. Batch SIZE has already saturated -
  * a 1.4 GiB batch still gives 14.7 GiB/s - so the only way to the array's ~24 GB/s is MORE BATCHES IN
@@ -1415,7 +1415,7 @@ static void ds4_ds_stats_record_prefill_wave(uint64_t bytes, size_t nreq) {
     g_ds_prefill_wave_requests += (uint64_t)nreq;
 }
 
-/* SLOW-BATCH LOG.  MEASURED 2026-08-18: ~0.7% of batches (46 of 6900) consume ~35% of ALL DirectStorage
+/* SLOW-BATCH LOG.  ~0.7% of batches (46 of 6900) consume ~35% of ALL DirectStorage
  * time - 65-520 ms each, moving ~25 MiB, i.e. 0.05-0.4 GiB/s against the 12.55 GiB/s the SAME queue
  * sustains on the bulk in the SAME run.  Those are stalls, not slow reads, and they mean the 35.9 ms/token
  * "average wait" the overlap work targeted is an artefact of aggregation over a few dozen events.
@@ -1975,7 +1975,7 @@ extern "C" int ds4_ds_selftest(int fd, uint64_t start_offset, uint64_t span_byte
         (unsigned long long)batch_completed,(unsigned long long)pread_completed);
     const double gib = (double)total / 1073741824.0;
 
-    /* [2026-08-20] A rate above the hardware ceiling means the TRANSFER DID NOT HAPPEN.
+    /* A rate above the hardware ceiling means the TRANSFER DID NOT HAPPEN.
      *
      * Observed: the GPU line printed 10737418.24 GB/s. Working back from a 1 GiB total, that is an
      * elapsed time of ~1e-7 s — 100 NANOSECONDS for a gibibyte. QueryPerformanceCounter resolves far

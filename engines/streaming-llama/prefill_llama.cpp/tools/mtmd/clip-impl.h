@@ -310,7 +310,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
 };
 
 static projector_type clip_projector_type_from_string(const std::string & str) {
-    // 2026-05-31: Kimi-K2.6 mmproj GGUFs (AesSedai/unsloth) declare projector type
+    // Kimi-K2.6 mmproj GGUFs (AesSedai/unsloth) declare projector type
     // "kimik25" for the same MoonViT + KimiVL projector arch this fork implements as
     // "kimivl" (PROJECTOR_TYPE_KIMIVL). Accept it as an alias so the K2.6 mmproj loads.
     if (str == "kimik25") {

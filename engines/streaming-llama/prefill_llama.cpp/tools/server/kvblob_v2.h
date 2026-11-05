@@ -35,7 +35,7 @@
 // Multi-slot correctness rule: the consumer MUST iterate the descriptor
 // table and place each (seq_id, pos) pair into its own logical slot.
 // There is no "everything goes to seq 0" code path.  This is the
-// architectural fix for the Phase 316z bug.
+// architectural fix for the bug.
 
 #include "llama.h"
 

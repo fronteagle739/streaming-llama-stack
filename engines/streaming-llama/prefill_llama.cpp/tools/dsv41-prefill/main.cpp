@@ -293,7 +293,7 @@ int wmain(int argc,wchar_t**argv){
     json report={{"schema","dsv41-offline-producer-v1"},{"status","failed"},{"runtime_qualified",false}};
     const auto process_started=clock_type::now();
     // CUDA module loading: the driver default (LAZY) unless CUDA_MODULE_LOADING is set.
-    // Forced EAGER was measured slower (43K ABAB, 2026-10-25: L0 first-tile stall +26.8/+7.8 s)
+    // Forced EAGER was measured slower (43K ABAB, L0 first-tile stall +26.8/+7.8 s)
     // and dropped; the effective mode is still logged (module_loading=).
     const wchar_t*module_loading_env=_wgetenv(L"CUDA_MODULE_LOADING");
     const bool module_loading_default=!module_loading_env||!*module_loading_env;
@@ -1025,7 +1025,7 @@ int wmain(int argc,wchar_t**argv){
         // Preserve whole-prompt prefetch instead of double-billing its first
         // sweep and falling back to separate reads for each sweep.
         if(warm_defer_prompt)open_weights.engram_early_is_next_request=true;
-        // PAIRFIX: LLAMADECODE_ENGRAM_WHOLE_PROMPT (default 1): one early load holds
+        // LLAMADECODE_ENGRAM_WHOLE_PROMPT (default 1): one early load holds
         // every sweep's rows; later sweeps reuse it instead of loading again.
         if(engram_early_cold){open_weights.engram_early_tokens.assign(tokens.begin(),tokens.begin()+(llama_dsv41_engram_whole_prompt()?tokens.size():first_sweep_tokens));open_weights.engram_early_tail=early_tail;}
         auto started=clock_type::now();const bool opened=sweep->open(open_weights,options,error,warm_request.get(),nullptr,restored?&restored->base:nullptr);report["phase_ms"]["inspect_admit_allocate"]=ms(started);success(opened,error);if(restored){restored->finish();restored.reset();}warm_request.reset();stop();

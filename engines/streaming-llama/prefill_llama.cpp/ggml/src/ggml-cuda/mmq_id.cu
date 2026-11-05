@@ -758,7 +758,7 @@ void ggml_cuda_mul_mat_q_id(ggml_backend_cuda_context & ctx, const ggml_tensor *
         src0, expert_bounds, ne00, ne01, ne02, ne12, cc, stream, &measured_bounds);
 
     // Diagnostic: per-expert routed-column histogram (LLAMA_MMQ_ID_COL_HISTO=1).
-    // Gates any tile re-tune: the 2026-07-12 sparse-tile refutation showed uniform synthetic
+    // Gates any tile re-tune: the sparse-tile refutation showed uniform synthetic
     // routing in the harness inverts on real (skewed) routing, same GPU. Prints first 24 calls
     // then every 100th. D2H sync per printed call - diagnostics only, never leave enabled.
     {

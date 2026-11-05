@@ -1,4 +1,4 @@
-# Opt-in registration is owned by the top-level CMakeLists.txt. Reuse the owner's
+# Opt-in registration is owned by the top-level CMakeLists.txt. Reuse the project's
 # existing read-only JSON header; do not download/vendor another dependency.
 if(NOT WIN32 OR NOT GGML_CUDA)
     message(FATAL_ERROR "The offline V4.1 producer requires Windows and GGML_CUDA")

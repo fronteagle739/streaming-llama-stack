@@ -12,11 +12,11 @@
 //
 // Status:
 //   Q8_0 dense ............ implemented, parity-tested against CPU reference
-//   Q2_K dense ............ pending (Phase 3)
-//   IQ2_XXS dense ......... pending (Phase 3)
-//   Q8_0 MoE _id .......... pending (Phase 4)
-//   Q2_K MoE _id .......... pending (Phase 4)
-//   IQ2_XXS MoE _id ....... pending (Phase 4)
+//   Q2_K dense ............ pending ()
+//   IQ2_XXS dense ......... pending ()
+//   Q8_0 MoE _id .......... pending ()
+//   Q2_K MoE _id .......... pending ()
+//   IQ2_XXS MoE _id ....... pending ()
 
 #include "ds4_mmq.h"
 
@@ -100,7 +100,7 @@ private:
 // Init
 // ----------------------------------------------------------------------------
 
-// Step 7 task #29: experimental persistent Q8_1 scratch buffer.
+// experimental persistent Q8_1 scratch buffer.
 //
 // Hypothesis: ggml_cuda_pool_alloc inside ds4_mmq_moe_vec_impl records a
 // cudaMallocAsync graph node into the captured layer graph.  At replay
@@ -186,7 +186,7 @@ static char *ds4_mmq_folded_q81(const float *X_f32, int64_t K, int n_tokens,
     return (char *)(uintptr_t)p;
 }
 
-// Default ON (2026-07-09 gated increment: same-boot ABBA 427->493 tok/s @12k,
+// Default ON (gated increment: same-boot ABBA 427->493 tok/s @12k,
 // gsm8k 97.5 / mbpp 90). DS4_MMQ_D2R=0 is the kill switch back to the
 // mul_mat_q SoA-tile down path.
 static bool d2r_enabled() {
@@ -212,7 +212,7 @@ static bool d2r_iq2_enabled() {
 // actual roots were fixed in the same commit (stream-K fixup write_back goes
 // dense + tmp_fixup zeroed + ncols_max=ne_get_rows), after which every
 // element a consumer reads is stored by the GEMM itself and the zeroing was
-// ~1.0 s/12k-admission of pure memset tax.  Default OFF (2026-07-09 gated
+// ~1.0 s/12k-admission of pure memset tax.  Default OFF (gated
 // increment: L42 deep tensors BIT-IDENTICAL with/without, same-boot ABBA
 // 641.5 -> 678 tok/s @12k, gsm8k 119/120 / mbpp 36/40 / canary=[]).
 // DS4_MMQ_OUT_MEMSET=1 restores the zeroing.
@@ -349,7 +349,7 @@ extern "C" int ds4_mmq_init(int device) {
         maps.expert_bounds = base + 2u * MMQ_GFX1151_PAIR_MAP_ROWS;
     }
 
-    // Step 7 task #29: pre-allocate persistent Q8_1 scratch if enabled.
+    // pre-allocate persistent Q8_1 scratch if enabled.
     // Must happen here (before any layer-graph capture) so the cudaMalloc
     // is not forbidden by capture-mode restrictions, and so the kernel
     // pointer arg baked into the captured graph stays valid at replay.
@@ -475,7 +475,7 @@ extern "C" int ds4_mmq_should_use(int type_x, int64_t ne11, int64_t n_experts) {
 // ----------------------------------------------------------------------------
 
 // Per-device singleton context. Owns the pool for stream-K fixup scratch.
-// Phase 4 will make this per-stream as well; for now a single context per
+// will make this per-stream as well; for now a single context per
 // device is sufficient for the dense path.
 namespace {
 
@@ -969,7 +969,7 @@ int ds4_mmq_moe_impl(
         return -1;
     }
 
-    ds4_pool_set_stream(stream);  /* task #22: pool ops must be stream-ordered with the kernels (see ds4_mmq_dense_impl) */
+    ds4_pool_set_stream(stream);  /* pool ops must be stream-ordered with the kernels (see ds4_mmq_dense_impl) */
 
     const int64_t ne_get_rows  = (int64_t)n_tokens * n_expert_used;
     const int64_t ne00         = K;
@@ -1325,7 +1325,7 @@ int ds4_mmq_moe_pair_impl(
         return -1;
     }
 
-    ds4_pool_set_stream(stream);  /* task #22: pool ops must be stream-ordered with the kernels (see ds4_mmq_dense_impl) */
+    ds4_pool_set_stream(stream);  /* pool ops must be stream-ordered with the kernels (see ds4_mmq_dense_impl) */
 
     const int64_t ne_get_rows  = (int64_t)n_tokens * n_expert_used;
     const int64_t ne00         = K;
@@ -2291,7 +2291,7 @@ int ds4_mmq_moe_vec_impl(
     const int64_t ne10_padded = GGML_PAD((int64_t)K, MATRIX_ROW_PADDING);
     const size_t  nbytes_q8_1 = (size_t)n_tokens * ne10_padded *
                                 sizeof(block_q8_1) / QK8_1;
-    // Step 7 task #29: experimental persistent Q8_1 scratch.  Avoids
+    // experimental persistent Q8_1 scratch.  Avoids
     // pool_alloc (cudaMallocAsync) graph nodes whose pointer baked at
     // capture time may not match the address resolved at replay.  When
     // disabled (default) or when the persistent buffer is too small,
@@ -4336,7 +4336,7 @@ static __device__ __forceinline__ float q2_k_vec_dot_windowed(
 
 // Twin of mul_mat_vec_q_moe<GGML_TYPE_Q2_K, 2> at the down-leg call shape
 // (nchannels_dst == 1, ids_stride == 1): grid (M/2, 1), block (32, ncols_dst),
-// warp per assignment column.  Keeps the -1 router-id guard (task #23).
+// warp per assignment column.  Keeps the -1 router-id guard.
 __launch_bounds__(8*32, 1)   /* MMVQ_MAX_BATCH_SIZE (mmvq.cuh) * warp; not included here */
 __global__ static void q2_k_aligned_moe_vec_kernel(
         const uint2 * __restrict__ dm2_soa,

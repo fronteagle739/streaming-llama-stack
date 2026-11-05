@@ -178,11 +178,9 @@ static int peer_endpoint_address(const ds4_peer_endpoint *endpoint,
 
 /* HOW LONG A PEER MAY GO QUIET BEFORE WE CALL THE LINK DEAD.
  *
- * The 10 s default killed a healthy generation. Measured 2026-08-24, RTX-prefill/Mac-decode: turn 1
- * decoded at ~40 t/s, slowed to 15 t/s while the RTX was streaming experts from SSD, and the Mac's
- * socket read hit EAGAIN -- "DS4P receive failed: Resource temporarily unavailable". The owner saw
- * that as `finish=error error="DS4P receive failed: connection reset"` at 441 tokens, and the session
- * could not even be retained afterwards ("turn-close could not retain session").
+ * RTX prefill can delay Mac decode while experts stream from SSD. A 10 s timeout
+ * can therefore return EAGAIN on a healthy connection, interrupt generation and prevent
+ * retention of the session.
  *
  * A quiet socket is NOT a dead peer on this link: the prefilling side streams tens of GiB of experts
  * per request and can legitimately stall for longer than a fixed 10 s while it does. Treating that as

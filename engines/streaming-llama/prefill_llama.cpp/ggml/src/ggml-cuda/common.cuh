@@ -1071,7 +1071,7 @@ const ggml_cuda_device_info & ggml_cuda_info();
 void ggml_cuda_set_device(int device);
 int ggml_cuda_get_device();
 
-// Phase 302 (2026-05-04): file-scope atomic counter for CUDA graphs created.
+// file-scope atomic counter for CUDA graphs created.
 // Defined inline so it has internal linkage per translation unit but the
 // counter object is shared (C++17 inline variable semantics in struct? Use
 // a Meyers-singleton function returning a static atomic instead).
@@ -1080,7 +1080,7 @@ inline std::atomic<int64_t> & ggml_cuda_graphs_created_counter() {
     return counter;
 }
 
-// Phase 304 (2026-05-04): same pattern for cudaStreamCreate / cudaEventCreate.
+// same pattern for cudaStreamCreate / cudaEventCreate.
 // Hypothesis: 184 per-cycle leak count = 61 layers * 3 (compute + 2 copy
 // streams/events). If event_create grows by ~184 per request, root cause
 // confirmed in event allocation rather than cuda_graphs map.
@@ -1105,7 +1105,7 @@ inline std::atomic<int64_t> & ggml_cuda_pinned_free_bytes_counter() {
     return counter;
 }
 
-// Phase 304 (2026-05-04): wrappers that count and forward to the underlying
+// wrappers that count and forward to the underlying
 // CUDA APIs. Use these instead of direct cudaEventCreateWithFlags /
 // cudaStreamCreateWithFlags calls anywhere we want to track per-cycle counts.
 // Existing code paths (which we don't want to perturb) can continue using
@@ -1131,7 +1131,7 @@ struct ggml_cuda_pool {
     virtual void * alloc(size_t size, size_t * actual_size) = 0;
     virtual void free(void * ptr, size_t size) = 0;
 
-    // Phase 296 (2026-05-04): release all cached freed buffers back to the device.
+    // release all cached freed buffers back to the device.
     // Default no-op for pools that don't cache. Called between prefill requests
     // to prevent the legacy pool from holding 20+ GB of freed buffers across
     // streaming-prefill cycles, which causes OOM on the second request.
@@ -1438,7 +1438,7 @@ struct ggml_backend_cuda_context {
     std::atomic<int> cuda_graph_disable_depth{0};
 
     ggml_cuda_graph * cuda_graph(const void * first_node_ptr) {
-        // Phase 303 (2026-05-04): tested cap on map size; cap fires correctly
+        // tested cap on map size; cap fires correctly
         // but VRAM isn't recovered — proves the map size growth is CORRELATED
         // with the leak (184 entries per cycle matches 3.3 GB) but NOT causal.
         // Cap removed; leak source must be elsewhere. Counter retained for
@@ -1446,9 +1446,9 @@ struct ggml_backend_cuda_context {
         auto it = cuda_graphs.find(first_node_ptr);
         if (it == cuda_graphs.end()) {
             cuda_graphs[first_node_ptr] = std::make_unique<ggml_cuda_graph>();
-            // Phase 302 (2026-05-04): file-scope atomic, thread-safe.
+            // file-scope atomic, thread-safe.
             int64_t prev = ggml_cuda_graphs_created_counter().fetch_add(1, std::memory_order_relaxed);
-            // Phase 316d (2026-05-04): log every Nth insert with key + map size
+            // log every Nth insert with key + map size
             // to attribute per-cycle growth. Trigger via env to avoid spam.
             const char * trace_env = std::getenv("LLAMA_CUDA_TRACE_GRAPHS");
             if (trace_env && trace_env[0] != '\0' && trace_env[0] != '0') {
@@ -1544,7 +1544,7 @@ struct ggml_backend_cuda_context {
         return pool(device);
     }
 
-    // Phase 296: walk all pools and release cached freed buffers.
+    // walk all pools and release cached freed buffers.
     // Returns total bytes released across all pools.
     size_t clear_pools() {
         size_t total_before = 0;

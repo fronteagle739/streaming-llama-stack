@@ -2487,7 +2487,7 @@ common_params_context common_params_parser_init(common_params & params,
                            params.prefill_shadow_catchup_max_batch = value;
                        })
                 .set_env("LLAMA_ARG_PREFILL_SHADOW_CATCHUP_MAX_BATCH"));
-    // Prefill strategy + token relay flags (Phase 3/4)
+    // Prefill strategy + token relay flags ()
     add_opt(common_arg({ "--prefill-strategy" }, "MODE",
                        string_format("prefill routing strategy: auto, mac, rtx (default: %s)",
                                      params.prefill_strategy == 0 ? "auto" :

@@ -5348,7 +5348,7 @@ struct ggml_tensor * ggml_dsa_indexer_topk(
     // q_full:  [D, H, n_q]
     // gates:   [H, n_q]
     // pos:     [>= n_q] I32 query positions (optional; NULL = no causal score
-    //          masking). [DSA_TOPK_CAUSAL 2026-07-03] When present, the kernel
+    //          masking). DSA_TOPK_CAUSAL When present, the kernel
     //          masks score[k, q] = -FLT_MAX for cache cells k > pos[q] BEFORE
     //          top-k selection, so unwritten/stale cells cannot crowd causally
     //          valid keys out of the fixed top-k budget.

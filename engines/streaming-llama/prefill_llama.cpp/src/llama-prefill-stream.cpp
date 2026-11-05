@@ -454,7 +454,7 @@ static void llama_prefill_host_cache_evict_layer(llama_prefill_host_cache_runtim
 }
 
 //
-// Streaming Prefill — Phase 2.1: Pointer-Rerouted 2-Buffer GPU Rotation
+// Streaming Prefill — Pointer-Rerouted 2-Buffer GPU Rotation
 //
 // Architecture:
 //   1. Model loaded with -ngl 0 → all weights in CPU heap RAM
@@ -1183,8 +1183,8 @@ static float prefill_upload_layer(std::vector<tensor_remap_entry> & layer_entrie
 // ---------------------------------------------------------------------------
 // Staged upload: 2-phase (CPU staging to pinned, then async H2D on copy stream)
 //
-// Phase 1 (CPU): memcpy from mmap → pinned staging buffer  (blocks host)
-// Phase 2 (GPU): cudaMemcpyAsync pinned → GPU on copy stream (non-blocking)
+// (CPU): memcpy from mmap → pinned staging buffer  (blocks host)
+// (GPU): cudaMemcpyAsync pinned → GPU on copy stream (non-blocking)
 //
 // After this returns, the H2D transfer is IN FLIGHT on the copy stream.
 // The caller must call ggml_backend_cuda_prefill_wait_upload() on the
@@ -1203,7 +1203,7 @@ static float prefill_upload_layer_staged(
     void * gpu_base = ggml_backend_buffer_get_base(gpu_buf);
     size_t offset   = 0;
 
-    // Phase 1: remap tensor pointers and stage ALL weight data into pinned buffer
+    // remap tensor pointers and stage ALL weight data into pinned buffer
     for (auto & entry : layer_entries) {
         entry.tensor->buffer = gpu_buf;
         entry.tensor->data   = (char *) gpu_base + offset;
@@ -1214,7 +1214,7 @@ static float prefill_upload_layer_staged(
 
     auto t_staged = std::chrono::high_resolution_clock::now();
 
-    // Phase 2: single large async H2D on copy stream
+    // single large async H2D on copy stream
     ggml_backend_cuda_prefill_upload_async(pipeline, gpu_base, pinned_staging, offset);
 
     auto t_end = std::chrono::high_resolution_clock::now();
@@ -1238,7 +1238,7 @@ bool llama_prefill_stream_available(const llama_context * ctx) {
 }
 
 //
-// Main Streaming Prefill Entry Point — Phase 2.1: Pointer-Rerouted
+// Main Streaming Prefill Entry Point — Pointer-Rerouted
 //
 // This function is called from decode_streaming(). It:
 //   1. Collects all per-layer tensor pointers
@@ -1388,7 +1388,7 @@ int llama_prefill_stream(llama_context *                     ctx,
     LLAMA_LOG_INFO("%s: [DIAG] tensor collection done, max_layer=%.2f MB, layers=%zu\n", __func__,
                    max_layer_bytes / (1024.0 * 1024.0), layer_infos.size());
 
-    // Phase 1 diagnostic: measure attention vs FFN/MoE split per layer
+    // diagnostic: measure attention vs FFN/MoE split per layer
     if (!layer_infos.empty()) {
         size_t attn_total = 0, ffn_total = 0, max_attn = 0, max_ffn = 0;
         for (int il = 0; il < (int)layer_infos.size(); il++) {
@@ -1588,7 +1588,7 @@ int llama_prefill_stream(llama_context *                     ctx,
     // Without WF, allocate full-size for direct tensor uploads.
     size_t gpu_buf_alloc_size = max_layer_bytes;
 
-    // Phase 328 (2026-05-05): if persistent buffers exist from a prior call,
+    // if persistent buffers exist from a prior call,
     // reuse them. LLAMA_PERSIST_GPU_BUFS=1 enables this. The size must match
     // (model-dependent) — invalidate persistent buffers if size changes.
     const char * persist_env = std::getenv("LLAMA_PERSIST_GPU_BUFS");
@@ -1606,11 +1606,11 @@ int llama_prefill_stream(llama_context *                     ctx,
                 gpu_buf_b = pb;
                 reused_persist_b = true;
             }
-            LLAMA_LOG_INFO("%s: Phase 328 - reusing persistent gpu_buf_a/b (size=%.2f MB)\n",
+            LLAMA_LOG_INFO("%s: reusing persistent gpu_buf_a/b (size=%.2f MB)\n",
                            __func__, gpu_buf_alloc_size / (1024.0 * 1024.0));
         } else if (pa && ps != gpu_buf_alloc_size) {
             // Size mismatch: free old buffers, will allocate new ones below
-            LLAMA_LOG_INFO("%s: Phase 328 - persistent buffer size mismatch (%.2f vs %.2f MB), reallocating\n",
+            LLAMA_LOG_INFO("%s: persistent buffer size mismatch (%.2f vs %.2f MB), reallocating\n",
                            __func__, ps / (1024.0 * 1024.0), gpu_buf_alloc_size / (1024.0 * 1024.0));
             ggml_backend_buffer_free(pa);
             if (pb) ggml_backend_buffer_free(pb);
@@ -1656,8 +1656,8 @@ int llama_prefill_stream(llama_context *                     ctx,
     // it must NOT be a D3D12-imported heap (that double-accounts VRAM and OOMs). Only the WF's PREFETCH is a
     // D3D heap. So we DO allocate gpu_buf_a here and wire it to the WF via wf_set_gpu_buf_ptr (legacy path).
     if (reused_persist_a) {
-        // Phase 328: skip allocation, persistent buffers already assigned
-        LLAMA_LOG_INFO("%s: skipping fresh GPU buffer alloc (Phase 328 persist mode)\n", __func__);
+        // skip allocation, persistent buffers already assigned
+        LLAMA_LOG_INFO("%s: skipping fresh GPU buffer alloc (persist mode)\n", __func__);
     } else if (n_gpu_bufs == 1 || ds_direct) {
         // Single buffer mode: allocate only buf_a, leave buf_b null.
         // R3 DS-direct: only buf_a is used (the WF computes from gpu_bufs[0]); a second rotation buffer
@@ -1681,13 +1681,13 @@ int llama_prefill_stream(llama_context *                     ctx,
     // Free guard — its purpose was just to push the allocator past any overlap
     if (guard_buf) ggml_backend_buffer_free(guard_buf);
 
-    // Phase 328: store newly-allocated buffers as persistent if env enabled
+    // store newly-allocated buffers as persistent if env enabled
     // (R3 DS-direct: skip — gpu_buf_a is the WF's permanent heap, not a ggml-owned buffer to persist here.)
     if (persist_bufs && !reused_persist_a && !ds_direct) {
         ctx->set_persist_gpu_buf_a(gpu_buf_a);
         ctx->set_persist_gpu_buf_b(gpu_buf_b);
         ctx->set_persist_gpu_buf_size(gpu_buf_alloc_size);
-        LLAMA_LOG_INFO("%s: Phase 328 - stored as persistent gpu_buf_a/b (size=%.2f MB)\n",
+        LLAMA_LOG_INFO("%s: stored as persistent gpu_buf_a/b (size=%.2f MB)\n",
                        __func__, gpu_buf_alloc_size / (1024.0 * 1024.0));
     }
 
@@ -1715,7 +1715,7 @@ int llama_prefill_stream(llama_context *                     ctx,
         const bool use_wf_requested = wf_env && wf_env[0] != '\0' && std::strcmp(wf_env, "0") != 0;
 
         if (use_wf_requested && !model->primary_model_path.empty()) {
-            // Phase 250 (2026-05-03): WF cache reuse opt-out for safety.
+            // WF cache reuse opt-out for safety.
             // Diagnosis: cached WF retains DirectStorage / cuFile descriptors
             // bound to the previous request's GPU buffer VAs. New request
             // allocates fresh ggml GPU buffers at potentially-different VAs;
@@ -1800,7 +1800,7 @@ int llama_prefill_stream(llama_context *                     ctx,
                     const char * mode_names[] = { "mmap", "direct_io", "gds", "dstorage", "auto" };
                     LLAMA_LOG_INFO("%s: weight fetcher active (mode=%s)\n", __func__,
                                    (int)eff < 5 ? mode_names[(int)eff] : "unknown");
-                    // Phase 250 (2026-05-03): only cache when explicitly opted-in.
+                    // only cache when explicitly opted-in.
                     // Default (cache OFF) means each request gets a fresh WF
                     // and the cleanup path at end of request will wf_destroy()
                     // it (because get_cached_wf() != wf when cached_wf is null).
@@ -1983,7 +1983,7 @@ int llama_prefill_stream(llama_context *                     ctx,
                     }
 
                     const auto & loc = it->second;
-                    // TASK-A ROOT CAUSE FIX (2026-07-21): weight_file_locs file_idx indexes
+                    // TASK-A ROOT CAUSE FIX weight_file_locs file_idx indexes
                     // split_file_paths DIRECTLY — split_file_paths[0] IS the primary file
                     // (llama.cpp:879 stores the loader's splits list, which includes the main
                     // file at [0]; same contract as the WF adapter and L1 dense-resident).
@@ -2216,31 +2216,31 @@ int llama_prefill_stream(llama_context *                     ctx,
         {
             size_t free_before = 0, total = 0;
             wf_cuda_get_vram_info(&free_before, &total);
-            // Phase 328: skip free if buffers are persisted across requests
+            // skip free if buffers are persisted across requests
             if (!persist_bufs) {
                 if (gpu_buf_a) ggml_backend_buffer_free(gpu_buf_a);
                 if (gpu_buf_b) ggml_backend_buffer_free(gpu_buf_b);
             } else {
-                LLAMA_LOG_INFO("%s: Phase 328 - SKIPPING gpu_buf_a/b free (persist mode)\n", __func__);
+                LLAMA_LOG_INFO("%s: SKIPPING gpu_buf_a/b free (persist mode)\n", __func__);
             }
             if (gpu_buf_persist) ggml_backend_buffer_free(gpu_buf_persist);
             size_t free_after_bufs = 0;
             wf_cuda_get_vram_info(&free_after_bufs, &total);
-            // Phase 296 (2026-05-04): release the CUDA backend's per-stream
+            // release the CUDA backend's per-stream
             // memory pool too. The legacy pool (used when GGML_CUDA_NO_VMM=1)
             // caches up to MAX_BUFFERS=256 freed compute buffers indefinitely,
             // accumulating 20+ GB across streaming-prefill cycles. Without this
             // the second consecutive prefill request OOMs at PRE_WF_ALLOC.
             size_t pool_released = 0;
-            // Phase 2.3b (2026-05-12): snapshot AFTER pool_clear and AFTER
+            // snapshot AFTER pool_clear and AFTER
             // graphs_clear separately to bisect the 500 MB/req leak at MAX ctx.
-            // (Phase 296+316i collapse them; we need them split for diagnosis.)
+            // (+316i collapse them; we need them split for diagnosis.)
             size_t free_after_pool = 0;
 #ifdef GGML_USE_CUDA
             if (gpu_backend) {
                 pool_released = ggml_backend_cuda_pool_clear(gpu_backend);
                 wf_cuda_get_vram_info(&free_after_pool, &total);
-                // Phase 316i (2026-05-04): clear the cuda_graphs map too.
+                // clear the cuda_graphs map too.
                 // The map holds node-ptr keys from the prior request's graph;
                 // those pointers reference compute-graph memory that's about
                 // to be freed by ggml_backend_buffer_free above. Without this
@@ -2253,7 +2253,7 @@ int llama_prefill_stream(llama_context *                     ctx,
 #endif
             size_t free_after = 0;
             wf_cuda_get_vram_info(&free_after, &total);
-            // Phase 299: report per-process cuda buffer accounting too,
+            // report per-process cuda buffer accounting too,
             // so we can spot leaks at the ggml-wrapper level (in addition to
             // the CUDA driver's free VRAM stats).
             int64_t cuda_alloc_total = 0;
@@ -2274,7 +2274,7 @@ int llama_prefill_stream(llama_context *                     ctx,
             event_creates  = ggml_cuda_event_create_total();
             event_destroys = ggml_cuda_event_destroy_total();
 #endif
-            // Phase 2.3b: VRAM trace bisect — show free at all four cleanup points
+            // VRAM trace bisect — show free at all four cleanup points
             //   start -> [free gpu_buf_a/b/persist] -> after_bufs
             //         -> [pool_clear]              -> after_pool
             //         -> [graphs_clear]            -> after
@@ -2723,7 +2723,7 @@ int llama_prefill_stream(llama_context *                     ctx,
         std::lock_guard<std::mutex> lock(dump_mutex);
         const std::string name = t->name;
         int & count = dump_counts[name];
-        // 2026-08-28: the cap was a hardcoded 3 described as "ubatch 0 + margin", and it really is
+        // the cap was a hardcoded 3 described as "ubatch 0 + margin", and it really is
         // ubatch 0 ONLY -- f0 and f1 came back BYTE-IDENTICAL, so every tensor measurement in the
         // needle investigation describes the first ubatch. The failure is now known to depend on
         // which ubatch a fact was prefilled in (only the FINAL ubatch's content is retrievable), so
@@ -2859,7 +2859,7 @@ int llama_prefill_stream(llama_context *                     ctx,
                         "csa_comp_k", "csa_k_all", "csa_lid_kq_mask", "csa_comp_input",
                         "csa_pre_q", "csa_pre_out",
                         "csa_state_pos", "csa_state_score_pre_ape", "csa_ape_rows", "csa_raw_mask", "csa_raw_mask_leaf", "csa_raw_mask_cnv",
-                        // HCA (odd layers 3..41, ratio 128). Never dumped before 2026-08-28 -- the
+                        // HCA (odd layers 3..41, ratio 128). Never dumped before -- the
                         // whole investigation sampled CSA layers only, so half the compressed
                         // attention had no coverage. Its soft_max reduces over 128 rows where CSA's
                         // reduces over 8, so it is a genuinely different CUDA kernel shape.
@@ -3142,7 +3142,7 @@ int llama_prefill_stream(llama_context *                     ctx,
     int prefix_tokens = batch_copy.n_tokens;
     int tail_tokens = 0;
 
-    // Phase 142 round-transition probe (env-gated).
+    // round-transition probe (env-gated).
     // Print at every llama_prefill_stream entry so we can see what state
     // round 2+ inherits from round 1's tail-deferred handoff. Cheap to leave
     // in (one fprintf per call) and toggleable.
@@ -3176,7 +3176,7 @@ int llama_prefill_stream(llama_context *                     ctx,
     // surfaced when 64-aligned tails were handed to Mac for re-prefill on
     // MLA models. Memory: feedback_no_weight_quant_blame.md.
     const int fa_tail_align = 256;
-    // 2026-06-01 vision diag: an embd (image) batch gets 256-aligned-split into an
+    // vision diag: an embd (image) batch gets 256-aligned-split into an
     // FA-prefix + a separate FA-tail decode pass (graph rebuild). Suspected to corrupt
     // the tail image cells' K. LLAMA_PREFILL_EMBD_NO_SPLIT=1 runs the whole embd batch
     // as ONE FA-on pass (no split) so all image cells get consistent FA-on K layout.
@@ -3209,7 +3209,7 @@ int llama_prefill_stream(llama_context *                     ctx,
             !force_no_fa_tail_split &&
             (((total_after_chunk % fa_tail_align) != 0) || ((batch_copy.n_tokens % ubatch_size) != 0));
 
-    // Phase 312 (2026-05-04): when the batch has multiple logits=1 positions
+    // when the batch has multiple logits=1 positions
     // (WIR refine pass, etc.), the FA-tail split runs prefix and tail as two
     // separate decode_layer_major calls. Each call wipes output_ids via
     // output_reserve, so only the LAST decode's logits remain accessible.
@@ -3263,7 +3263,7 @@ int llama_prefill_stream(llama_context *                     ctx,
         // and process normally without the split. The whole batch will run non-FA.
         // MUST restore FA state after processing (see restore block below).
         if (prefix_tokens == 0) {
-            // Phase 81: when LLAMA_PREFILL_NO_FA_DISABLE=1, force the entire batch
+            // when LLAMA_PREFILL_NO_FA_DISABLE=1, force the entire batch
             // through the FA-on path EVEN IF the size isn't 256-aligned. The MLA FA
             // kernel may degrade on the unaligned tail but the K cells remain
             // FA-on-compatible so the Mac decoder doesn't see garbage. (FA-off
@@ -3334,7 +3334,7 @@ int llama_prefill_stream(llama_context *                     ctx,
     // one slower tail ubatch on RTX. Required for coherent output on prompts
     // where total_token_count % 256 != 0.
     const bool no_remote_tail_env = std::getenv("LLAMA_PREFILL_NO_REMOTE_TAIL_HANDOFF") != nullptr;
-    // 2026-05-31 vision: an embd batch (image embeddings; batch.embd != null,
+    // vision: an embd batch (image embeddings; batch.embd != null,
     // batch.token == null) CANNOT have its unaligned tail deferred — neither to the
     // Mac (the receiver has no pixel data and the prompt export breaks at the image
     // LLAMA_TOKEN_NULL) nor to "the next RTX batch" (the next batch is the text suffix
@@ -3485,8 +3485,8 @@ int llama_prefill_stream(llama_context *                     ctx,
                     wf_start(wf);
                 }
 
-                // Phase 81 extended: respect LLAMA_PREFILL_NO_FA_DISABLE here too.
-                // Phase 81 originally only guarded the prefix=0 branch (line ~2371).
+                // extended: respect LLAMA_PREFILL_NO_FA_DISABLE here too.
+                // originally only guarded the prefix=0 branch (line ~2371).
                 // The prefix>0 && tail>0 branch unconditionally disabled FA for the
                 // unaligned tail, producing numerically-different K cells than the
                 // FA-on prefix and corrupting Mac MLX MLA decode (`_TKS_TKS_…` for
@@ -3502,7 +3502,7 @@ int llama_prefill_stream(llama_context *                     ctx,
                 } else {
                     LLAMA_LOG_INFO("%s: FA tail fallback: KEEPING FA on for unaligned tail (%d tokens) per LLAMA_PREFILL_NO_FA_DISABLE=1\n",
                                    __func__, tail_tokens);
-                    // Phase 196 (2026-05-02): force graph rebuild for the tail call.
+                    // force graph rebuild for the tail call.
                     // Without this, the tail decode_layer_major call reuses the prefix
                     // graph (built for n_ubatch sized SET_ROWS, e.g. 2048) and
                     // dispatches (n_ubatch - tail_tokens) stale k_idxs row writes —
@@ -3657,7 +3657,7 @@ int llama_prefill_stream(llama_context *                     ctx,
         ctx->set_prefill_kv_layout_flash_attn(flash_attn_layout_saved);
         ctx->invalidate_graph();
 
-        // Phase 252 (2026-05-03): MISSING CLEANUP on error path was leaking
+        // MISSING CLEANUP on error path was leaking
         // gpu_buf_a/b (~17GB), pinned_a/b (~17GB host), cuda_pipeline streams,
         // and WF resources on every failed request. After 1-2 failures the
         // server OOMs on the next request's GPU buffer alloc and crashes.
@@ -3669,7 +3669,7 @@ int llama_prefill_stream(llama_context *                     ctx,
             wf_stop(wf);
             wf_quiesce(wf);
             wf_free_prefetch(wf);
-            // Default behavior is no-cache (Phase 250), so destroy unconditionally
+            // Default behavior is no-cache (), so destroy unconditionally
             // unless the user opted in to cache reuse and stored it.
             if (ctx->get_cached_wf() != wf) {
                 wf_destroy(wf);
@@ -3687,7 +3687,7 @@ int llama_prefill_stream(llama_context *                     ctx,
         if (pinned_a) { ggml_backend_cuda_prefill_pinned_free(pinned_a); pinned_a = nullptr; }
         if (pinned_b) { ggml_backend_cuda_prefill_pinned_free(pinned_b); pinned_b = nullptr; }
 #endif
-        // Phase 328: skip free in persist mode (this is the failure-path
+        // skip free in persist mode (this is the failure-path
         // cleanup; persistent buffers stay alive for the next attempt)
         if (!persist_bufs) {
             if (gpu_buf_a) { ggml_backend_buffer_free(gpu_buf_a); gpu_buf_a = nullptr; }
@@ -3767,7 +3767,7 @@ int llama_prefill_stream(llama_context *                     ctx,
 
     // (RAM prefetch two-hop test runs at init and prints its own results)
 
-    LLAMA_LOG_INFO("%s: === Phase 2.1 Pointer-Rerouted Summary ===\n", __func__);
+    LLAMA_LOG_INFO("%s: === Pointer-Rerouted Summary ===\n", __func__);
     LLAMA_LOG_INFO("%s: layers: %d, weight data: %.2f GB\n", __func__, n_layer,
                    total_bytes / (1024.0 * 1024.0 * 1024.0));
     LLAMA_LOG_INFO("%s: total upload: %.2f ms (%.2f GB/s effective)\n", __func__, total_upload_ms, upload_bw);

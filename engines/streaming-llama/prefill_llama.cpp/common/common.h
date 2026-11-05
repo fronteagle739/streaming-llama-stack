@@ -556,7 +556,7 @@ struct common_params {
     std::string prefill_kv_artifact_path; // optional KV artifact output path
     std::string prefill_tb_session_dir;   // optional TB transport session root
 
-    // Prefill strategy + token relay (Phase 3/4)
+    // Prefill strategy + token relay ()
     int  prefill_strategy = 0;             // 0=auto, 1=mac, 2=rtx
     int  prefill_crossover_tokens = 0;     // 0=auto-compute from model size
     std::string token_stream_host;         // Mac's token stream address

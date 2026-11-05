@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-// Phase 326 (2026-05-05): bumped from 256 to 1024 to support NP=1000+ for
+// bumped from 256 to 1024 to support NP=1000+ for
 // shared-prefix-via-seq_cp architecture. Used for fixed-size arrays in
 // llama_batch_allocr (seq_pos, seq_cpl, seq_idx) and llama_kv_cache cell
 // per-seq tracking. 4x increase = ~4x memory in those arrays but they are

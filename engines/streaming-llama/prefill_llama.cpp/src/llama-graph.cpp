@@ -167,7 +167,7 @@ void llm_graph_input_pos_bucket_kv::set_input(const llama_ubatch * ubatch) {
 void llm_graph_input_out_ids::set_input(const llama_ubatch * ubatch) {
     GGML_ASSERT(out_ids);
 
-    // 2026-04-21 (iter 10): When the mega-dispatch path skips get_rows for
+    // (iter 10): When the mega-dispatch path skips get_rows for
     // external per-layer tensors, inp_out_ids is not referenced by any graph
     // node and the scheduler does not allocate a buffer for it.  In that case
     // the tensor is unused — no host-side initialization is needed.
@@ -826,9 +826,9 @@ void llm_graph_input_dsv4::set_input(const llama_ubatch * ubatch) {
         ggml_backend_tensor_set(raw_kq_mask, inp_raw->self_kq_mask_swa->data, 0,
                                 ggml_nbytes(raw_kq_mask));
 
-        // [MASKFILL_ECHO 2026-08-28] Read the tensor straight back and count -inf.
+        // MASKFILL_ECHO Read the tensor straight back and count -inf.
         //
-        // Measured 2026-08-28: the fill above RUNS (MASKFILL_SKIP never fires, so every precondition
+        // the fill above RUNS (MASKFILL_SKIP never fires, so every precondition
         // held) and the destination HAS a buffer (DSV4_MASKRES own=DEVICE) -- yet at compute time a
         // ggml_cont of this very tensor reads inf=0, while a ggml_cont of the LEAF it was copied
         // from, in the same layer range of the same graph, reads inf=40896.
@@ -869,7 +869,7 @@ void llm_graph_input_dsv4::set_input(const llama_ubatch * ubatch) {
                     ggml_nbytes(raw_kq_mask), n, n_inf, n_nan);
         }
     } else if (raw_kq_mask && !raw_kq_mask->buffer) {
-        // [MASKFILL_NOBUF 2026-08-28] The THIRD silent path. Both the fill and the MASKFILL_SKIP
+        // MASKFILL_NOBUF The THIRD silent path. Both the fill and the MASKFILL_SKIP
         // warn below are guarded on `raw_kq_mask->buffer`, so a NULL destination buffer skips the
         // copy AND says nothing -- the same silence that hid the original defect for two months.
         //
@@ -889,9 +889,9 @@ void llm_graph_input_dsv4::set_input(const llama_ubatch * ubatch) {
                     (long long) raw_kq_mask->ne[0], (long long) raw_kq_mask->ne[1]);
         }
     } else if (raw_kq_mask && raw_kq_mask->buffer) {
-        // [MASKFILL_SKIP 2026-08-28] The knob is ON (the tensor has a buffer, so something reads it)
+        // MASKFILL_SKIP The knob is ON (the tensor has a buffer, so something reads it)
         // but a precondition failed and the copy above did NOT happen -- leaving the DSV4-owned mask
-        // at whatever its buffer held, i.e. ZEROS. That is exactly the state measured on 2026-08-28:
+        // at whatever its buffer held, i.e. ZEROS. That is exactly the state measured on
         // with LLAMA_DSV4_RAW_MASK_OWN=1, NODE_SCAN read `csa_raw_mask-42 inf=0` while the leaf it
         // was supposed to be copied FROM read `inf=40896`. The fill had silently not run.
         //
@@ -1525,7 +1525,7 @@ ggml_tensor * llm_graph_context::build_norm(
          ggml_tensor * mb,
        llm_norm_type   type,
                  int   il) const {
-    // P3-alt test (2026-05-30, LLAMA_RMS_EPS_OVERRIDE): increase RMS-norm eps to dampen the
+    // P3-alt test (LLAMA_RMS_EPS_OVERRIDE): increase RMS-norm eps to dampen the
     // near-zero-RMS amplification (1/sqrt(eps)) that is the suspected amplifier turning the
     // ~1-ULP multi-ub batch-shape seed into catastrophic divergence. Affects all RMS norms.
     // Gated/default-off: only overrides when the env is set, so production is untouched.
@@ -2434,7 +2434,7 @@ ggml_tensor * llm_graph_context::build_inp_pos() const {
     auto & cur = inp->pos;
 
     cur = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, (int64_t)n_tokens*hparams.n_pos_per_embd());
-    // Named so downstream code (split-decode Phase 2d.C1 arena-offset lookup,
+    // Named so downstream code (split-decode arena-offset lookup,
     // find_named_tensor_any("inp_pos") debug path) can locate it by name.
     ggml_set_name(cur, "inp_pos");
     ggml_set_input(cur);
@@ -2595,7 +2595,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
     k = ggml_permute(ctx0, k, 0, 2, 1, 3);
     v = ggml_permute(ctx0, v, 0, 2, 1, 3);
 
-    // D-FIX (2026-07-17, bug#2 stream_local far-recall): the CUDA 512-wide single-query FA tile
+    // D-FIX (bug#2 stream_local far-recall): the CUDA 512-wide single-query FA tile
     // (fattn-tile.cuh) does NOT read ggml_flash_attn_ext_get_prec(), so the GGML_PREC_F32 request
     // below is silently ignored and the tile accumulates half2 VKQ (half-staged probabilities) over
     // all selected pooled rows. That half accumulation erases the weak, distributed needle recall
@@ -2605,14 +2605,14 @@ ggml_tensor * llm_graph_context::build_attn_mha(
     // additionally force F32 on the V*prob (kqv) multiply. Fires ONLY on nt==1 (decode) => production
     // streaming->Mac prefill (nt>1, decode runs on MLX) is untouched. Env LLAMA_DSV4_DECODE_F32_ATTN=0
     // reverts to the FA tile (A/B control). Sourced: .planning/debug/stream-local-recall-debug.md (D).
-    // NOTE (2026-07-17): recall A/B FALSIFIED this as the sole bug#2 fix — forcing F32 decode attention
+    // NOTE recall A/B FALSIFIED this as the sole bug#2 fix — forcing F32 decode attention
     // changed the (still-wrong) answer 5->826 but did NOT restore far-recall => the root cause is downstream
     // of attention. Kept as an env-gated LEVER (default OFF) for combined testing once the downstream fix lands.
     static const bool dsv4_decode_f32_attn = []() {
         const char * e = std::getenv("LLAMA_DSV4_DECODE_F32_ATTN");
         return e && e[0] != '\0' && e[0] != '0';   // default OFF; =1 enables (F32 decode attention lever)
     }();
-    // [DSV4_PREFILL_DECOMP 2026-08-28] The PREFILL counterpart of the lever above.
+    // DSV4_PREFILL_DECOMP The PREFILL counterpart of the lever above.
     //
     // `fa=off` RECALLS the needle and `fa=on` does not, with the mask now verified correct on both
     // compressed paths (inf=40896, zero NaN) and the CSA sink excluded -- so the FA KERNEL itself is
@@ -2646,7 +2646,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
     const bool dsv4_layer_is_compressed =
         arch == LLM_ARCH_DEEPSEEK4 && il >= 0 && il < (int) LLAMA_MAX_LAYERS &&
         hparams.dsv4_compress_ratios[il] != 0;
-    // [DECOMP_RAW 2026-08-28] The inverted guard, for the RAW layers (0, 1, 43).
+    // DECOMP_RAW The inverted guard, for the RAW layers (0, 1, 43).
     //
     // Decomposing the COMPRESSED layers gave a clean negative: guard verified at il=2,3,4 only,
     // output stayed COHERENT (finish=stop, not the degenerate attractor), and the reply CHANGED
@@ -2715,7 +2715,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
             v = ggml_cast(ctx0, v, GGML_TYPE_F16);
         }
 
-        // NOMASK (2026-05-30, >160k unlock — graph-side DEFERRED): the plan was to pass a null mask
+        // NOMASK (>160k unlock — graph-side DEFERRED): the plan was to pass a null mask
         // here so the FA uses its inline causal mask + the O(ub*n_kv) kq_mask is freed. The kernel +
         // dispatch groundwork is in place (fattn-mma-f16.cuh loads gated on mask_h, direct_causal flag
         // relaxed; fattn.cu GQA-path + selector allow null mask under LLAMA_FA_MLA_CAUSAL_DIRECT_NOMASK).
@@ -2729,7 +2729,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
 
         ggml_flash_attn_ext_add_sinks(cur, sinks);
 
-        // [NO_PREC_F32 2026-08-28] LLAMA_FA_NO_PREC_F32 (default off) skips the GGML_PREC_F32
+        // NO_PREC_F32 LLAMA_FA_NO_PREC_F32 (default off) skips the GGML_PREC_F32
         // request, leaving the kernel at its default precision.
         //
         // This is the LAST independent variable separating fa=on from fa=off for the DSV4 needle.
@@ -2835,7 +2835,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
         ggml_soft_max_add_sinks(kq, sinks);
         cb(kq, "kq_soft_max", il);
 
-        // bug#2 (2026-07-18): pin the ACTUAL post-softmax attention weights at DSV4 DECODE (nt==1) under
+        // bug#2 pin the ACTUAL post-softmax attention weights at DSV4 DECODE (nt==1) under
         // LLAMA_DSV4_LID_PROBE so the clean dump can raw-byte them - the earlier attempt pinned csa_lid_kq_mask
         // (the pre-top-k position mask, all-finite). This kq IS the applied weight distribution (top-k -inf
         // already baked in). Requires the DECOMPOSED path (LLAMA_DSV4_DECODE_F32_ATTN=1 + GGML_CUDA_DISABLE_GRAPHS=1).
@@ -2849,7 +2849,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
             }
         }
 
-        // [DIAG_SPARSE_NAN 2026-06-25] env-gated probe: name post-softmax kq so the cb_eval
+        // DIAG_SPARSE_NAN env-gated probe: name post-softmax kq so the cb_eval
         // LLAMA_LAYER_CMP_DUMP hook captures it (localizes whether the softmax NaNs).
         static const bool diag_sparse_nan = []() {
             const char * e = std::getenv("LLAMA_DIAG_SPARSE_NAN");
@@ -2867,7 +2867,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
         }
 
         ggml_tensor * kqv = ggml_mul_mat(ctx0, v, kq);
-        // D-FIX (2026-07-17): force F32 accumulation for the DSV4 nt==1 512-wide decode V*prob multiply.
+        // D-FIX force F32 accumulation for the DSV4 nt==1 512-wide decode V*prob multiply.
         // Disabling FA alone is insufficient — the decomposed V*prob multiply otherwise keeps default
         // (F16-capable) precision, which is the exact half accumulation we are fixing. See top of fn.
         if (force_dsv4_decomp_f32) {
@@ -2881,7 +2881,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
 
         // for MLA with the absorption optimization, we need to "decompress" from MQA back to MHA
         if (v_mla) {
-            // [DIAG_KQV_MLA_SHAPES 2026-06-24] env-gated shape dump to root-cause the multi-ubatch
+            // DIAG_KQV_MLA_SHAPES env-gated shape dump to root-cause the multi-ubatch
             // CUDA invalid-argument at this mul_mat (dst kqv_mla, src0 attn_v_b/wv_b). Zero cost off.
             static const bool diag_kqv_mla = []() {
                 const char * e = std::getenv("LLAMA_DIAG_KQV_MLA");
@@ -2906,7 +2906,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
                     fclose(df);
                 }
             }
-            // [KQV_MLA_MULTIUBATCH_FIX 2026-06-25] In multi-ubatch (n_stream>1) src1=kqv carries n_stream in
+            // KQV_MLA_MULTIUBATCH_FIX In multi-ubatch (n_stream>1) src1=kqv carries n_stream in
             // ne[3] while src0=v_mla (the quantized wv_b weight, ne[3]=1) must broadcast over ne[3]; the CUDA
             // mul_mat can't broadcast a QUANTIZED src0 over ne[3] -> "CUDA error: invalid argument". Dequant-cast
             // v_mla so it broadcasts fine. Use F32 (NOT F16): the ggml-cpu DUP op only supports quantized->F32
@@ -2949,7 +2949,7 @@ llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache() con
 
     inp->self_kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->self_kq_mask, GGML_TYPE_F16) : inp->self_kq_mask;
     ggml_set_name(inp->self_kq_mask_cnv, "self_kq_mask_cnv");
-    // [MASK_SITE_DIAG 2026-08-27] env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
+    // MASK_SITE_DIAG env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
     // mask copy meets a 256-row self_kq_mask_cnv in cpy.cu:409. Static reading could not say
     // WHICH build makes the 256 one, so every site that can create this tensor names itself.
     if (std::getenv("LLAMA_MASK_SITE_DIAG")) {
@@ -3083,7 +3083,7 @@ static std::unique_ptr<llm_graph_input_attn_kv> build_attn_inp_kv_impl(
 
         inp->self_kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->self_kq_mask, GGML_TYPE_F16) : inp->self_kq_mask;
         ggml_set_name(inp->self_kq_mask_cnv, "self_kq_mask_cnv");
-        // [MASK_SITE_DIAG 2026-08-27] env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
+        // MASK_SITE_DIAG env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
         // mask copy meets a 256-row self_kq_mask_cnv in cpy.cu:409. Static reading could not say
         // WHICH build makes the 256 one, so every site that can create this tensor names itself.
         if (std::getenv("LLAMA_MASK_SITE_DIAG")) {
@@ -3095,7 +3095,7 @@ static std::unique_ptr<llm_graph_input_attn_kv> build_attn_inp_kv_impl(
                 (long long) inp->self_kq_mask_cnv->ne[2], (long long) inp->self_kq_mask_cnv->ne[3],
                 (int) cparams.n_ubatch, (int) ubatch.n_tokens);
         }
-        // 2026-05-31 PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
+        // PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
         // self_kq_mask_cnv is the largest n_kv-scaled compute tensor; in the layer-major repeated-
         // slice prefill its gallocr placement reshuffles the frozen layout so a per-layer (MoE)
         // neighbor overruns the attn_norm/kv_cmpr_pe slot -> layer1+ Kcur=0/nan (ggml-alloc.c:26-35
@@ -3309,7 +3309,7 @@ static std::unique_ptr<llm_graph_input_attn_k> build_attn_inp_k_impl(
 
         inp->self_kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->self_kq_mask, GGML_TYPE_F16) : inp->self_kq_mask;
         ggml_set_name(inp->self_kq_mask_cnv, "self_kq_mask_cnv");
-        // [MASK_SITE_DIAG 2026-08-27] env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
+        // MASK_SITE_DIAG env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
         // mask copy meets a 256-row self_kq_mask_cnv in cpy.cu:409. Static reading could not say
         // WHICH build makes the 256 one, so every site that can create this tensor names itself.
         if (std::getenv("LLAMA_MASK_SITE_DIAG")) {
@@ -3321,7 +3321,7 @@ static std::unique_ptr<llm_graph_input_attn_k> build_attn_inp_k_impl(
                 (long long) inp->self_kq_mask_cnv->ne[2], (long long) inp->self_kq_mask_cnv->ne[3],
                 (int) cparams.n_ubatch, (int) ubatch.n_tokens);
         }
-        // 2026-05-31 PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
+        // PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
         // self_kq_mask_cnv is the largest n_kv-scaled compute tensor; in the layer-major repeated-
         // slice prefill its gallocr placement reshuffles the frozen layout so a per-layer (MoE)
         // neighbor overruns the attn_norm/kv_cmpr_pe slot -> layer1+ Kcur=0/nan (ggml-alloc.c:26-35
@@ -3344,7 +3344,7 @@ llm_graph_input_attn_k * llm_graph_context::build_attn_inp_k() const {
     return (llm_graph_input_attn_k *) res->add_input(std::move(inp));
 }
 
-// Phase 3.5-lite (iter 29): sparse-MLA indexer K cache helpers.
+// lite (iter 29): sparse-MLA indexer K cache helpers.
 ggml_tensor * llm_graph_context::build_inp_indexer_k(int il) const {
     const auto * mctx_cur = dynamic_cast<const llama_kv_cache_context *>(mctx);
     if (mctx_cur == nullptr) {
@@ -3507,7 +3507,7 @@ ggml_tensor * llm_graph_context::build_attn(
 
     const auto & kq_mask = is_swa ? inp->get_kq_mask_swa() : inp->get_kq_mask();
 
-    // [LEAFCONT_SHARED 2026-08-28] The general form of the DSV4 mask fix, for EVERY ISWA arch.
+    // LEAFCONT_SHARED The general form of the DSV4 mask fix, for EVERY ISWA arch.
     //
     // `get_kq_mask_swa()` returns `self_kq_mask_swa_cnv` = `ggml_cast(leaf, F16)` under FA, built
     // ONCE AT THE GRAPH HEAD. The layer-major streaming executor computes per-layer node ranges, and
@@ -3662,7 +3662,7 @@ llm_graph_input_attn_kv_iswa * llm_graph_context::build_attn_inp_kv_iswa() const
 
         inp->self_kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->self_kq_mask, GGML_TYPE_F16) : inp->self_kq_mask;
         ggml_set_name(inp->self_kq_mask_cnv, "self_kq_mask_cnv");
-        // [MASK_SITE_DIAG 2026-08-27] env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
+        // MASK_SITE_DIAG env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
         // mask copy meets a 256-row self_kq_mask_cnv in cpy.cu:409. Static reading could not say
         // WHICH build makes the 256 one, so every site that can create this tensor names itself.
         if (std::getenv("LLAMA_MASK_SITE_DIAG")) {
@@ -3674,7 +3674,7 @@ llm_graph_input_attn_kv_iswa * llm_graph_context::build_attn_inp_kv_iswa() const
                 (long long) inp->self_kq_mask_cnv->ne[2], (long long) inp->self_kq_mask_cnv->ne[3],
                 (int) cparams.n_ubatch, (int) ubatch.n_tokens);
         }
-        // 2026-05-31 PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
+        // PIN_MASK (env LLAMA_PREFILL_PIN_MASK, default off): at chunk5 the ~419MB f16
         // self_kq_mask_cnv is the largest n_kv-scaled compute tensor; in the layer-major repeated-
         // slice prefill its gallocr placement reshuffles the frozen layout so a per-layer (MoE)
         // neighbor overruns the attn_norm/kv_cmpr_pe slot -> layer1+ Kcur=0/nan (ggml-alloc.c:26-35
@@ -3700,17 +3700,17 @@ llm_graph_input_attn_kv_iswa * llm_graph_context::build_attn_inp_kv_iswa() const
 
         inp->self_kq_mask_swa_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp->self_kq_mask_swa, GGML_TYPE_F16) : inp->self_kq_mask_swa;
         ggml_set_name(inp->self_kq_mask_swa_cnv, "self_kq_mask_swa_cnv");
-        // 2026-08-28 PIN_MASK_SWA: the base-mask block above pins self_kq_mask_cnv under
+        // PIN_MASK_SWA: the base-mask block above pins self_kq_mask_cnv under
         // LLAMA_PREFILL_PIN_MASK, but the SWA mask never got the same treatment -- and the SWA
         // _cnv is precisely what DSV4's CSA path consumes (get_kq_mask_swa() -> raw_mask in
-        // build_csa_lid_attention). Measured 2026-08-28: with fa=ON the raw half of the consumed
+        // build_csa_lid_attention). with fa=ON the raw half of the consumed
         // mask carries 65536 zeros (everything visible) while its source leaf is exact
         // (-inf=40896 == a 128 window over 256x256); with fa=OFF, _cnv IS the leaf (the ternary's
         // else branch) and the needle is recalled at both 267 and 492 tokens.
         //
         // This pin DISCRIMINATES the two candidate mechanisms for those zeros:
         //   recall returns -> the cast ran and its buffer was RECYCLED (gallocr reuse pool), same
-        //                     defect the base-mask pin was added for on 2026-05-31.
+        //                     defect the base-mask pin was added for on .
         //   still a miss   -> the cast NEVER RAN: it is built at the graph head and the layer-major
         //                     executor computes per-layer node ranges, so nothing in any range
         //                     evaluates it. Fix would be to rebuild the cast inside the consuming
@@ -3751,7 +3751,7 @@ llm_graph_input_dsv4 * llm_graph_context::build_inp_dsv4() const {
 
         inp_raw->self_kq_mask_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp_raw->self_kq_mask, GGML_TYPE_F16) : inp_raw->self_kq_mask;
         ggml_set_name(inp_raw->self_kq_mask_cnv, "self_kq_mask_cnv");
-        // [MASK_SITE_DIAG 2026-08-27] env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
+        // MASK_SITE_DIAG env-gated (LLAMA_MASK_SITE_DIAG). Z1a/Z4: a 512-row staged
         // mask copy meets a 256-row self_kq_mask_cnv in cpy.cu:409. Static reading could not say
         // WHICH build makes the 256 one, so every site that can create this tensor names itself.
         if (std::getenv("LLAMA_MASK_SITE_DIAG")) {
@@ -3778,7 +3778,7 @@ llm_graph_input_dsv4 * llm_graph_context::build_inp_dsv4() const {
 
         inp_raw->self_kq_mask_swa_cnv = cparams.flash_attn ? ggml_cast(ctx0, inp_raw->self_kq_mask_swa, GGML_TYPE_F16) : inp_raw->self_kq_mask_swa;
         ggml_set_name(inp_raw->self_kq_mask_swa_cnv, "self_kq_mask_swa_cnv");
-        // 2026-08-28 PIN_MASK_SWA_DSV4: THIS is the SWA _cnv that DSV4 actually consumes --
+        // PIN_MASK_SWA_DSV4: THIS is the SWA _cnv that DSV4 actually consumes --
         // build_csa_lid_attention reads inp_attn->get_kq_mask_swa() off the inp_raw built HERE,
         // not off build_attn_inp_kv_iswa. Patching only the latter produced an inert arm (the
         // PIN_MASK_SWA marker never appeared in the server log), so both sites carry the pin and
@@ -3815,7 +3815,7 @@ llm_graph_input_dsv4 * llm_graph_context::build_inp_dsv4() const {
                 n_kv_raw, n_tokens/n_stream, 1, n_stream);
         ggml_set_input(inp->raw_kq_mask);
         ggml_set_name(inp->raw_kq_mask, "dsv4_raw_kq_mask");
-        // [MASKPIN_OWN 2026-08-28] Take this tensor OUT of the gallocr reuse pool.
+        // MASKPIN_OWN Take this tensor OUT of the gallocr reuse pool.
         //
         // Measured, on the real 256-token streaming pass (not warmup -- the echo is shape-gated):
         //     MASKFILL_ECHO: ne=[256,256] wrote 262144 bytes, read back inf=40896   <- correct
@@ -3824,7 +3824,7 @@ llm_graph_input_dsv4 * llm_graph_context::build_inp_dsv4() const {
         // inside layer 42 reads ZEROS. The write lands (immediate read-back proves it) and the value
         // is lost before the consumer runs, which is the signature of the buffer being reused.
         //
-        // Note this is NOT the pin that failed on self_kq_mask_swa_cnv (2026-08-28, marker fired 7x,
+        // Note this is NOT the pin that failed on self_kq_mask_swa_cnv (marker fired 7x,
         // mask still inf=0). That one is a ggml_cast NODE which the layer-major executor never
         // evaluates, so pinning stabilised a buffer nothing ever writes. THIS tensor's content comes
         // from a host->device copy in set_input that provably runs, so protecting its buffer is the

@@ -287,7 +287,7 @@ __global__ static void router_fused_coop_kernel(
     const uint32_t lane = threadIdx.x & 31u;
     const uint32_t warp = threadIdx.x >> 5u;
 
-    /* Phase 0 (block 0): prefetch the tail's small model-map reads so their
+    /* (block 0): prefetch the tail's small model-map reads so their
      * latency hides behind the matmul phase.  Verbatim copies -- the select
      * below consumes identical values. */
     if (blockIdx.x == 0u) {
@@ -302,7 +302,7 @@ __global__ static void router_fused_coop_kernel(
         }
     }
 
-    /* Phase 1: split-K logits matmul, one warp per (row, kseg) tile.
+    /* split-K logits matmul, one warp per (row, kseg) tile.
      * Chunk values, lane placement, and both warp_sum_f32 trees replicate the
      * ref block's warps 0/1 exactly; s0+s1 matches its cross-warp tree, which
      * otherwise only adds exact zeros. */
@@ -349,7 +349,7 @@ __global__ static void router_fused_coop_kernel(
     cooperative_groups::this_grid().sync();
     if (blockIdx.x != 0u) return;
 
-    /* Phase 2: combine partials in fixed kseg order (verbatim combine kernel;
+    /* combine partials in fixed kseg order (verbatim combine kernel;
      * out_dim 256 == one 256-thread block). */
     {
         const uint64_t row = (uint64_t)threadIdx.x;
@@ -360,7 +360,7 @@ __global__ static void router_fused_coop_kernel(
     }
     __syncthreads();
 
-    /* Phase 3: verbatim router_select_warp_topk_kernel warp body (t = 0,
+    /* verbatim router_select_warp_topk_kernel warp body (t = 0,
      * row_in_block = 0); bias/hash reads swapped for the prefetched copies. */
     if (warp != 0u) return;
     const float *log = logits;

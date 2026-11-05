@@ -12,7 +12,7 @@ struct ggml_tensor;
 struct ggml_cgraph;
 
 //
-// RTX Prefill Streaming Mode — Phase 2.1: Pointer-Rerouted 2-Buffer GPU Rotation
+// RTX Prefill Streaming Mode — Pointer-Rerouted 2-Buffer GPU Rotation
 //
 // This module implements streaming prefill where only 2 layers of model weights
 // reside in GPU memory at any time. Instead of snapshotting weights to RAM
@@ -33,12 +33,12 @@ struct ggml_cgraph;
 struct llama_prefill_stream_params {
     int    n_buffers          = 2;               // double-buffer by default
     bool   telemetry          = true;            // emit per-layer timing
-    bool   enable_overlap     = false;           // Phase 2: load(i+1) while compute(i)
+    bool   enable_overlap     = false;           // load(i+1) while compute(i)
     int    min_streaming_tokens = 32;             // minimum batch tokens before early skip is allowed
     bool   force_streaming    = false;            // bypass small-batch skip for explicit streaming modes
     int    prefetch_distance  = 1;               // layer lookahead distance
     size_t slab_bytes         = 16 * 1024 * 1024; // upload chunk size in bytes (0 = whole tensor)
-    bool   remote_weight_relay = false;          // Phase 6: route layer slabs through relay path
+    bool   remote_weight_relay = false;          // route layer slabs through relay path
     bool   remote_weight_hybrid = true;          // keep local fallback path if relay is unavailable
     int    host_cache_window_layers = 0;         // S3: moving-window layer count (0 = disabled)
     size_t host_cache_window_bytes  = 0;         // S3: moving-window byte budget (0 = disabled)

@@ -106,7 +106,7 @@ static cudaError_t cuda_host_admitted_register(void *p, size_t n, unsigned flags
 #define cudaHostRegister(p, n, flags) cuda_host_admitted_register(p, n, flags, __LINE__)
 #endif
 
-/* [merge 2026-08-15] The merge took upstream's "ds4_cuda.cu does not include ds4_gpu.h" convention
+/* The merge took upstream's "ds4_cuda.cu does not include ds4_gpu.h" convention
  * while KEEPING HEAD code that needs two things from that header, leaving them undefined. The
  * resulting syntax error derails the EDG parser, which then reads function bodies as file scope and
  * emits a storm of bogus "already defined" errors hundreds of lines away from the real cause.
@@ -141,7 +141,7 @@ typedef struct ds4_gpu_decode_profile_snapshot {
     uint64_t resident_copies;
     uint64_t resident_bytes;
     double   resident_ms;
-    /* [2026-08-20] The synchronous pread fallback in cuda_model_read_to_host(). Under R4 the DS
+    /* The synchronous pread fallback in cuda_model_read_to_host(). Under R4 the DS
      * prepass is skipped wholesale while resident spans are set, the resident lookup then MISSES
      * for the ~65/256 experts R4 never made resident, and the fetch falls through to a blocking
      * per-expert disk read that NO existing counter sees. Suspected to carry the entire
@@ -245,7 +245,7 @@ enum {
     DS4_CUDA_ATTENTION_SCORE_CAP = 8192u,
     DS4_CUDA_ATTENTION_RAW_SCORE_CAP = 256u,
     DS4_CUDA_TOPK_MERGE_GROUP = 8u,
-    /* [merge 2026-08-15] RESTORED from HEAD. The merge dropped these two while KEEPING the code
+    /* RESTORED from HEAD. The merge dropped these two while KEEPING the code
      * that uses them (streaming expert-cache budget clamp), so they were referenced-but-undefined. */
     DS4_CUDA_STREAM_EXPERT_DEFAULT = 8u * 64u,
     DS4_CUDA_STREAM_EXPERT_MAX = 61u * 384u,
@@ -317,7 +317,7 @@ static int g_model_direct_fd = -1;
 static uint64_t g_model_direct_align = 1;
 static uint64_t g_model_file_size;
 static int g_model_cache_full;
-/* [merge 2026-08-15] RESTORED from HEAD: the merge dropped this declaration while keeping both
+/* RESTORED from HEAD: the merge dropped this declaration while keeping both
  * assignments to it (teardown paths), leaving it referenced-but-undefined. */
 static int g_model_mapping_failure_notice_printed;
 static cudaStream_t g_model_prefetch_stream;
@@ -942,7 +942,7 @@ static std::vector<cuda_q8_f16_range> g_q8_f16_ranges;
 static std::unordered_map<uint64_t, size_t> g_q8_f16_by_offset;
 static std::vector<cuda_q8_f32_range> g_q8_f32_ranges;
 static std::unordered_map<uint64_t, size_t> g_q8_f32_by_offset;
-/* [merge 2026-08-15] `static cuda_stream_selected_cache g_stream_selected_cache;` was removed here.
+/* `static cuda_stream_selected_cache g_stream_selected_cache;` was removed here.
  * It is a DUPLICATE I introduced: I unioned this globals block on the grounds that both sides
  * declared independent statics, which was true of every symbol EXCEPT this one -- upstream already
  * defines it above (with the selected-cache struct), so the union produced two definitions.
@@ -1095,7 +1095,7 @@ extern "C" void ds4_gpu_cache_affinity_finish(void) {
 }
 
 
-/* [2026-08-18] MECHANISM COUNTER for the prefill-edge work. The two existing lines cannot tell you
+/* MECHANISM COUNTER for the prefill-edge work. The two existing lines cannot tell you
  * whether the cache was being populated during prefill:
  *   - "prefill edge evicted expert cache 0.00 GiB" reads 0.00 on EVERY build, because the gate
  *     PREVENTS population rather than evicting an already-built cache.
@@ -1674,7 +1674,7 @@ static inline cublasHandle_t cuda_cublas_for_tier(int logical_tier) {
  * Design ported from the Entrpi/ds4 batched-serving fork's per-layer
  * decode graph work (fork commits abe26575, 2200c675, 9caaa508; author
  * Entrpi <entrpi@proton.me>), re-implemented against upstream's decode
- * body.  Phase 1 captures the two position-independent islands of each
+ * body.  captures the two position-independent islands of each
  * decode layer:
  *   island 0: layer top (hc pre-norm, mixes, QKV projections), ending
  *             before the position-dependent QKV rope.
@@ -2132,7 +2132,7 @@ static const char *cuda_resolve_weight_ptr(const void *model_map,
                                             const char *label,
                                             const char **kind_out = NULL) {
     if (kind_out) *kind_out = NULL;
-    /* [2026-08-16 FIX] Resolve SUPPORT-model weights directly against the registered support map.
+    /* Resolve SUPPORT-model weights directly against the registered support map.
      *
      * WHY: ds4_gpu_register_support_map() records base/size/bias, but on a single GPU this function
      * took the g_n_gpus <= 1 early return and delegated to cuda_model_range_ptr(), which matches
@@ -2146,7 +2146,7 @@ static const char *cuda_resolve_weight_ptr(const void *model_map,
      * The support model is cudaHostRegister'd no-copy, so its host pointer is device-addressable
      * under unified addressing; a bounds-checked base+offset is the correct resolution and needs no
      * range entry. The multi-GPU branch below still applies g_support_offset_bias as before. */
-    /* [2026-08-16 REVERTED] A fast path here returned `(const char *)model_map + offset` for the
+    /* A fast path here returned `(const char *)model_map + offset` for the
      * support map. It cleared the resolve NULL (0 instead of 1) but caused
      *     CUDA synchronize failed: an illegal memory access was encountered
      * on the first decode: that is a HOST pointer, and the kernels dereference it on device. The
@@ -3241,7 +3241,7 @@ static int cuda_model_copy_to_device_streamed(
         const uint64_t bi = chunk_idx % 4u;
         cudaError_t err;
         if (chunk_idx >= 4u) {
-            /* [merge 2026-08-15] restored from HEAD: profiled helper, not raw cudaEventSynchronize.
+            /* restored from HEAD: profiled helper, not raw cudaEventSynchronize.
              * Upstream's rewrite dropped the decode-profile wait accounting; without it the
              * streaming stall time is invisible to the instrumentation this program relies on. */
             if (!cuda_decode_profile_event_synchronize(
@@ -3298,7 +3298,7 @@ static int cuda_model_copy_to_device_streamed(
                 what ? what : "expert");
         return 0;
     }
-    /* [merge 2026-08-15] restored from HEAD. Upstream omits this, so every byte streamed from SSD
+    /* restored from HEAD. Upstream omits this, so every byte streamed from SSD
      * went UNCOUNTED - g_decode_profile.ssd_bytes would read 0 and the storage instrumentation
      * this whole program depends on would silently report nothing. */
     if (cuda_decode_profile_enabled()) g_decode_profile.ssd_bytes += bytes;
@@ -3380,7 +3380,7 @@ static char *cuda_model_arena_alloc(uint64_t bytes, const char *what) {
         uint64_t arena_bytes = 0;
         for (const cuda_model_arena &a : g_model_arenas) arena_bytes += a.bytes;
         /* Free VRAM is reported alongside the arena total because the arena total ALONE cannot answer the
-         * question it is usually asked for. Measured 2026-08-17: the expert cache sizing saw only
+         * question it is usually asked for. the expert cache sizing saw only
          * 9.40 GiB available on a 32.6 GiB card while the logged accounting (model 0.99 + KV 1.59 +
          * context buffers 2.59) came to ~5.2 GiB, leaving ~14 GiB unaccounted. This arena is unbounded by
          * default - cuda_model_cache_limit_bytes() returns UINT64_MAX unless
@@ -3762,7 +3762,7 @@ static int cuda_stream_expert_cache_budget_visible_to_shared(void) {
     return env && env[0] && strcmp(env, "0") != 0;
 }
 
-/* [2026-08-18] The denominator of the primary/tail expert-cache class split: the tail class gets
+/* The denominator of the primary/tail expert-cache class split: the tail class gets
  * 1/denom of the aggregate byte budget and the primary gets the rest. Read in TWO places that must
  * agree - the class budget (what the tail may claim) and the live-budget holdback (what the primary
  * must leave) - so it lives here rather than being parsed twice. Default 8 is the historical value
@@ -3912,7 +3912,7 @@ static uint32_t cuda_stream_expert_cache_live_budget(
     if (cuda_stream_expert_cache_class_isolation_enabled() &&
         cache == &g_stream_expert_caches[0] &&
         !g_stream_expert_caches[1].valid) {
-        /* [2026-08-18] DEFAULT TO THE CLASS SPLIT, not a second independent 8. These two denominators
+        /* DEFAULT TO THE CLASS SPLIT, not a second independent 8. These two denominators
          * describe the same intent from opposite sides: the class budget decides how many bytes the
          * tail class may CLAIM, and this holdback decides how many bytes the primary class must LEAVE.
          * When they disagree the tail claim is unfunded, and because a secondary class only carries a
@@ -4071,7 +4071,7 @@ static uint32_t cuda_stream_expert_cache_class_budget(
      * for the larger boosted/Q4 tail. Both shares remain inside the original
      * aggregate byte budget derived by ds4.c from --ssd-streaming-cache-gb.
      *
-     * [2026-08-18] THE 1/8 IS THE THING THAT PINS THE Q4 TAIL, and it had no knob. Measured: class 1
+     * THE 1/8 IS THE THING THAT PINS THE Q4 TAIL, and it had no knob. Measured: class 1
      * allocates exactly 233 experts / 3.07 GiB in every configuration tried today - reserves 6/7/8/
      * 9/10/12, a 2 GB DirectStorage arena, both cache modes, and every TAIL_DENOM value. It is 15%
      * residency over the 1536 Q4 experts while the primary class runs at 43%.
@@ -4346,7 +4346,7 @@ static cuda_stream_expert_cache *cuda_stream_expert_cache_prepare(
         }
     }
     if (cap == 0) {
-        /* [2026-08-18] KEEP WHAT WE ALREADY HAVE. A zero live budget means the cache cannot GROW; it
+        /* KEEP WHAT WE ALREADY HAVE. A zero live budget means the cache cannot GROW; it
          * has never meant the existing allocation became unusable. Returning NULL here threw that
          * allocation away and made the caller bypass VRAM for every expert, for the rest of the run.
          *
@@ -4982,7 +4982,7 @@ static void cuda_stream_host_expert_cache_update_peak(
 static void cuda_stream_host_expert_cache_release(
         cuda_stream_host_expert_cache *cache, int pinned = g_host_cache_pinned) {
     if (!cache) return;
-    /* [2026-08-16] cudaFreeHost: these are cudaMallocHost'd (pinned) now. free() here would be
+    /* cudaFreeHost: these are cudaMallocHost'd (pinned) now. free() here would be
      * heap corruption. */
     cuda_stream_host_expert_cache_free_buffers(
         cache->gate_ptr, cache->up_ptr, cache->down_ptr, pinned);
@@ -5283,7 +5283,7 @@ static int cuda_stream_host_expert_cache_try_alloc(
         return 0;
     }
 
-    /* [2026-08-16] PINNED, not malloc. This cache is the source of every host->device expert copy on
+    /* PINNED, not malloc. This cache is the source of every host->device expert copy on
      * the decode path -- ~206 copies/token -- and pageable memory forces the driver to stage each one
      * through an internal bounce buffer. Measured on the pageable version: 464 MiB/token at 2.68 GB/s
      * = 10.7% of PCIe 4.0 x16, ~0.82 ms for a ~2.25 MiB copy, i.e. latency-bound, and `plan` (the
@@ -5480,7 +5480,7 @@ cuda_stream_host_expert_cache_decode_refill(
         }
     }
 
-    /* [2026-08-23] DESCENDING RETRY - DS4_HOST_CACHE_DECODE_STEPDOWN_V1.
+    /* DESCENDING RETRY - DS4_HOST_CACHE_DECODE_STEPDOWN_V1.
      *
      * This used to be a single attempt at target_cap that fell straight back to old_cap, and
      * MEASURED on fp165g that is a REGRESSION against the pre-fix build. Pre-fix, the budget latch
@@ -6326,7 +6326,7 @@ static void cuda_ds_hash_pipeline_stats_dump(void) {
 /* Optional next-layer RAM -> VRAM promotion.  It occupies a disjoint tail of
  * the DirectStorage GPU arena, so pinned-H2D and SSD->GPU can run together
  * without allocating a second transient VRAM slab or overwriting each other. */
-/* [2026-08-18] RAISED 16 -> 256, i.e. a WHOLE LAYER.
+/* RAISED 16 -> 256, i.e. a WHOLE LAYER.
  *
  * 16 experts is ~6% of a 256-expert layer, which cannot move the hit rate no matter how accurate the
  * prediction is - the promotion has to cover a large FRACTION of the layer to matter. At 6.75 MiB an
@@ -6429,7 +6429,7 @@ static uint64_t cuda_ds_prefetch_capacity_bytes(void) {
      * expert cache (6 GB at the settings used) ~= 7.3 GB, all explicitly bounded and none of it
      * scaling with model size. Free RAM measured flat at 21.7 GB across these runs.
      *
-     * [2026-08-15] RAISED 1024 -> 1792 MiB. The 1024 figure above was tuned on DECODE, where one
+     * RAISED 1024 -> 1792 MiB. The 1024 figure above was tuned on DECODE, where one
      * token activates few experts and 1024 MiB really did cover them. PREFILL activates close to the
      * whole 256-expert union of a layer (GGUF: deepseek4.expert_count=256), so at 1024 MiB the engine
      * logged "held 151 experts of this layer; the remainder use serial reads" -- i.e. prefill sat in
@@ -6750,7 +6750,7 @@ static int cuda_model_read_to_host(
 #endif
     if (g_model_fd >= 0 &&
         (g_model_fd_host_base == NULL || model_map == g_model_fd_host_base)) {
-        /* [2026-08-20] Timed: this blocking read is the last fall-through of this function and was
+        /* Timed: this blocking read is the last fall-through of this function and was
          * invisible to every counter. Marker: DS4_PREAD_FALLBACK_PROFILE_V1 */
         const int pread_profile = cuda_decode_profile_enabled();
         const double pread_t0 = pread_profile ? cuda_decode_profile_now_ms() : 0.0;
@@ -6829,7 +6829,7 @@ static int cuda_stream_host_expert_cache_load_slot(
     entry.gate_expert_bytes = gate_expert_bytes;
     entry.down_expert_bytes = down_expert_bytes;
     entry.age = ++cache->tick;
-    /* [2026-08-18] BOTH admission sites are instrumented - there are two identical ones (this and the
+    /* BOTH admission sites are instrumented - there are two identical ones (this and the
      * other slot-fill path). Counting only one under-reports and would invert the conclusion. */
     if (g_stream_expert_cache_phase_decode) {
         g_expert_cache_admits_decode++;
@@ -6927,7 +6927,7 @@ static int cuda_stream_host_expert_cache_copy_to_device(
 
 #include "ds4_external_host_cache.inc"
 
-/* [2026-08-16] Merged-run variant of the copy above.
+/* Merged-run variant of the copy above.
  *
  * WHY: the per-expert version issues THREE SYNCHRONOUS cudaMemcpy calls, and a 16K prefill makes
  * 24,000 such calls = 72,000 blocking transfers, measured at 10.87 GiB/s against 25-50 GB/s of
@@ -7185,7 +7185,7 @@ static int cuda_stream_expert_cache_load_slot(
     entry.age = ++cache->tick;
     entry.route_rank = route_rank;
     cache->rank_worst_valid = 0;
-    /* [2026-08-18] BOTH admission sites are instrumented - there are two identical ones (this and the
+    /* BOTH admission sites are instrumented - there are two identical ones (this and the
      * other slot-fill path). Counting only one under-reports and would invert the conclusion. */
     if (g_stream_expert_cache_phase_decode) {
         g_expert_cache_admits_decode++;
@@ -7209,7 +7209,7 @@ static int cuda_ds_gpu_destination_enabled(void) {
 }
 
 static int cuda_ds_gpu_prefetch_arena_ensure(void) {
-    /* [2026-08-20] REVALIDATE, do not just trust our own pointer. DS4_GPU_ARENA_REVALIDATE_V1.
+    /* REVALIDATE, do not just trust our own pointer. DS4_GPU_ARENA_REVALIDATE_V1.
      *
      * R4's ds4_ds_prefill_arenas_create() calls gpu_arena_release(), destroying the D3D12 resource
      * and the external-memory mapping this pointer refers to. It stays non-NULL and DANGLING, so
@@ -8718,7 +8718,7 @@ extern "C" void ds4_gpu_decode_profile_get(ds4_gpu_decode_profile_snapshot *snap
     snapshot->enabled = cuda_decode_profile_enabled();
 }
 
-/* [merge 2026-08-16] RESTORED from the pre-merge tree verbatim. The merge deleted this function
+/* RESTORED from the pre-merge tree verbatim. The merge deleted this function
  * and rewired its only production call site (in ds4_gpu_set_model_map_spans) to
  * ds4_gpu_set_model_map(), which does the same teardown PLUS a cudaHostRegister of the entire
  * model mapping -- impossible for 90.9 GiB on a 32 GB card, and the cause of the -22% decode
@@ -9540,7 +9540,7 @@ extern "C" int ds4_gpu_set_model_fd(int fd) {
             uint64_t start = g_model_file_size > (span * 3ull) ? (g_model_file_size / 3ull) : 0ull;
             start &= ~4095ull;
             if (g_model_file_size > start + span) {
-                /* [2026-08-20] MATRIX SWEEP. chunk and batch used to be hardcoded (8 MiB / 64), so
+                /* MATRIX SWEEP. chunk and batch used to be hardcoded (8 MiB / 64), so
                  * the two variables that matter most - request SIZE and queue DEPTH - could not be
                  * swept at all, and every other knob was being measured at one arbitrary point in
                  * their plane. Now both take comma-separated lists and the cross product runs in ONE
@@ -9585,7 +9585,7 @@ extern "C" int ds4_gpu_set_model_fd(int fd) {
                 }
                 if (n_batch == 0u) { batch_list[0] = 64u; n_batch = 1u; }
 
-                /* [2026-08-20] EVERY POINT MUST READ A **DIFFERENT** REGION.
+                /* EVERY POINT MUST READ A **DIFFERENT** REGION.
                  *
                  * `start` and `span` are computed ONCE, above, outside all three loops. Until now
                  * every point re-read the IDENTICAL bytes: a 36-point matrix at repeats=3 read the
@@ -10351,7 +10351,7 @@ extern "C" uint32_t ds4_gpu_stream_expert_cache_apply_order(
     return missing;
 }
 
-/* [2026-08-18] THE VIRTUAL CACHE: a runtime record of which experts a workload ACTUALLY selects,
+/* THE VIRTUAL CACHE: a runtime record of which experts a workload ACTUALLY selects,
  * including the ones deliberately EXCLUDED from the cache.
  *
  * The two-bound tiers rank experts from `ds4_default_streaming_hotlist_flash`, a STATIC table baked
@@ -10889,7 +10889,7 @@ extern "C" void ds4_gpu_stream_expert_cache_report_admits(void) {
             "ds4: CUDA expert cache admissions: prefill %llu, decode %llu\n",
             g_expert_cache_admits_prefill,
             g_expert_cache_admits_decode);
-    /* [2026-08-23] The VRAM/host hit rates used to be reachable ONLY through
+    /* The VRAM/host hit rates used to be reachable ONLY through
      * atexit(cuda_expert_cache_stats_dump). Every campaign here ends an arm with `kill` from MSYS
      * bash, which cannot deliver a POSIX signal to a native Windows process - it hard-terminates it,
      * so atexit never runs and the line never appears. Measured: zero "expert cache hit rate" lines
@@ -10939,7 +10939,7 @@ extern "C" void ds4_gpu_stream_expert_cache_set_phase_decode(
     }
 #endif
 
-    /* [2026-08-18] Report the admission counts at the FIRST prefill->decode transition, and do it HERE,
+    /* Report the admission counts at the FIRST prefill->decode transition, and do it HERE,
      * ABOVE the early return below. That return fires whenever the edge-vram gate is off - which is
      * exactly the control arm the counter exists to measure. A report placed after it would print only
      * in the treatment arm and silently vanish from every baseline, making the A/B look self-confirming.
@@ -11995,7 +11995,7 @@ static int cuda_ds_decode_pipeline_capture(
         }
     }
     if (!has_frequency_tier) {
-        /* [2026-08-20] This used to return silently, and that cost a campaign. The decode
+        /* This used to return silently, and that cost a campaign. The decode
          * pipeline predicts tier-1 experts, so with DS4_CUDA_STREAMING_PREFETCH_K=0 and
          * DS4_CUDA_STREAMING_CACHE_M=0 nothing is ever marked TIER_PREFETCH and there is
          * nothing to look ahead at. The run then behaves exactly like the legacy path while
@@ -12798,7 +12798,7 @@ static void cuda_prefill_pipeline_release_internal(int refill_host_decode_edge) 
      * fails, the old capacity is rebuilt empty and the failure is reported.
      *
      * The earlier pipeline-teardown placement measured a throughput null on
-     * the 2026-08-20 90 GB configuration and mechanically grew class 0, but it
+     * the 90 GB configuration and mechanically grew class 0, but it
      * did not run at the shipped graph-workspace release edge. That evidence
      * does not measure this corrected placement or the active-class budget
      * redistribution. This work-order path remains default-on and requires the
@@ -13719,7 +13719,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
             else cuda_ds_prefetch_reset();
             ds4_ds_batch_reset();
             uint32_t staged = 0, skipped = 0;
-            /* [2026-08-20] DS4_PREPASS_STAGE_PROFILE_V1. The selective-prepass fix was INERT:
+            /* DS4_PREPASS_STAGE_PROFILE_V1. The selective-prepass fix was INERT:
              * ds_batches stayed an exact 0.000 on requests 2+ while pread stayed at ~203 calls.
              * The gate now passes, so the loop is entered - which means stage() is refusing. Its
              * refusal is silent (`skipped++; break`) and abandons the whole layer on the FIRST
@@ -13836,7 +13836,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
                 /* OVERLAP: submit without waiting, so the ~71% of this layer's experts that HIT the VRAM
                  * cache can be copied while the ~29% cold-tail misses are still in flight.
                  *
-                 * MEASURED justification (2026-08-17, DS4_CUDA_DS_BATCH_TRACE over 7,645 batches):
+                 * MEASURED justification (DS4_CUDA_DS_BATCH_TRACE over 7,645 batches):
                  * batch cost is 0.407 ms fixed + bytes/15.12 GiB/s (r^2=0.955), and the engine issues
                  * 29.9 batches per decoded token totalling 57.3 ms - 41% of a 138 ms token - all of it
                  * spent BLOCKED. Hiding it behind the hit-copies predicts 7.24 -> ~12 t/s.
@@ -13873,7 +13873,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
                         g_decode_profile.ds_wait_calls++;
                         g_decode_profile.ds_wait_ms += wait_ms;
                     }
-                    /* [DIAG 2026-08-16] THE decisive measurement for the prefill endgame: is a
+                    /* THE decisive measurement for the prefill endgame: is a
                      * batch's cost fixed (submit->wait round trip) or proportional to its payload?
                      * Aggregate evidence already says fixed - a VRAM sweep moved the hit rate
                      * 43.6%->55.3% (17% fewer misses, so ~17% fewer bytes) and prefill throughput
@@ -13909,7 +13909,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
 #if defined(_WIN32)
     cuda_ds_phase_scope copy_scope(&g_ds_decode_bandwidth.phase_copy_ms);
 #endif
-    /* [2026-08-16] Merged-run H2D state. The per-expert path issued THREE SYNCHRONOUS cudaMemcpy
+    /* Merged-run H2D state. The per-expert path issued THREE SYNCHRONOUS cudaMemcpy
      * calls per expert - 72,000 blocking transfers on a 16K prefill, measured at 10.87 GiB/s against
      * 25-50 GB/s of pinned-H2D link speed. Consecutive copies were measured 99.4% contiguous on BOTH
      * ends (host slot and compact slot) with runs averaging 156, so accumulating a run and flushing
@@ -14099,19 +14099,18 @@ static int cuda_stream_selected_cache_begin_compact_load(
                 cuda_stream_host_expert_cache_prepare(gate_expert_bytes,
                                                       down_expert_bytes,
                                                       configured_cache_budget) : NULL;
-            /* [DIAG 2026-08-16] Accounting for the ~15 s of `load` that is NOT DirectStorage.
+            /* Accounting for the ~15 s of `load` that is NOT DirectStorage.
              * Per-batch tracing showed DS runs at ~16.7 GiB/s and accounts for only ~11 s of the
              * 26.5 s load phase, so the remainder is here: host-cache probe + H2D copy. Time the
              * two separately - the pinned-host-cache win (+98% prefill) came from exactly this
              * path, so it is the one lever already proven responsive. */
-            /* [2026-08-16 PERF FIX] This was a bare getenv() inside the PER-EXPERT loop - roughly
+            /* This was a bare getenv() inside the PER-EXPERT loop - roughly
              * 24,000 calls per layer-batch during prefill and ~66,000 across a 256-token decode.
              * Measured cost: decode fell to 6.14 / 7.33 t/s against a 10.4-10.9 history, i.e. the
              * diagnostics I added to chase the chunk limits regressed decode ~35%. getenv() is not
              * free on Windows. Cache it in a static - evaluated once per process.
              *
-             * [2026-08-18 ATTRIBUTION CORRECTED - read this before hunting getenv calls elsewhere]
-             * getenv() was NOT what cost the 35%. Measured directly on this box
+             * * getenv() was NOT what cost the 35%. Measured directly on this box
              * (.planning/benchmarks/getenv_cost.c in the RTX_ACCELERATED_MAC_PREFILL_LLAMA repo):
              * a full-environment MISS costs 1.546 us with a 106-variable / 7213-byte environment, so
              * the ~66,000 calls above come to 0.102 s against a ~25 s decode = 0.41%, not 35%.
@@ -14167,14 +14166,14 @@ static int cuda_stream_selected_cache_begin_compact_load(
             }
 
             if (ds_copy_trace) {
-                /* [DIAG 2026-08-16] Accumulate BYTES as well as ms, so aggregate GiB/s is measured
+                /* Accumulate BYTES as well as ms, so aggregate GiB/s is measured
                  * rather than inferred. The earlier ~13 GiB/s figure divided this path's time by
                  * DirectStorage's byte count - two different populations, the same mistake that
                  * produced a meaningless "1% host hit rate". A copy moves gate + up + down. */
                 static double   host_ms    = 0.0;
                 static uint64_t host_n     = 0;
                 static uint64_t host_bytes = 0;
-                /* [DIAG 2026-08-16] Source-run length decides the merge design. Destinations are
+                /* Source-run length decides the merge design. Destinations are
                  * provably contiguous (gate_dst = compact_slot * gate_expert_bytes), but a single
                  * transfer needs BOTH ends contiguous and the host slot is allocated independently.
                  * Count how often this copy's host_slot continues the previous one: long runs ->
@@ -14258,7 +14257,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
      * in that case. */
     cuda_ds_expert_fetch_drain();
 
-    /* [2026-08-16] Flush the final merged run BEFORE the arena is retired below. A deferred run
+    /* Flush the final merged run BEFORE the arena is retired below. A deferred run
      * reads from host-cache staging, so flushing after cuda_ds_prefetch_reset() would copy data
      * that has since been overwritten - silent corruption, not a crash. */
     if (!DS4_FLUSH_HOST_RUN()) {
@@ -14288,7 +14287,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
     }
     }
 
-    /* [merge 2026-08-16] ROOT CAUSE of "CUDA streaming selected experts are unavailable for layer 0".
+    /* ROOT CAUSE of "CUDA streaming selected experts are unavailable for layer 0".
      *
      * `logical_tier` is a field UPSTREAM added to cuda_stream_selected_cache for tensor parallelism.
      * Upstream's own population site sets it (~29501); this HEAD-side streaming site never did,
@@ -14315,7 +14314,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
     g_stream_selected_cache.model_map = model_map;
     g_stream_selected_cache.layer = layer;
     g_stream_selected_cache.n_total_expert = n_total_expert;
-    /* [merge 2026-08-15] `.n_selected = slot_count;` removed. `n_selected` is a HEAD-era field that
+    /* `.n_selected = slot_count;` removed. `n_selected` is a HEAD-era field that
      * upstream's cuda_stream_selected_cache (the struct that won this merge) does not have -- it
      * carries `slot_count` instead. The assignment was written once and read nowhere, and the very
      * next line already stores the identical value, so dropping it is behaviour-preserving. */
@@ -14353,7 +14352,7 @@ static int cuda_stream_selected_cache_begin_compact_load(
             cuda_decode_profile_now_ms() - decode_profile_t0;
     }
 
-    /* [2026-08-18] ROUTE DUMP, for the ONE question that decides whether layer-ahead prefetch can work
+    /* ROUTE DUMP, for the ONE question that decides whether layer-ahead prefetch can work
      * in any form.  MEASURED: the current predictor (global hotlist rank inside the RAM band) hits
      * 1.4-1.5% against a 6/256 = 2.34% chance baseline - i.e. WORSE than guessing, because that band is
      * defined to exclude the hottest experts.  Router-ahead cannot rescue it: the router consumes this
@@ -25107,7 +25106,7 @@ static int cuda_matmul_q8_0_tensor_labeled(ds4_gpu_tensor *out, const void *mode
         }
     }
     const char *wptr = cuda_resolve_weight_ptr(model_map, weight_offset, weight_bytes, logical_tier, "q8_0");
-    /* [DIAG 2026-08-16] Last unexamined layer for the DSpark stage-1 seed failure. The attn_kv q8_0
+    /* Last unexamined layer for the DSpark stage-1 seed failure. The attn_kv q8_0
      * matmul fails at offset 2,008,544,064 while an f16 matmul in the same stage succeeds at
      * 3,962,015,904, with identical tensor metadata and every guard above passing. If wptr is NULL
      * here, the resolve is the answer and the offset/label combination is what differs. */
@@ -27178,7 +27177,7 @@ extern "C" int ds4_gpu_rope_tail_decode_rows_tensor(
             ext_factor, attn_factor, beta_fast, beta_slow);
     return cuda_ok(cudaGetLastError(), "rope tail decode rows launch");
 }
-/* [merge 2026-08-16] ds4_gpu_kv_rope_fp8_fuse_available() is defined ONLY in ds4_metal.m, yet ds4.c
+/* ds4_gpu_kv_rope_fp8_fuse_available() is defined ONLY in ds4_metal.m, yet ds4.c
  * declares it unguarded (line ~20085) and calls it at ~22541 / ~22681 / ~22887. Those call sites are
  * NOT compiled out on Windows, so ds4.obj carries an unresolved reference and the link fails.
  * (Its three siblings -- decode_attn_rope_fuse_available/_used/set_decode_attn_rope_fuse -- are
@@ -28423,7 +28422,7 @@ static int attention_decode_batch_launch(
         /* One-shot attribution marker. This path uses ldmatrix and INT8 tensor-core MMA, both of which
          * live behind __CUDA_ARCH__ >= 800 guards whose sm_75 fallbacks return zeros / do nothing, and
          * it needs a 90 KiB dynamic shared-memory opt-in that sm_75 cannot grant (64 KiB cap). The
-         * binary shipped as sm_75-only until 2026-08-17, so this kernel had never executed on this box
+         * binary shipped as sm_75-only until so this kernel had never executed on this box
          * even though its gate - a RUNTIME prop.major >= 8 query - passes on a 5090.
          * Without this line, any prefill change after the sm_120 rebuild is unattributable: it could be
          * native SASS, any of the other 16 unblocked >= 800 sites, or noise. Printed once, no getenv in
@@ -28683,7 +28682,7 @@ extern "C" int ds4_gpu_attention_decode_mixed_batch_heads_tensor(
         comp_arg = comp_kv_f32;
         comp_kv_f16 = 0;
     } else if (comp_kv_f16) {
-        /* [2026-08-16] n_comp == 0: there are NO compressed keys, so the f16 flag describes an
+        /* n_comp == 0: there are NO compressed keys, so the f16 flag describes an
          * empty set and is meaningless - but attention_decode_batch_launch() rejects comp_kv_f16
          * as its very FIRST guard term, unconditionally. Without this clear, the call fails with
          *   CUDA attention decode batch validation failed comp_f16=1 ... n_comp=0 ratio=128
@@ -29643,7 +29642,7 @@ static void cuda_attnout_weight_hash_probe(
         !cuda_attnout_fnv1a64(out_b, out_b_bytes, &b_hash, "attn_out_b")) {
         return;
     }
-    /* [2026-08-20] ALIGNMENT is the live hypothesis and it costs nothing to answer here.
+    /* ALIGNMENT is the live hypothesis and it costs nothing to answer here.
      * The hashes came back IDENTICAL between arms while the pointer KIND differed
      * (resident vs fd), so R4 delivers the correct bytes and the divergence in attn_low is a
      * compute-path difference. A quantised GEMM commonly selects a vectorised path on pointer
@@ -29840,7 +29839,7 @@ extern "C" int ds4_gpu_attention_output_q8_batch_tensor(
         /* SPLIT THE LAUNCH: gridDim.y is capped at 65,535, and x_rows here is n_tokens * n_groups.
          *
          * At the 16128-token prefill chunk this overflows for any n_groups >= 5, and the launch fails with
-         * a bare "invalid argument". MEASURED 2026-08-17: len_35k and len_40k both died with
+         * a bare "invalid argument". len_35k and len_40k both died with
          *     CUDA attention_output_q8_a prequant launch failed: invalid argument
          *     gpu layer 38 attention batch encode failed
          * while the same prompts had worked earlier - because this is a FALLBACK path. It only runs when
@@ -30529,7 +30528,7 @@ extern "C" int ds4_gpu_cache_affinity_router_tensor(
     const int tier = ds4_tensor_device_idx(selected);
     cuda_router_residency residency = {};
 #ifdef DS4_EXTERNAL_DECODE
-    /* RAMFIX: external decode prices a RAM-resident expert between VRAM and storage.
+    /* external decode prices a RAM-resident expert between VRAM and storage.
      * LLAMADECODE_RAM_ROUTE_COST in [0,1] is its share of the miss penalty (0 = old
      * boolean residency). Selection only; combine weights stay the original probabilities. */
     static const float ram_route_cost = [] {
@@ -36556,7 +36555,7 @@ static int routed_moe_launch_impl(
      * [n_tokens, n_expert, *] by the validation above.  Any entry
      * failure falls through to the legacy sorted-pairs path (the
      * buffers are scratch there too). */
-    /* [merge 2026-08-16] FAILURE A fix. This upstream IQ2 MMQ branch wants the FULL expert weights,
+    /* FAILURE A fix. This upstream IQ2 MMQ branch wants the FULL expert weights,
      * which it obtains through cuda_resolve_weight_ptr(). Under --ssd-streaming that is impossible:
      * the model is 90.9 GiB against a 32 GB card. What actually happened was worse than a clean
      * refusal -- the arena OOM'd ("moe up mmq (1792.00 MiB chunk): out of memory"), then
@@ -37587,7 +37586,7 @@ static int routed_moe_launch_impl(
                 ok = cuda_ok(cudaGetLastError(),
                              "owned routed_moe active mid quantize launch");
             } else {
-                /* [2026-08-16 FIX] Split the launch so gridDim.y stays within the CUDA limit.
+                /* Split the launch so gridDim.y stays within the CUDA limit.
                  *
                  * midq_grid was dim3(midq_blocks, n_tokens * n_expert, 1). gridDim.y is capped at
                  * 65535, and with n_expert = 6 that caps the prefill chunk at 10922 tokens - so
@@ -38419,7 +38418,7 @@ extern "C" int ds4_gpu_direction_routed_moe_one_tensor(ds4_gpu_tensor *out,ds4_g
 }
 
 extern "C" int ds4_gpu_routed_moe_batch_tensor(ds4_gpu_tensor *out, ds4_gpu_tensor *gate, ds4_gpu_tensor *up, ds4_gpu_tensor *mid, ds4_gpu_tensor *down, const void *model_map, uint64_t model_size, uint64_t gate_offset, uint64_t up_offset, uint64_t down_offset, uint32_t gate_type, uint32_t down_type, uint64_t gate_expert_bytes, uint64_t gate_row_bytes, uint64_t down_expert_bytes, uint64_t down_row_bytes, uint32_t expert_in_dim, uint32_t expert_mid_dim, uint32_t out_dim, const ds4_gpu_tensor *selected, const ds4_gpu_tensor *weights, uint32_t n_total_expert, uint32_t n_expert, float clamp, const ds4_gpu_tensor *x, uint32_t layer_index, uint32_t n_tokens, bool *mid_is_f16, bool force_resident) {
-    /* [2026-08-16] force_resident was DISCARDED here (`(void)force_resident;`) with
+    /* force_resident was DISCARDED here (`(void)force_resident;`) with
      * allow_streaming hardcoded to 1 below, while the single-token sibling
      * ds4_gpu_routed_moe_one_tensor() correctly passes `force_resident ? 0 : 1`. A caller demanding
      * resident weights therefore got the streaming path anyway - and when the streaming selected
@@ -39041,7 +39040,7 @@ extern "C" int ds4_gpu_args_probe_auto_cuda(const int      *device_filter,
     return 0;
 }
 
-/* [merge 2026-08-15] ds4_gpu_stream_expert_table was defined HERE (~line 29245) but HEAD's streaming
+/* ds4_gpu_stream_expert_table was defined HERE (~line 29245) but HEAD's streaming
  * code uses it from ~6445 onward, so it was used-before-declared in five places. Definition moved to
  * the top of the file, beside the other local declarations that stand in for ds4_gpu.h. */
 
@@ -45735,7 +45734,7 @@ extern "C" int ds4_gpu_set_model_map_spans(const void *model_map, uint64_t model
             return 0;
         }
     }
-    /* [merge 2026-08-16] ROOT CAUSE of the -22% decode regression. The merge SWAPPED the callee here:
+    /* ROOT CAUSE of the -22% decode regression. The merge SWAPPED the callee here:
      *   pre-merge:  cuda_model_set_host_map()  -- bookkeeping/teardown only
      *   merged:     ds4_gpu_set_model_map()    -- same teardown PLUS cudaHostRegister of the
      *                                             ENTIRE model mapping

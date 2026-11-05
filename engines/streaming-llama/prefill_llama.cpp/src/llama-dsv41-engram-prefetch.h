@@ -10,7 +10,7 @@
 // early multi-ring loader (prepare_early/load_early), so the row cache is
 // consulted on every load; the single-ring load() is no longer called.
 bool llama_dsv41_engram_early_enabled();
-// PAIRFIX LLAMADECODE_ENGRAM_WHOLE_PROMPT=1|0 (default 1): the early load covers
+// LLAMADECODE_ENGRAM_WHOLE_PROMPT=1|0 (default 1): the early load covers
 // the whole request (all sweeps); each later sweep adopts the same row cache.
 bool llama_dsv41_engram_whole_prompt();
 bool llama_dsv41_engram_early_auto();

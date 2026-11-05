@@ -1,5 +1,5 @@
 // LLAMADECODE host-plan cost log: headroom arithmetic and line format.
-// Numbers from the live Studio fh2 run of 2026-10-25 (admitted_host 6576668672,
+// Numbers from the live Studio fh2 run of (admitted_host 6576668672,
 // row cache 195035136 B of 195148800 B headroom, owner_digest_staging 33554432).
 #include "llama-dsv41-host-plan-log.h"
 #include <cstdio>

@@ -26,7 +26,7 @@ enum server_task_type {
     SERVER_TASK_TYPE_SLOT_ERASE,
     SERVER_TASK_TYPE_GET_LORA,
     SERVER_TASK_TYPE_SET_LORA,
-    // Phase G (2026-05-06): KVBlob v2 handoff via main-loop task queue
+    // KVBlob v2 handoff via main-loop task queue
     // (direct call from request thread crashes in fork's streaming-prefill
     //  llama-context — see kvblob_v2.h spec + the matching POST handlers).
     SERVER_TASK_TYPE_HANDOFF_EXPORT,
@@ -196,7 +196,7 @@ struct server_task {
     // used by SERVER_TASK_TYPE_SET_LORA
     std::map<int, float> set_lora; // mapping adapter ID -> scale
 
-    // Phase G (2026-05-06): used by SERVER_TASK_TYPE_HANDOFF_EXPORT /
+    // used by SERVER_TASK_TYPE_HANDOFF_EXPORT /
     // SERVER_TASK_TYPE_HANDOFF_IMPORT. Sequence ids the export should
     // pull KV for (or the import should remap targets onto). For
     // import, `handoff_blob` carries the raw KVBlob v2 byte stream
@@ -620,7 +620,7 @@ struct server_task_result_apply_lora : server_task_result {
     virtual json to_json() override;
 };
 
-// Phase G (2026-05-06): result of SERVER_TASK_TYPE_HANDOFF_EXPORT.
+// result of SERVER_TASK_TYPE_HANDOFF_EXPORT.
 // The export ran on the main loop (where KV reads are safe) and stuffed
 // the KVBlob v2 byte stream into `kvblob_bytes`. The HTTP handler
 // returns it as Content-Type: application/octet-stream.
@@ -633,7 +633,7 @@ struct server_task_result_handoff_export : server_task_result {
     virtual json to_json() override { return json{{"n_seqs", n_seqs}}; }
 };
 
-// Phase G: result of SERVER_TASK_TYPE_HANDOFF_IMPORT.
+// result of SERVER_TASK_TYPE_HANDOFF_IMPORT.
 struct server_task_result_handoff_import : server_task_result {
     int32_t n_seqs = 0;
     int32_t status_code = 200;        // 200 | 400 | 409 | 500

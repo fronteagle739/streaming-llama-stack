@@ -173,7 +173,9 @@
       "source_commit": "2774636281ab32bf871497f0a8caae23c6b6cdc7",
       "source_sha256": "56d96b556f6b95ba72054100bc8c27a70937cba83a15577a476a1fd1cff87648",
       "selected": null,
-      "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use"
+      "changes": "Two-line provenance header only; source body retained, LF-normalized digest checked before use",
+      "derived_body_sha256": "f323a66355e32ef7738c7f905be9ca7b39d2ce3963856de6f7d7c0ea80372068",
+      "distribution_note": "Comment and docstring wording is technical; executable Python AST is unchanged."
     },
     {
       "path": "dsv41_session_process.py",

@@ -5,12 +5,12 @@
 // without C++ compilation. Functions return 0 on success and non-zero on
 // failure (with stderr error message). Device pointers are caller-owned.
 //
-// Phase 0: skeleton only. Q8_0 dense entry compiles and instantiates
+// skeleton only. Q8_0 dense entry compiles and instantiates
 // mul_mat_q_case<Q8_0> but is not yet wired into ds4_cuda.cu.
-// Phase 1: Q8_1 activation quantizer wrapper added.
-// Phase 2: Q8_0 dense entry verified against cublas+dequant baseline.
-// Phase 3: Q2_K + IQ2_XXS dense entries.
-// Phase 4: MoE _id variants of all three.
+// Q8_1 activation quantizer wrapper added.
+// Q8_0 dense entry verified against cublas+dequant baseline.
+// Q2_K + IQ2_XXS dense entries.
+// MoE _id variants of all three.
 
 #pragma once
 
@@ -175,7 +175,7 @@ int ds4_mmq_mxfp4_dense(
 //
 // where col = token * n_expert_used + slot, row in [0, M).  The caller is
 // responsible for any downstream sum-weighted-by-router-weights reduction
-// across the n_expert_used dimension (Phase 5 wires this into ds4's
+// across the n_expert_used dimension (wires this into ds4's
 // existing moe_sum_kernel).
 //
 // Layouts:

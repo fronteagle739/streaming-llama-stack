@@ -27,7 +27,7 @@ static bool ggml_is_view(const struct ggml_tensor * t) {
 }
 
 // ops that return true for this function must not use restrict pointers for their backend implementations
-// 2026-05-28: gallocr buffer-reuse toggles. The multi-ubatch LAYER-MAJOR prefill
+// gallocr buffer-reuse toggles. The multi-ubatch LAYER-MAJOR prefill
 // executor re-runs each layer's node-range slice once PER UBATCH against the buffer
 // layout that gallocr froze for a SINGLE in-order full-graph pass. A buffer freed or
 // in-place-reused mid-layer then gets clobbered before a still-needed consumer in the
@@ -42,7 +42,7 @@ static bool ggml_alloc_no_inplace(void) {
     if (v < 0) { const char * e = getenv("GGML_ALLOC_NO_INPLACE"); v = (e && e[0] && e[0] != '0') ? 1 : 0; }
     return v != 0;
 }
-// [2026-07-28 M3 wf=1 CODE-DEFAULT] Host-forced no-free-reuse, same pattern as
+// Host-forced no-free-reuse, same pattern as
 // g_ggml_protect_reuse below. The M3 wf=1 layer-major garble (L1 upper-half NaN,
 // GPU-verified 07-28: targeted Q-pin alone is INSUFFICIENT - pinning one tensor
 // just relocates the collision) is only reliably fixed by full no-free-reuse.
@@ -57,7 +57,7 @@ static bool ggml_alloc_no_free_reuse(void) {
     return v != 0 || g_ggml_force_no_free_reuse != 0;
 }
 
-// 2026-05-31 TARGETED no-free-reuse, GATED. The fix for the chunk5 free-reassign collision
+// TARGETED no-free-reuse, GATED. The fix for the chunk5 free-reassign collision
 // (above) is to NOT return the small attention-critical slots (norm/kv_cmpr/Kcur/Vcur/k_pe/
 // attn_norm) to gallocr's reuse pool during the layer-major MLA multi-ubatch prefill, so a
 // later writer cannot clobber a slot still needed across the repeated slice. This MUST be
@@ -1662,7 +1662,7 @@ static void ggml_gallocr_allocate_node(ggml_gallocr_t galloc, struct ggml_tensor
         size_t size = ggml_backend_buft_get_alloc_size(buft, node);
         hn->buffer_id = buffer_id;
         hn->addr = ggml_dyn_tallocr_alloc(alloc, size, node);
-        // 2026-05-31 ALLOC_OVERLAP_DUMP (env): print buffer_id/chunk/offset/size for the chunk5
+        // ALLOC_OVERLAP_DUMP (env): print buffer_id/chunk/offset/size for the chunk5
         // collision suspects so an offline scan finds which buffer overlaps attn_norm-1/kv_cmpr_pe-1.
         // Marker ALLOC_OVERLAP for build-grep. Fires per gallocr reserve (per chunk); the largest
         // reserve (biggest self_kq_mask_cnv) = chunk5.
@@ -1714,7 +1714,7 @@ static void ggml_gallocr_free_node(ggml_gallocr_t galloc, struct ggml_tensor * n
     remove_allocated_tensor(alloc, hn->addr, node);
 #endif
 
-    // 2026-05-31 TARGETED no-free-reuse for the layer-major repeated-slice prefill collision.
+    // TARGETED no-free-reuse for the layer-major repeated-slice prefill collision.
     // The layer-major executor re-runs each layer's node slice PER UBATCH against a layout gallocr
     // froze for a SINGLE in-order pass. At chunk5's largest n_kv layout, a freed attention-critical
     // slot (norm/kv_cmpr/Kcur/Vcur — still needed across the repeated slice) is reassigned to a later
@@ -2107,7 +2107,7 @@ static bool ggml_gallocr_needs_realloc(ggml_gallocr_t galloc, struct ggml_cgraph
         return true;
     }
 
-    // [2026-07-28 GLM-DSA L11/L3 host-AV FIX] needs_realloc validated nodes+srcs but NEVER the
+    // needs_realloc validated nodes+srcs but NEVER the
     // leafs. The layer-major repeated-slice prefill reuses the reserved plan across per-layer
     // graphs; GLM-DSA's shared-cadence DENSE layers (il=3,7,11,...) carry a DIFFERENTLY-SIZED
     // leaf (full-n_kv mask vs the sparse layers' top_k=2048 scope) at the SAME leaf slot, so the

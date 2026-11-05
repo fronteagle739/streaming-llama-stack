@@ -1144,7 +1144,7 @@ bool llama_dsv41_sweep::capture_rewind_anchor(rewind_anchor&out,std::string&erro
         out.tokens_sha256=dsv41_boundary::sha256(p->tokens.data(),p->tokens.size()*4);
         out.logits_sha256=dsv41_boundary::sha256(out.logits.data(),out.logits.size()*4);
         out.mutable_owners.resize(plan.spans.size());
-        // PAIRFIX: the append-only compressed/index owners take the cache's
+        // the append-only compressed/index owners take the cache's
         // verified owner digests (the incremental memo the session's checkpoint
         // inspection just refreshed) instead of a second full read+hash of the
         // ~1.3 GB cache; the small mutable owners are still read, copied and

@@ -602,7 +602,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             }catch(const std::exception&e){why=e.what();return false;}},error),error);
             std::fprintf(stderr,"LLAMADECODE_LOCAL_SNAPSHOT yoco_keep=%u bytes=%llu milliseconds=%.3f\n",options.yoco_keep,(unsigned long long)sent,ms(started));
         }else if(operation=="export_initial"||operation=="export_delta"){
-            // PAIRFIX wire encoding (optional, initial export only): the receiver may
+            // wire encoding (optional, initial export only): the receiver may
             // ask for the BF16-stored compressed/index owners as their BF16 bits.
             // Lossless by construction (the cache holds BF16); every value is still
             // checked, and owner hashes stay defined over the canonical F32 bytes.
@@ -618,7 +618,7 @@ void run_live_session(std::unique_ptr<llama_dsv41_sweep>&sweep,
             require(initial?(!initial_sent&&!have_remote):(have_remote&&remote.frontier.position<current.frontier.position),"Full resend or delta without an acknowledged base refused");
             std::string error;uint64_t sent=0;std::array<unsigned char,65536>page{};
             success(sweep->export_native([&](wire_payload_reader&r,std::string&why){try{
-                // PAIRFIX: the initial export verifies the header, tokens and logits
+                // the initial export verifies the header, tokens and logits
                 // first, then each owner span's SHA-256 while its bytes stream (one
                 // read instead of a full pre-hash pass plus the send). A mismatch
                 // fails this export loudly after the stream; the receiver also

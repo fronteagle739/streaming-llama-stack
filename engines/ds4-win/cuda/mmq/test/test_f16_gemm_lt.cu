@@ -1,4 +1,4 @@
-/* P3.3 proto (2026-07-07, CLOSED "cuBLAS knows best"): are the cutlass_80_*
+/* P3.3 proto (CLOSED "cuBLAS knows best"): are the cutlass_80_*
  * (Ampere-tile) f16 GEMMs on sm_121 leaving throughput on the table?  NO:
  * - The 6.25 ms cutlass_80_64x256 launch (129x/12k admission) is the
  *   ATTENTION OUTPUT projection (M=8192=8 groups x 1024 rank, K=4096,

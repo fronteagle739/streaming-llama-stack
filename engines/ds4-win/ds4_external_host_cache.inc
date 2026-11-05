@@ -75,7 +75,7 @@ static uint32_t external_host_resize(uint64_t bytes, uint64_t gate, uint64_t dow
         if (!external_host_allocate(cache,n,gate,down,0)) {fprintf(stderr,"LLAMADECODE_HOST_RESIZE_STEP reason=allocation slots=%u\n",n);continue;}
         char *p[3]={cache->gate_ptr,cache->up_ptr,cache->down_ptr};
         uint64_t sizes[3]={cache->gate_capacity,cache->up_capacity,cache->down_capacity};
-        /* RAMFIX: register the payload with CUDA first (the driver pins it, so no VirtualLock;
+        /* register the payload with CUDA first (the driver pins it, so no VirtualLock;
          * WDDM refuses to register already-locked pages). RAM hits then DMA straight from it,
          * with no CPU staging copy. Any refusal keeps the locked, staged path. */
         bool registered_all=false;

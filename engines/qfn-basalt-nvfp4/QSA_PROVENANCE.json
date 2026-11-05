@@ -7,6 +7,6 @@
   "oracle_source_bytes": 6174,
   "oracle_snapshot": "vendor/lightning-indexer.cu",
   "adapter": "qsa-indexer.cu",
-  "numerical_policy": "Basalt3xTF32 full scores, current-QFN weights/scales and byte strides; possible near-cutoff selection changes require owner full-model gates; mode1 retains current scalar arithmetic",
+  "numerical_policy": "Basalt3xTF32 full scores, current-QFN weights/scales and byte strides; possible near-cutoff selection changes require full-model qualification gates; mode1 retains current scalar arithmetic",
   "oracle_path_base": "project root"
 }

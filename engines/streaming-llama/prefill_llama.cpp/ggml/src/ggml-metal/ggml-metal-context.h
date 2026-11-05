@@ -26,7 +26,7 @@ bool ggml_metal_cpy_tensor_async(ggml_metal_t ctx_src, ggml_metal_t ctx_dst, con
 enum ggml_status ggml_metal_graph_compute (ggml_metal_t ctx, struct ggml_cgraph * gf);
 void             ggml_metal_graph_optimize(ggml_metal_t ctx, struct ggml_cgraph * gf);
 
-// Path A Phase D.2 (2026-04-20) — segmented graph_compute with per-segment
+// Path A .2 — segmented graph_compute with per-segment
 // event gates. Serially encodes each segment's node range into its own
 // cmd_buf, optionally preceded by encodeWaitForEvent(wait_event) and
 // followed by encodeSignalEvent(signal_event). All segments are committed
@@ -60,7 +60,7 @@ void ggml_metal_event_wait  (ggml_metal_t ctx, ggml_metal_event_t ev);
 
 ggml_metal_event_t ggml_metal_get_ev_cpy(ggml_metal_t ctx);
 
-// Accessor for the underlying device handle — used by Phase 3 public
+// Accessor for the underlying device handle — used by public
 // ggml_backend_metal_event_init wrapper.
 ggml_metal_device_t ggml_metal_get_device(ggml_metal_t ctx);
 

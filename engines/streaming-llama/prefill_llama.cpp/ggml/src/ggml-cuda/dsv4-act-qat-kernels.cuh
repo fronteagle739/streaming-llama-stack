@@ -90,7 +90,7 @@ static __global__ void dsv4_act_qat_kernel(
         const int64_t n_q,
         const int64_t nrow) {
 
-    // GRID-Y OVERFLOW FIX 2026-08-28. This was `row = blockIdx.y` with the launcher putting the
+    // GRID-Y OVERFLOW FIX . This was `row = blockIdx.y` with the launcher putting the
     // full row count in gridDim.y, which CUDA caps at 65535. The DSV4 indexer has 64 heads, so
     // nrow = 64 * n_tokens and a 1024-token ubatch is 65536 rows -- over the cap by ONE. Every
     // prefill with ubatch >= 1024 therefore died in cudaLaunchKernel with "invalid argument",

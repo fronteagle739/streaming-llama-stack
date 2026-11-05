@@ -1,7 +1,7 @@
 #pragma once
 // LLAMADECODE_ENGRAM_EARLY=auto (default): start the early Engram row load
 // only when its predicted wall fits the gap before layer 1 needs table 0.
-// Measured (bin-eg, 2026-10-24): the loader sustains ~100K random 4 KiB reads/s
+// Measured (bin-eg, ): the loader sustains ~100K random 4 KiB reads/s
 // while weights stream. Early wins when the whole load fits the gap (16K cold:
 // 488,608 requests, 4.99 s, done before layer 0 ended, prefill -5 s) and loses
 // when it does not (43K: 1.42M requests, 13.7 s, +3 s weight wait).

@@ -5523,7 +5523,7 @@ static uint32_t ds4_streaming_cache_experts_for_byte_budget(
  * reads the cached map. K=M=0 deliberately leaves expert_tiers NULL so the
  * same binary provides a byte-for-byte legacy-policy control. */
 static uint8_t  g_cuda_stream_expert_tiers[DS4_MAX_LAYER][DS4_MAX_EXPERT];
-/* [2026-08-18] PHASE SWITCH (task #3: "prefill has different settings optimised for prefill").
+/* PREFILL/DECODE PHASE SWITCH.
  * MEASURED on the 165 GB build, whose same-setting repeats agree to 0.2% so these are real:
  *   K=0  decode 4.67  prefill 132.54  served 43.0%
  *   K=4  decode 4.32  prefill  92.78  served 80.0%
@@ -5541,13 +5541,13 @@ static int g_cuda_stream_phase_decode = 0;
 static bool ds4_prefill_edge_vram_enabled(void) {
     static int cached = -1;
     if (cached < 0) {
-        /* [2026-08-18] DEFAULT ON. Measured on DSV4-Flash 90 GB / RTX 5090, three effects:
+        /* DEFAULT ON. Measured on DSV4-Flash 90 GB / RTX 5090, three effects:
          *
          *  1. Prefill does not consume expert residency (523 t/s at a 16 GB cache vs 516-551 at 28 GB),
          *     so cache admissions during prefill are largely wasted work. Measured **+37.7%** prefill
          *     (210.40 -> 289.76 t/s, three alternating pairs, OFF spread 1.9%).
          *
-         *     [2026-08-18 CORRECTED by the admissions counter] This does NOT "skip population". With the
+         *     This does NOT "skip population". With the
          *     gate ON the 90 GB build still performs **8,927** prefill admissions; the gate cuts them
          *     from 14,766, i.e. **-39.5%, not to zero**. An earlier version of this comment claimed
          *     prevention, inferred from "prefill edge evicted expert cache 0.00 GiB" - but that line
@@ -15170,7 +15170,7 @@ static uint32_t ds4_prefill_cap_for_prompt(int prompt_len,
                 cap = (uint32_t)v;
             }
         } else if (prompt_len > 4096) {
-            /* [2026-08-18] The old 16128 guard is stale.  A 31.6K-token prompt
+            /* The old 16128 guard is stale.  A 31.6K-token prompt
              * completed both 16384-token chunks, including non-zero pos0, after
              * the gridDim.y loop fixes; neither the routed-MoE launch nor the
              * layer-38 attention failure remains.  The later failure was VRAM:
@@ -15191,7 +15191,7 @@ static uint32_t ds4_prefill_cap_for_prompt(int prompt_len,
         }
     }
 
-    /* [2026-08-18] KEEP EVERY CHUNK BOUNDARY ON A COMPRESSION-GROUP BOUNDARY.
+    /* KEEP EVERY CHUNK BOUNDARY ON A COMPRESSION-GROUP BOUNDARY.
      *
      * The compressor and the indexer batch a prefill chunk only when BOTH `pos0 % ratio == 0` and the
      * chunk length covers whole compression groups; otherwise they walk the chunk token by token on
@@ -15211,8 +15211,7 @@ static uint32_t ds4_prefill_cap_for_prompt(int prompt_len,
     if (cap == 0) cap = 1;
     if (cap > (uint32_t)prompt_len) cap = (uint32_t)prompt_len;
 
-    /* ROUND ONLY WHEN WE ARE ALREADY CHUNKING. [2026-08-18, and this was a REGRESSION first.]
-     *
+    /* ROUND ONLY WHEN WE ARE ALREADY CHUNKING. *
      * The first version of this rounded before the clamp to prompt_len, so a prompt that fitted in ONE
      * chunk got its cap rounded DOWN below its own length and was split in two: 3643 tokens -> cap 3584
      * -> chunks 3584 + 59. That is a whole extra layer-major pass with its own expert sweep, to save at
@@ -19201,7 +19200,7 @@ static bool metal_graph_alloc_prefill_workspace_once(
          * allocation also passed a 5 GiB floor, then failed two 764 MiB layer-0
          * temporaries.  Preserve the streaming cache's measured-safe 8 GiB
          * execution reserve before accepting a scratch size. */
-        /* [2026-08-18] THIS FLOOR WAS GUARDING A CACHE THAT IS BEING EVICTED.
+        /* THIS FLOOR WAS GUARDING A CACHE THAT IS BEING EVICTED.
          *
          * The 8 GiB above is the streaming expert cache's execution reserve. But this whole block runs
          * only when `ds4_prefill_edge_vram_enabled()` — the path that EVICTS that cache for the duration
@@ -19228,7 +19227,7 @@ static bool metal_graph_alloc_prefill_workspace_once(
         for (int t = 0; t < DS4_MAX_GPUS; t++) {
             if (!used_tier[t]) continue;
             const uint64_t free_b = ds4_gpu_tier_free_vram(t);
-            /* [2026-08-18] FAIL CLOSED ON A ZERO READING. This used to be
+            /* FAIL CLOSED ON A ZERO READING. This used to be
              * `free_b != 0 && free_b < execution_floor`, so a tier reporting ZERO free VRAM skipped the
              * check entirely and the workspace was accepted. Observed in the wild on a 31.6k-token run:
              *     ds4: prefill workspace cap=28909 accepted with 0.00 GiB
@@ -19236,7 +19235,7 @@ static bool metal_graph_alloc_prefill_workspace_once(
              * line that reads like a pass. A margin whose sentinel value means "skip the safety check" is
              * worse than no margin, because the log looks protected.
              *
-             * [2026-08-19] NOTE THE ORDERING, because the first message here got it wrong and cost a
+             * NOTE THE ORDERING, because the first message here got it wrong and cost a
              * reader (me) an investigation. free_b is sampled AFTER the pc-sized workspace tensors are
              * allocated above (last alloc ~L16207) - that is the whole point, the question being asked is
              * "does this workspace leave execution headroom?". So zero here normally means the WORKSPACE
@@ -21297,7 +21296,7 @@ static bool metal_graph_install_model_spans(
                 label ? label : "requested");
     }
     else {
-        /* [2026-08-18] ATTRIBUTE THE SPAN INSTALLS. The FIRST decode token costs 5.1-11.4 s (65-96x a
+        /* ATTRIBUTE THE SPAN INSTALLS. The FIRST decode token costs 5.1-11.4 s (65-96x a
          * normal token, 8 of 8 runs, 20-26% of the whole decode wall), ALL of it host-side encode, and
          * its window holds 45 "loading model tensors into device cache" sessions - one per install,
          * since each install releases the previous ranges and resets the progress printer.
@@ -25720,7 +25719,7 @@ static bool metal_graph_hc_expand_fusion_eligible(const ds4_gpu_graph *g,
 #endif
 }
 
-/* [2026-08-18] The two "flush" barriers in the selected/shared overlap path are METAL semantics.
+/* The two "flush" barriers in the selected/shared overlap path are METAL semantics.
  *
  * On Metal a flush is how encoded work reaches the GPU at all, so the overlap path flushes twice per
  * expert layer: once so the shared-expert kernels start while the async selected-id load runs, and
@@ -26442,7 +26441,7 @@ static bool metal_graph_encode_decode_layer_phase(
     if (qkv_rms_fused && ok && !kv_rope_fused) {
         metal_graph_debug_dump_tensor("KVnorm", metal_graph_kv(g), DS4_N_HEAD_DIM, il, pos);
     }
-    /* Phase B head slice: under the real TP split this rank computes only
+    /* head slice: under the real TP split this rank computes only
      * its heads [tp_head0, tp_head0 + tp_heads) end to end — q_b rows, the
      * per-head norm/rope, the attention core and its owned output groups.
      * q and heads hold the owned half compactly at the buffer base; the
@@ -32558,7 +32557,7 @@ static const int32_t *metal_graph_visual_tokens_for_batch(
     return NULL;
 }
 
-/* [2026-08-18] RAGGED-PREFIX COMPRESSOR/INDEXER PREFILL, default ON on CUDA.
+/* RAGGED-PREFIX COMPRESSOR/INDEXER PREFILL, default ON on CUDA.
  *
  * The compressor and the indexer each batch a prefill chunk only when the chunk length divides the
  * layer's compression ratio; otherwise they fall back to a HOST loop that launches a one-row kernel
@@ -33547,7 +33546,7 @@ static bool metal_graph_encode_layer_attention_batch(
                                                      DS4_N_INDEXER_HEAD,
                                                      metal_graph_batch_attn_norm(g),
                                                      n_tokens) != 0;
-            /* [DIAG 2026-08-16] Layer 2 attention fails right after indexer_setup for any chunk
+            /* Layer 2 attention fails right after indexer_setup for any chunk
              * above 8192 (10240/10880/10922 all die here; 4096/8192 pass). Three arithmetic theories
              * for the boundary have already been refuted - gridDim.y headroom, divisible-by-128, and
              * topk_prefill_needed - so print the state instead of deriving a fourth. */
@@ -35510,7 +35509,7 @@ static bool metal_graph_eval_token_raw_swa_streaming(
         return false;
     }
 
-    /* WHOLE-FUNCTION TIMER, UNCONDITIONAL.  MEASURED 2026-08-18: timing this call FROM THE CALLER gives
+    /* WHOLE-FUNCTION TIMER, UNCONDITIONAL.  timing this call FROM THE CALLER gives
      * 101.98 ms (profiler off) / 105.20 ms (profiler on), while the profiler's own t0..t_read total is
      * 84.05 ms.  So ~18-21 ms of REAL work per call happens inside this function and outside the region
      * the profiler watches - and the difference is NOT the profiler's own cost, which a same-binary
@@ -36133,7 +36132,7 @@ static bool metal_graph_seed_streaming_expert_cache_from_hotlist(
         const ds4_model   *model,
         const ds4_weights *weights) {
     if (!metal_graph_streaming_expert_hotlist_enabled(g)) return true;
-    /* [DIAG 2026-08-16, temporary] The hotlist seed costs 51% prefill and buys 10% decode. It has
+    /* The hotlist seed costs 51% prefill and buys 10% decode. It has
      * three call sites; which of them runs BEFORE prefill decides whether the fix is "move the
      * seed to the prefill->decode transition" or something else. Print a sequence number and let
      * log ordering answer it, rather than reasoning about the call graph. */
@@ -37110,7 +37109,7 @@ static bool metal_graph_seed_dspark_stage_target_cache(
         uint32_t                  pos0,
         uint32_t                  n_tokens,
         bool                      commands_open) {
-    {   /* [DIAG 2026-08-16, temporary] stage_caches=0 in the seed-body trace, but every
+    {   /* stage_caches=0 in the seed-body trace, but every
          * n_tokens-dependent term here passes on paper and the rest are static tensor checks that
          * would also fail at 15 tokens (where DSpark works). Separate guard from body so the trace
          * says which half fails, instead of another paper derivation. */
@@ -37158,7 +37157,7 @@ static bool metal_graph_seed_dspark_stage_target_cache(
                             0,
                             (uint64_t)n_tokens * DS4_N_EMBD * sizeof(float));
     bool ok = hc_mix_view && hc_split_view && attn_cur_view;
-    /* [DIAG 2026-08-16, temporary] stage 0 succeeds and stage 1 fails, yet none of these views
+    /* stage 0 succeeds and stage 1 fails, yet none of these views
      * depend on `stage` - so print which step diverges rather than reasoning about it. */
     static int sc_trace_v = -1;  /* PERF: hot path - ds4.c is C, so lazy-init */
     if (sc_trace_v < 0) sc_trace_v = getenv("DS4_DSPARK_SEED_TRACE") != NULL;
@@ -37243,7 +37242,7 @@ static bool metal_graph_seed_dspark_stage_target_cache(
     }
     /* DSpark target features already have stage-0 main_proj/main_norm. The reference applies wkv directly; support HC/attn_norm is for drafts. */
     if (sc_trace) {
-        /* [DIAG 2026-08-16] attn_kv resolves at stage 0 (offset 5,440) and fails at stage 1
+        /* attn_kv resolves at stage 0 (offset 5,440) and fails at stage 1
          * (2,008,544,064), while hc_attn_fn at 3,962,015,904 succeeds in the SAME stage - so it is
          * not the address. Print attn_kv's metadata for both stages: same declared DENSE layout
          * behaving differently means the concrete type or dims differ. */
@@ -37292,7 +37291,7 @@ static bool metal_graph_seed_dspark_stage_target_cache(
                                                        n_tokens,
                                                        DS4_N_HEAD_DIM,
                                                        DS4_N_ROT) != 0;
-    /* [DIAG 2026-08-16] g->dspark_raw_cache[stage] is the ONLY stage-dependent input in this body,
+    /* g->dspark_raw_cache[stage] is the ONLY stage-dependent input in this body,
      * which matches the symptom exactly (stage 0 ok, stage 1 fails). Print it before the call. */
     if (sc_trace) {
         fprintf(stderr,
@@ -37326,7 +37325,7 @@ static bool metal_graph_seed_dspark_initial_cache_from_prefill(
         uint32_t                  n_tokens,
         uint32_t                 *seeded_rows) {
     if (seeded_rows) *seeded_rows = 0;
-    /* [2026-08-16 FIX] Seed from the LAST dspark_cache_cap tokens instead of refusing outright.
+    /* Seed from the LAST dspark_cache_cap tokens instead of refusing outright.
      *
      * This guard used to reject any prefill with n_tokens > dspark_cache_cap. For DSV4-Flash that
      * cap is the SWA window: DS4_SHAPE_FLASH.n_swa = 128 -> raw_cap = min(128, ctx) = 128 ->
@@ -37343,7 +37342,7 @@ static bool metal_graph_seed_dspark_initial_cache_from_prefill(
         batch_start += n_tokens - g->dspark_cache_cap;
         n_tokens     = g->dspark_cache_cap;
     }
-    {   /* [DIAG 2026-08-16, temporary] The windowed clamp above made the size term pass, yet the
+    {   /* The windowed clamp above made the size term pass, yet the
          * seed still fails and DSpark still drafts nothing above 128 tokens. Print each term
          * separately so the actual blocker is named rather than guessed. */
         static int dn = 0;
@@ -37505,7 +37504,7 @@ static bool metal_graph_eval_dspark_stage_block(
     const uint32_t feature_pos = align_rocm ? pos - 1u : pos;
     const uint32_t draft = dw->block_size;
     const uint32_t rows = draft + 1u;
-    {   /* [DIAG 2026-08-16, temporary] DSpark proposes ZERO drafts at every prompt >= 1024 tokens
+    {   /* DSpark proposes ZERO drafts at every prompt >= 1024 tokens
          * (465 at ~15 tokens), so the draft path is disabled before quality matters. This guard is
          * the leading suspect. Print which term trips and the values behind it. */
         static int dn = 0;
@@ -41554,7 +41553,7 @@ static uint32_t metal_graph_raw_cap_for_context(int ctx_size, uint32_t prefill_c
     if (wanted > (uint32_t)ctx_size) wanted = (uint32_t)ctx_size;
     if (wanted == 0) wanted = 1;
     wanted = align_up(wanted, 256u);
-    /* [2026-08-16] The old `if (wanted > 8192u) wanted = 8192u;` here is what capped the prefill
+    /* The old `if (wanted > 8192u) wanted = 8192u;` here is what capped the prefill
      * chunk at 8192 for DSV4-Flash.
      *
      * The indexed-attention entry validates `raw_cap < n_raw` and returns 0
@@ -41647,7 +41646,7 @@ static uint32_t glm53_graph_resume_prefill_min_tokens(void) {
 #define DS4_GLM_METAL_LONG_CONTEXT_THRESHOLD 65536u
 #define DS4_GLM_METAL_LONG_CONTEXT_FULL_ATTN_CONTEXT 4096u
 #define DS4_GLM_METAL_INDEXED_PREFILL_CHUNK_TOKENS 4096u
-/* [2026-08-16] 256 -> 512 MiB. This scratch budget, not any grid or capacity check, is what capped the
+/* 256 -> 512 MiB. This scratch budget, not any grid or capacity check, is what capped the
  * prefill chunk at 8192.
  *
  * glm_graph_indexed_prefill_score_tokens() derives the usable score-row count as
@@ -46141,7 +46140,7 @@ static bool ds41_engram_prefetch_start(ds41_engram_prefetch *p, ds41_gpu_graph *
     return true;
 }
 
-/* Wave 4 lever 1.  Join and forget any carried delivery.  Called whenever the
+/* Join and forget any carried delivery.  Called whenever the
  * graph's history is reset or the graph is freed, and whenever a sweep's own
  * hashed ids do not match the ones the carried reader used: the reader owns
  * part of the prefetch slab, so it must be joined before anything else writes
@@ -60097,7 +60096,7 @@ static bool glm_graph_prefill_range(
                 if (token_prefill_max != 0 && chunk > token_prefill_max) {
                     chunk = token_prefill_max;
                 }
-                /* [2026-08-18] WHICH CLAMP ACTUALLY FIRES. Six rounds of static tracing produced six
+                /* WHICH CLAMP ACTUALLY FIRES. Six rounds of static tracing produced six
                  * wrong answers for why an 18,137-token prompt never runs in one chunk (the cap is
                  * pinned at 16128 across every ctx, every --prefill-chunk, and every env override
                  * tried). Reading call graphs has failed repeatedly; printing the number does not.
@@ -64336,7 +64335,7 @@ static int generate_metal_graph_raw_swa(
     if (ok) ds4_streaming_set_phase_decode(1);
 #endif
 
-    /* EAGER STATIC DECODE MAP.  MEASURED 2026-08-18: the FIRST decode token costs 5.5-7.8 s - 65-96x a
+    /* EAGER STATIC DECODE MAP.  the FIRST decode token costs 5.5-7.8 s - 65-96x a
      * normal token, reproduced in 5 of 5 profiled runs, and 20-26% of the entire decode wall of a
      * 256-token run.  All of it is host-side encode (7792 of 7793 ms; the GPU wait is 0.85 ms), and the
      * log window shows 45 "loading model tensors into device cache" sessions - one per layer plus two.
@@ -64366,7 +64365,7 @@ static int generate_metal_graph_raw_swa(
                     "ds4: eager static decode map built in %.2f s (moved out of the first decode token)\n",
                     now_sec() - t_map0);
         } else {
-            /* [2026-08-18] SAY SO. The first version of this was a SILENT fallback, justified in a comment
+            /* SAY SO. The first version of this was a SILENT fallback, justified in a comment
              * as "acceptable because the fallback is the old code path".  It is not acceptable: the A/B
              * then showed the treatment arm behaving exactly like the control with no explanation, and
              * "did it fail or was it skipped?" could not be answered from the log at all.  A silent
@@ -64408,7 +64407,7 @@ static int generate_metal_graph_raw_swa(
     int n_generated = 0;
     int n_decode_eval = 0;
     const double t_decode0 = now_sec();
-    /* LOOP ACCOUNTING.  MEASURED 2026-08-18: DS4_METAL_GRAPH_TOKEN_PROFILE accounts for only 80.1 ms of a
+    /* LOOP ACCOUNTING.  DS4_METAL_GRAPH_TOKEN_PROFILE accounts for only 80.1 ms of a
      * 110.3 ms decode token.  The missing 30.2 ms - 27.4% of every token, larger than anything the overlap
      * work chased - is spent in THIS loop, outside the forward pass, and nothing had ever measured it.
      * The candidates are all right here: a host-side argmax over the whole 129k-entry vocabulary, the
@@ -64421,7 +64420,7 @@ static int generate_metal_graph_raw_swa(
      * per-token sync profiler that degrades a run sequence -55%. */
     double t_loop_argmax = 0.0, t_loop_stop = 0.0, t_loop_emit = 0.0, t_loop_eval = 0.0;
     uint64_t loop_iters = 0, eval_calls = 0;
-    /* [2026-08-18] STEADY-STATE DECODE READOUT, always on.
+    /* STEADY-STATE DECODE READOUT, always on.
      *
      * The single "generation: N t/s" figure averages in the FIRST decode token, which on this engine
      * costs 5.1-11.4 SECONDS against a ~101 ms warm token - 65-96x, and 20-26% of the wall time of a
@@ -64432,7 +64431,7 @@ static int generate_metal_graph_raw_swa(
      * The split is taken when the FIRST forward pass returns, so the reported first-token figure
      * includes prompt-tail setup and the steady-state figure covers only tokens 2..N.
      *
-     * [2026-08-18, later] QUARTER RATES, because the rate CHANGES WITHIN A RUN and one average hides it.
+     * QUARTER RATES, because the rate CHANGES WITHIN A RUN and one average hides it.
      * Measured across runs: 8.23 t/s over 127 tokens vs 7.03 over 511, same configuration.
      *
      * I twice explained that decline as "each token attends over a longer prefix". THAT EXPLANATION IS
@@ -64531,7 +64530,7 @@ static int generate_metal_graph_raw_swa(
             (steady_toks > 0 && steady_s > 0.0) ? (double)steady_toks / steady_s : 0.0,
             steady_toks);
 
-    /* [2026-08-18] Dump the route-hotness virtual cache HERE, at end of generation.
+    /* Dump the route-hotness virtual cache HERE, at end of generation.
      *
      * The counters are reset at the START of a prefill, and the reset also dumps - which prints
      * nothing on the first pass because no selections have happened yet. A single-shot CLI run
@@ -70705,7 +70704,7 @@ int ds4_engine_generate_argmax(
             const double t_decode0 = now_sec();
             const bool greedy_top1 = metal_graph_tp_env_flag("DS4_CUDA_GREEDY_TOP1", true);
             int token = ds4_session_argmax(s);
-            /* LOOP ACCOUNTING.  MEASURED 2026-08-18: the per-token graph profiler
+            /* LOOP ACCOUNTING.  the per-token graph profiler
              * (DS4_METAL_GRAPH_TOKEN_PROFILE) accounts for only 80.1 ms of a 110.3 ms decode token.
              * The missing 30.2 ms - 27.4% of every token, larger than anything the overlap work chased -
              * is spent OUTSIDE the forward pass, and nothing has ever measured it.  These four counters
@@ -74686,7 +74685,7 @@ static bool ds4_engine_preload_ram_streaming_cache(ds4_engine *e) {
                                                        cache_budget);
     }
 
-    /* [2026-08-18] SSD-PREFETCH EXCLUSION BAND - the user's design.
+    /* SSD-PREFETCH EXCLUSION BAND - the user's design.
      * The hottest experts are DELIBERATELY excluded from BOTH caches so they are prefetched from SSD
      * every token.  They are the PREDICTABLE ones, so a prefetch of them is high-yield and needs no
      * router output at all; the scarce cache space then holds the experts that CANNOT be predicted.
@@ -75461,7 +75460,7 @@ static int engine_compute_cuda_ep_placement(
     return 0;
 }
 
-/* Phase A: classify multi-tier on a freshly-opened engine (model loaded,
+/* classify multi-tier on a freshly-opened engine (model loaded,
  * weights bound). Pure CPU — no GPU init required. Sets e->multi_tier,
  * e->n_placement_entries, e->placement[], and e->gpu_cfg. Returns 0 on
  * success. NULL config is a no-op. */
@@ -75859,7 +75858,7 @@ static void engine_print_layout(const ds4_engine *e) {
  * head tier itself. The strict multi-tier weight cache is offset-keyed, so
  * support tensors are registered with a disjoint offset bias. */
 static int engine_install_dspark_support_cache(ds4_engine *e) {
-    /* [2026-08-16 FIX] `!e->multi_tier` removed from this guard.
+    /* `!e->multi_tier` removed from this guard.
      *
      * The multi_tier gate existed TWICE - at the only call site (:58474, inside `if (e->multi_tier)`)
      * and here. On a single GPU this function returned immediately, so
@@ -75908,7 +75907,7 @@ static int engine_install_dspark_support_cache(ds4_engine *e) {
     e->dspark_exec_tier = exec_tier;
 
     const uint64_t bias = (e->model.size + 4095ull) & ~4095ull;
-    /* [DIAG 2026-08-16] Does this run at all, and with which pointer? Three principled edits in a
+    /* Does this run at all, and with which pointer? Three principled edits in a
      * row changed nothing, so prove the precondition before touching code again. */
     if (getenv("DS4_DSPARK_SEED_TRACE")) {
         fprintf(stderr, "ds4: DIAG support_reg map=%p size=%llu bias=%llu\n",
@@ -76643,7 +76642,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
     }
     e->dspark_confidence_threshold_set =
         opt->dspark_confidence_threshold_set;
-    /* [2026-08-16] DS4_DSPARK_CONFIDENCE_THRESHOLD - env override, because nothing in this tree
+    /* DS4_DSPARK_CONFIDENCE_THRESHOLD - env override, because nothing in this tree
      * parses a CLI flag for it (dspark_confidence_threshold_set has exactly one reader and no
      * writer), so the CUDA default of 0.7 was unreachable for tuning.
      *
@@ -77300,7 +77299,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
     }
     if (opt->mtp_path && opt->mtp_path[0] &&
         opt->distributed.role == DS4_DISTRIBUTED_NONE) {
-        /* [2026-08-16] The blanket refusal is now opt-in-overridable via DS4_ALLOW_MTP_STREAMING=1.
+        /* The blanket refusal is now opt-in-overridable via DS4_ALLOW_MTP_STREAMING=1.
          * Rationale: the fd-swap machinery this gate presumably guarded ALREADY EXISTS -- see
          * ds4_gpu_set_model_fd_for_map() called for the main model, then the MTP model, then switched
          * back -- and the DirectStorage layer tracks file identity specifically so an MTP fd swap is
@@ -77504,7 +77503,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
         ds4_gpu_set_quality(e->quality);
         ds4_gpu_set_glm_model(DS4_MODEL_FAMILY == DS4_MODEL_FAMILY_GLM_DSA);
         ds4_gpu_set_ssd_streaming(e->ssd_streaming);
-        /* [2026-08-16 FIX] Register the DSpark support map on the SINGLE-TIER path too.
+        /* Register the DSpark support map on the SINGLE-TIER path too.
          *
          * engine_install_dspark_support_cache() is the only caller of
          * ds4_gpu_register_support_map(), and it lived solely inside the `if (e->multi_tier)` branch
@@ -77522,7 +77521,7 @@ static int ds4_engine_open_internal(ds4_engine **out,
          *
          * Registration is tier-agnostic - it records base/size/bias - so calling it here is safe.
          * Only meaningful when a DSpark support model is actually loaded. */
-        /* [DIAG 2026-08-16] model_open(&e->mtp_model) is at :58396, well before this point, so the
+        /* model_open(&e->mtp_model) is at :58396, well before this point, so the
          * guard "should" hold - but the registration marker never printed. Print the guard's actual
          * inputs instead of reasoning about ordering again. */
         if (e->support_kind == DS4_SUPPORT_DSPARK && e->dspark && e->mtp_model.map &&
@@ -81725,7 +81724,7 @@ int ds4_session_sync(ds4_session *s, const ds4_tokens *prompt, char *err, size_t
             return 1;
         }
     }
-    /* [2026-08-18] OWN THE PREFILL/DECODE PHASE FLAG ON THIS PATH TOO.
+    /* OWN THE PREFILL/DECODE PHASE FLAG ON THIS PATH TOO.
      *
      * ds4_streaming_set_phase_decode() had exactly ONE caller - the one-shot CLI, which sets it to 1
      * after prefill and never clears it.  ds4-server and every multi-turn session go through
@@ -84534,7 +84533,7 @@ static int ds4_session_eval_probe_tp(ds4_session *s, int token, bool probe_mtp,
     return rc;
 }
 
-/* DS4COMBO expert-cache restore (owner requirement 2026-10-23): a relaunched decoder must not
+/* DS4COMBO expert-cache restore: a relaunched decoder must not
  * start cold. The exporting process writes its resident VRAM/RAM expert set in LRU order
  * (oldest first); the relaunched process loads that exact list at startup and seeds it through
  * the existing hotlist seed path (ds4_gpu_stream_expert_cache_seed_experts / the RAM preload

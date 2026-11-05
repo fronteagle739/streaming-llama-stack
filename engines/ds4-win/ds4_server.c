@@ -71,7 +71,7 @@ static void stop_signal_handler(int sig) {
 }
 
 #if defined(_WIN32) && defined(SIGBREAK)
-/* Ctrl-Break (the owner's no-force-kill escalation step, sent by the DS4COMBO
+/* Ctrl-Break (cooperative shutdown escalation, sent by the DS4COMBO
  * harness and Studio): request the same orderly stop as SIGINT, but never _exit,
  * however many arrive, so a process that may hold VRAM/DirectStorage always leaves
  * through its normal teardown. The CRT resets the disposition before each call. */
@@ -12649,7 +12649,7 @@ static void server_peer_payload_source_release(void *opaque, FILE *file) {
 }
 
 /* The listener owns one dedicated session rather than borrowing a client
- * slot.  Phase 3 transfers one complete artifact; peer session reuse and
+ * slot.  transfers one complete artifact; peer session reuse and
  * cancellation deliberately wait for their later protocol frames. */
 static int server_peer_prefill_callback(void *opaque, const int *tokens,
                                         uint32_t n_tokens,
@@ -12876,7 +12876,7 @@ static int server_peer_decode_restore_checkpoint_locked(
      * Checkpoints are written at `ds4_session_pos()` -- the PROMPT length of the turn that created
      * them (server_peer_decode_checkpoint_locked). This lookup used to demand equality with `common`,
      * the divergence point of the NEW turn. Those are different quantities and rarely coincide, so
-     * ordinary second turns were refused outright: measured 2026-08-24, boundaries 2, 9 and 15 against
+     * ordinary second turns were refused outright: boundaries 2, 9 and 15 against
      * prompts of 16, 375 and 468 tokens. Every session in every run came back source=NEW because of it.
      *
      * The correct rule is ordinary prefix-cache semantics: restore the furthest checkpoint that is
@@ -12902,9 +12902,9 @@ static int server_peer_decode_restore_checkpoint_locked(
     /* BOUND THE WORK THIS MACHINE TAKES ON.
      *
      * Whatever is not covered by the checkpoint gets evaluated HERE, on the decode peer. That is
-     * what SESSION_RESUME is for and it is fine for a short new turn, but the owner's rule is "long
-     * prefill on rtx, short prompts only on mac". So refuse a large remainder and let the owner's
-     * retry re-open the session, which prefills on ITS machine and ships the KV.
+     * what SESSION_RESUME is for and it is fine for a short new turn. Large remainders
+     * must return to the prefill endpoint: refuse them so its retry reopens the session,
+     * prefills locally and ships the KV.
      */
     {
         const char *env = getenv("DS4_PEER_RESUME_MAX_EVAL_TOKENS");
@@ -13094,16 +13094,9 @@ static int server_peer_decode_session_resume(void *opaque, uint64_t session_id,
                                                           err, errlen);
         /* DELIBERATELY NO PEER-SIDE FALLBACK HERE.
          *
-         * A previous version of this recovered by re-prefilling the whole prompt on THIS machine.
-         * It worked, and it was wrong: this is the DECODE peer, and measured 2026-08-24 it made the
-         * Mac prefill 4561 tokens of a 4561-token prompt. The owner's topology is "long prefill on
-         * rtx, short prompts only on mac", so recovering here moves the work to precisely the
-         * machine that must not do it.
-         *
-         * Worse, succeeding here HIDES the failure from the owner, which is the only party that can
-         * recover correctly: it drops the session and re-opens it with SESSION_NEW, prefilling
-         * locally and shipping the KV. So this path must keep returning non-zero -- the owner's
-         * retry (see the call site of server_peer_decode_begin) is the fix.
+         * This endpoint decodes; it must not recover by prefilling the whole prompt.
+         * Return non-zero so the prefill endpoint can drop the session and reopen it with
+         * SESSION_NEW, prefill locally and ship the KV. See server_peer_decode_begin.
          */
     } else if (rc == 0) {
         rc = ds4_session_prepare_prefill(entry->session, prompt.len, err, errlen);
@@ -14699,10 +14692,8 @@ static void generate_job_inner(server *s, server_slot *slot, job *j) {
              * ships the payload. In the primary topology (this machine prefills, the Mac decodes)
              * only the second keeps the work where it belongs.
              *
-             * Measured 2026-08-24: recovering from a failed resume peer-side made the Mac prefill
-             * 4561 tokens of a 4561-token prompt -- correct output, wrong machine, and the owner's
-             * requirement is "long prefill on rtx, short prompts only on mac". Dropping the session
-             * and re-opening it costs one local prefill and keeps that promise.
+             * Recover from a failed resume by dropping and reopening the session. This costs
+             * one local prefill and keeps long-prompt work on the prefill endpoint.
              *
              * Bounded to a single retry: peer_decode_session_id is cleared first, so the next call
              * takes the SESSION_NEW branch and cannot come back here.
@@ -16863,7 +16854,7 @@ static void apply_prefill_mode(const char *mode) {
         exit(2);
     }
     if (set == accurate) {
-        /* Measured 2026-10-24 (DS4COMBO layer-ab20-modes, modes16k-accurate): the switch-based
+        /* (DS4COMBO layer-ab20-modes, modes16k-accurate): the switch-based
          * accurate class lands FURTHER from the token-major accurate reference than ultra
          * (mean KL 0.0101 vs 0.0071), and its F32 dense cache exceeds the host budget at
          * decode (crash at the pinned host-tier allocation). Refuse until llama's accurate

@@ -9833,7 +9833,7 @@ int ds4_gpu_tp_init(uint32_t rank,
         (volatile uint32_t *)((uint8_t *)ds4_gpu_tensor_contents(slab) + gpu_flags_off) : NULL;
     /* Flag arrival is the default: the slab-word publish detects in ~1-3us
      * where signaledValue polling costs 10-20, worth +2.3 t/s on the pair
-     * (A/B 2026-07-06, byte-identical output).  DS4_TP_EVENT_GATES falls
+     * (A/B byte-identical output).  DS4_TP_EVENT_GATES falls
      * back to the shared-event arrival path. */
     g_tp_flag_gates = g_tp_gpu_flags != NULL && getenv("DS4_TP_EVENT_GATES") == NULL;
     g_tp_gpu_event = [g_device newSharedEvent];

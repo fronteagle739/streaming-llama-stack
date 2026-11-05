@@ -123,7 +123,7 @@ def command(row, session, sequence, mode=3, prefill_max=MAX_PREFILL, model_sha25
              'perfexp_kv_samples': ['base', 'path']}
     require(type(op) is str and op in extra, 'Unknown session operation')
     owned_vision = op=='prefill' and 'vision_spans_file' in row
-    # PAIRFIX: optional initial-export wire encoding (BF16 bits of the BF16-stored owners).
+    # optional initial-export wire encoding (BF16 bits of the BF16-stored owners).
     encoded = op=='export_initial' and 'wire_encoding' in row
     if encoded:
         require(row['wire_encoding'] == 'bf16-compressed-index-v1', 'Unknown native wire encoding')

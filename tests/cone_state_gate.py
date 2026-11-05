@@ -1,6 +1,6 @@
 """GPU gate: same exact-cone prompt in local mode1 and negotiated mode3/v2.
 
-Run only in the owner's exclusive guarded GPU window. Reuse the actual WebUI
+Run only in an exclusive guarded GPU window. Reuse the actual WebUI
 paired session's initial.tokens.le32. Complete export/import/ACK and browser
 recall are a separate live gate; this compares every common cache owner and
 full-vocabulary teacher-forced rows from the two producer configurations.

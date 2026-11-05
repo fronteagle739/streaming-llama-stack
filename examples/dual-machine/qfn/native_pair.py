@@ -196,7 +196,7 @@ else:
     if a.test_mtp_trace_rows or a.test_features or a.test_peer_failure:mac+=['--test-trace-rows',str(max(a.test_mtp_trace_rows,1))]
     if a.test_peer_failure:rtx+=['--test-peer-restart-delay-ms','4000']
     if a.test_wide_index:mac+=['--test-wide-index']
-    if a.test_local_payload_roundtrip and not a.test_features:raise ValueError('Local payload roundtrip requires the owner-observation feature flags')
+    if a.test_local_payload_roundtrip and not a.test_features:raise ValueError('Local payload roundtrip requires the state-observation feature flags')
     if a.test_features:mac+=['--test-owner-readback']
     if a.test_local_payload_roundtrip:mac+=['--test-local-payload-roundtrip']
     if a.rtx_vision:

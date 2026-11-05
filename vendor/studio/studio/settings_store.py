@@ -81,8 +81,7 @@ def ensure_pair_token() -> str:
 
 
 # --------------------------------------------------------------------------------------------------
-# Runtime remote-access toggle (user 2026-08-04: "remote access should be enabled/disabled from the
-# GUI at runtime — never a separate startup script / relaunch"). The daemon binds 0.0.0.0 so a phone
+# Runtime remote access is controlled by the GUI without restarting. The daemon binds 0.0.0.0 so a phone
 # on the LAN CAN reach it, but the auth middleware 403-rejects every non-local caller until this
 # persisted flag is true. Default FALSE => locked to localhost, byte-for-byte the old behaviour.
 # Stored in its OWN file (like the token / gpu-assignment stores) so an engine-settings save never
@@ -119,8 +118,7 @@ def save_remote_access_enabled(enabled: bool) -> bool:
 
 
 # --------------------------------------------------------------------------------------------------
-# H3 Prompt Enhance backend selection (user 2026-08-05: "the enhancer backend choice must be a
-# persisted, GUI-settable option — no hidden env-only config"). The H3 Context-IR enhancer at the
+# H3 Prompt Enhance backend selection is persisted and editable in the GUI. The enhancer at the
 # adapter chokepoint (adapter._maybe_enhance_h3) can run on several backends; this persisted flag
 # picks WHICH:
 #   auto            -> the resolution chain: configured endpoint -> live LLM preset -> local vision
@@ -327,8 +325,7 @@ def paths() -> dict:
     }
 
 
-# Editable data-location roots (user 2026-06-03: "data locations should all be editable/browse, not
-# env vars"). Persisted to a STABLE app-data file (independent of output_dir, which itself can change).
+# Editable data-location roots are persisted independently of output_dir, which can itself change.
 _PATH_KEYS = ("output_dir", "models_root", "model_fast_root", "model_archive_root", "datasets_dir", "loras_dir")
 _PATH_ENVS = {
     "output_dir": "STUDIO_OUTPUT_DIR",
@@ -408,8 +405,7 @@ def _slow_model_root_allowed(value: str) -> bool:
 
 
 # --------------------------------------------------------------------------------------------------
-# Per-model / per-service GPU assignment (user 2026-06-09: "assign models to a gpu... so everytime
-# they are started they go to the same place").
+# Persist per-model and per-service GPU assignments across launches.
 #
 # THE GPU-INDEX CONVENTION (adopted app-wide): indices are stored in NVIDIA-SMI PCI-BUS ORDER, i.e.
 # what `nvidia-smi --query-gpu=index` reports with CUDA_DEVICE_ORDER=PCI_BUS_ID.

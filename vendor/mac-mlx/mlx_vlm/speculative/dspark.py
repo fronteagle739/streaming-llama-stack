@@ -222,7 +222,7 @@ def _dspark_rounds(
     b = int(first_bonus)
     emitted = 1  # first bonus already yielded by the caller
     timing = getattr(draft_model, "phase_timing", None)
-    # v41 port lever 3 (2026-09-15): cost-feedback admission control. A serial step is a zero-draft
+    # Cost-feedback admission control. A serial step is a zero-draft
     # round through the same verify/commit/rollback code below; the controller sees wall-clock ms
     # per round (measured at the walk, which forces the target tokens) and committed counts.
     controller = None

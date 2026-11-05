@@ -221,7 +221,7 @@ class Negotiation(unittest.TestCase):
 
 
 class WholePromptEngram(unittest.TestCase):
-    """PAIRFIX: a multi-sweep prompt admits its whole prompt's Engram rows once, outside the sweep search."""
+    """a multi-sweep prompt admits its whole prompt's Engram rows once, outside the sweep search."""
     def plan(self, **extra):
         from slstack.combo_producer import prefill_arguments
         cfg = dict(context=1000001, producer_profile='ultra', yoco_keep=2541, ctx_cache_precision='bf16',

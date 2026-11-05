@@ -1157,7 +1157,7 @@ def _connect(
             # is INTERFACE-SCOPED (RTF_IFSCOPE on bridge0); a long-lived mlx_vlm serve process's connect can
             # fail the kernel route lookup with EHOSTUNREACH (errno 65) — emitting NO packet — even with a
             # valid ARP entry + a source-IP bind, while fresh processes resolve it. Binding the socket to the
-            # interface forces the scoped route. (tcpdump 2026-06-16: 0 packets on the failing connect.)
+            # interface forces the scoped route. (tcpdump 0 packets on the failing connect.)
             if source_iface and sys.platform == "darwin":
                 try:
                     _IP_BOUND_IF = 25  # <netinet/in.h> on macOS

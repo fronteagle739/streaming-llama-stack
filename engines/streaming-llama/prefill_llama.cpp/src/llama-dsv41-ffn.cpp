@@ -79,7 +79,7 @@ llama_dsv41_ffn_graph::result llama_dsv41_ffn_graph::routed_impl(
         product_ids=ggml_cpy(ctx,selected,w.expert_slots);ggml_set_name(product_ids,"dsv41_expert_slot_copy");
     }
     if(w.native_fp4_layout){
-        std::fprintf(stderr,"DSVAPPEND_PACKED_FFN rows=%lld native_half=%d expert_slots=%d weight_slots=%lld layout=%s\n",
+        std::fprintf(stderr,"DSV41_PACKED_FFN rows=%lld native_half=%d expert_slots=%d weight_slots=%lld layout=%s\n",
             (long long)count,int(native_half),int(w.expert_slots!=nullptr),(long long)w.gate->ne[2],w.expert_slots?"slot-interleaved":"full-planes");
         GGML_ASSERT(!native_half);
         auto *routed=ggml_new_tensor_2d(ctx,GGML_TYPE_F32,width,count);

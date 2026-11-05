@@ -1038,7 +1038,7 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mv_id(ggml_m
 // ----------------------------------------------------------------------------
 
 ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_dsa_indexer_score(ggml_metal_library_t lib, const ggml_tensor * op) {
-    // Phase 37 fix: this getter is called both for raw GGML_OP_DSA_INDEXER_SCORE
+    // fix: this getter is called both for raw GGML_OP_DSA_INDEXER_SCORE
     // and from the GGML_OP_DSA_INDEXER_TOPK chain (score-then-topk). Accept both
     // op types — the score pipeline itself doesn't depend on op->op being SCORE.
     GGML_ASSERT(op->op == GGML_OP_DSA_INDEXER_SCORE || op->op == GGML_OP_DSA_INDEXER_TOPK);
@@ -1104,7 +1104,7 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_flash_attn_ext_s
     return res;
 }
 
-// Phase 29 (UNTESTED) — v2 sparse FA pipeline. Activated when env
+// (UNTESTED) — v2 sparse FA pipeline. Activated when env
 // LLAMA_METAL_SPARSE_FA_V2=1 is set in the dispatcher arm. See
 // kernel_flash_attn_ext_sparse_v2_f16 in ggml-metal.metal for design.
 ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_flash_attn_ext_sparse_v2(ggml_metal_library_t lib, const ggml_tensor * op) {

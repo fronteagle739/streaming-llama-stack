@@ -77,12 +77,12 @@ struct kv_artifact_header_v1_cache_hit {
     uint64_t pd_session_id;               // 8 — Mac-side LRU snapshot handle
 };                                        // total: 8
 
-// Phase 5.3 (2026-05-12) — v1.7 extension: per-slot multi-slot demux metadata.
+// v1.7 extension: per-slot multi-slot demux metadata.
 struct kv_artifact_header_v1_slot {
     int32_t source_slot_id;               // 4 — RTX-side slot index; -1 = legacy
 };                                        // total: 4
 
-// ship-embeddings (2026-06-01) — v1.8 extension: image-embeddings re-prefill metadata.
+// ship-embeddings — v1.8 extension: image-embeddings re-prefill metadata.
 // When img_cell_count>0 the stored payload carries img_cell_count*img_n_embd f32
 // image embeddings appended AFTER the prompt text+tokens.
 struct kv_artifact_header_v1_image {
@@ -91,14 +91,14 @@ struct kv_artifact_header_v1_image {
     uint32_t img_pos_start;               // 4 — abs sequence position of first image cell
     uint32_t reserved_img;                // 4 — reserved (0)
 };                                        // total: 16
-// v2.0 (MTP-on-KV-inject, 2026-06-24): per-token last-layer hidden states (fp16) appended at the very END of the
+// v2.0 (MTP-on-KV-inject, ): per-token last-layer hidden states (fp16) appended at the very END of the
 // payload (after raw_image), sized mtp_hidden_n_tokens*mtp_hidden_n_embd uint16. Lets the receiver warm the MTP sidecar.
 struct kv_artifact_header_v2_mtp {
     uint32_t mtp_hidden_n_tokens;         // 4 — # hidden rows (= streamed prefix token count); 0 = none
     uint32_t mtp_hidden_n_embd;           // 4 — hidden dim per row (= model n_embd)
 };                                        // total: 8
 
-// v2.1 (format_minor >= 10) — delta shipping (2026-09-10)
+// v2.1 (format_minor >= 10) — delta shipping
 struct kv_artifact_header_v2_delta {
     uint32_t base_prefix_cells;           // 4 — cells [0, base) the decoder holds; the payload's cells start at base
     uint32_t reserved_delta;              // 4

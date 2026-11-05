@@ -787,7 +787,7 @@ python -m mlx_vlm.convert --hf-path <local_dir> --mlx-path <mlx_dir>
             # For affine quant: packed_last = input_dim * bits / 32,
             # and scales_last = input_dim / group_size.
             # So bits = packed_last * 32 / (scales_last * group_size).
-            # 2026-09-10: the group size is PER MODULE. DeepSeek-V4-Flash-0731-MLX carries a global
+            # the group size is PER MODULE. DeepSeek-V4-Flash-0731-MLX carries a global
             # group_size 64 plus 494 per-module overrides {group_size: 32, mode: mxfp4|mxfp8}; using
             # the global 64 halved every derived bit width (4-bit mxfp4 -> "2-bit mxfp4 @ 64") and
             # mx.quantize refused ("mxfp4 quantization requires group size 32 but got 64"). Take the
@@ -1374,7 +1374,7 @@ def _manifest_from_quantized_model(model, config):
         if not isinstance(cfg, dict):
             cfg = {}
         # A quantized module records its own group_size/bits; prefer those, then the per-module
-        # override, then the global value (2026-09-10: the group size is per module).
+        # override, then the global value (the group size is per module).
         mod = _module_at_path(model, wk.rsplit(".weight", 1)[0])
         gs = int(getattr(mod, "group_size", 0) or cfg.get("group_size", group_size) or group_size)
         input_dim = s_arr.shape[-1] * gs
@@ -1829,7 +1829,7 @@ def load_processor(
     # Checkpoints that ship a CUSTOM processor class (Kimi-K2.x: kimi_k25_processor.py +
     # tokenization_kimi.py, registered via config auto_map) cannot be instantiated without this;
     # transformers raises "Unrecognized processing class ... Can't instantiate a processor, a
-    # tokenizer, an image processor..." (measured 2026-08-11 on Kimi-K2.7-Code-MLX-Q3.5-INF).
+    # tokenizer, an image processor..." (on Kimi-K2.7-Code-MLX-Q3.5-INF).
     #
     # This matches what load_config() already does for the very same directory a few lines above,
     # so it introduces no new trust: the config path already executes that checkpoint's code.

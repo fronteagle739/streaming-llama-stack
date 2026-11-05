@@ -1,6 +1,6 @@
 #pragma once
 // Diagnostic scaffolding only; compile alongside the three boundary-* variants.
-// Unbuilt owner-review candidate: explicit HC/expert seed injection, no qualification.
+// Unbuilt candidate requiring review: explicit HC/expert seed injection, no qualification.
 #include "ggml.h"
 #include "ggml-backend.h"
 #include <array>

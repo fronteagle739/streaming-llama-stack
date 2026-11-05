@@ -7,7 +7,7 @@
 #include "ggml-dsv41-gather-half.h"
 #include <atomic>
 
-// ─── K-quant get_rows support (added 2026-04-19 for split-decode Phase 2b) ──
+// ─── K-quant get_rows support (added for split-decode ) ──
 // The legacy k_get_rows template (below) works only on non-K-quants where a
 // value can be dequantized in isolation via a dequantize_kernel_t(block, iqs).
 // K-quants (Q4_K, Q5_K, Q6_K, ...) need block-at-a-time dequant because

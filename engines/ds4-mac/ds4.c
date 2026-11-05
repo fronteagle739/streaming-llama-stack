@@ -24861,7 +24861,7 @@ static bool metal_graph_encode_decode_layer_phase(
     if (qkv_rms_fused && ok && !kv_rope_fused) {
         metal_graph_debug_dump_tensor("KVnorm", metal_graph_kv(g), DS4_N_HEAD_DIM, il, pos);
     }
-    /* Phase B head slice: under the real TP split this rank computes only
+    /* head slice: under the real TP split this rank computes only
      * its heads [tp_head0, tp_head0 + tp_heads) end to end — q_b rows, the
      * per-head norm/rope, the attention core and its owned output groups.
      * q and heads hold the owned half compactly at the buffer base; the
@@ -73035,7 +73035,7 @@ static int engine_compute_cuda_ep_placement(
     return 0;
 }
 
-/* Phase A: classify multi-tier on a freshly-opened engine (model loaded,
+/* classify multi-tier on a freshly-opened engine (model loaded,
  * weights bound). Pure CPU — no GPU init required. Sets e->multi_tier,
  * e->n_placement_entries, e->placement[], and e->gpu_cfg. Returns 0 on
  * success. NULL config is a no-op. */

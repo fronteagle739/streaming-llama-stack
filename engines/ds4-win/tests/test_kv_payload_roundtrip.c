@@ -1,7 +1,7 @@
 /*
  * Model-backed payload gate for the DSV4 session serializer.
  *
- * Run the complete Phase 0 + Phase 1 matrix with:
+ * Run the complete + matrix with:
  *   DS4_TEST_MODEL=/path/to/model.gguf ./test-kv-payload-roundtrip --all-formats
  *
  * Each case drives the engine API directly: sync -> stage -> new session ->
@@ -584,7 +584,7 @@ static int run_format_case(const payload_format_case *format, int context,
     ds4_tokens prompt = {0};
     int rc = build_prompt(engine, context, &prompt);
     if (rc == 0 && (phase0 || phase1)) {
-        /* A v2 load is retained in Phase 1 so the compatibility promise is a
+        /* A v2 load is retained in so the compatibility promise is a
          * behavioural gate rather than a source-level claim. */
         rc = run_roundtrip(engine, context, &prompt, format, false);
     }

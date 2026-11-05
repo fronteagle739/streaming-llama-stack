@@ -948,7 +948,7 @@ void ggml_metal_event_encode_wait(ggml_metal_event_t ev, ggml_metal_cmd_buf_t cm
     [cmd_buf encodeWaitForEvent:event value:atomic_load_explicit(&ev->value, memory_order_relaxed)];
 }
 
-// 2026-04-20: encode a wait that pairs with a FUTURE signal. Pre-bumps
+// encode a wait that pairs with a FUTURE signal. Pre-bumps
 // ev->value so the encoded wait target matches what the next signal
 // (host or GPU) will produce via fetch_add(1)+1. Used for host-signal
 // handoff in split-decode's gated compute — RX thread signals AFTER
@@ -976,7 +976,7 @@ void ggml_metal_event_encode_wait_prebump(ggml_metal_event_t ev, ggml_metal_cmd_
     [cmd_buf encodeWaitForEvent:event value:(uint64_t)target];
 }
 
-// 2026-04-20 split-decode: race-free variants that take an explicit target
+// split-decode: race-free variants that take an explicit target
 // from the caller. The encoder and signaler derive the SAME target from
 // the same input (typically a per-token counter), so there's no shared
 // atomic that both sides race to fetch_add. Caller guarantees strict
@@ -1053,7 +1053,7 @@ void ggml_metal_device_event_synchronize(ggml_metal_device_t dev, ggml_metal_eve
     GGML_UNUSED(dev);
 }
 
-// Phase 3 split-decode Mac event-graph — host-side signaling + waiting on
+// split-decode Mac event-graph — host-side signaling + waiting on
 // MTLSharedEvent. These are called from network RX/TX threads to release
 // GPU work that's waiting on encodeWaitForEvent.
 void ggml_metal_event_signal_host(ggml_metal_event_t ev) {
@@ -1065,7 +1065,7 @@ void ggml_metal_event_signal_host(ggml_metal_event_t ev) {
 void ggml_metal_event_wait_host(ggml_metal_event_t ev) {
     id<MTLSharedEvent> event = ev->obj;
     const int target = atomic_load_explicit(&ev->value, memory_order_relaxed);
-    // Phase 3: busy-spin. GPU-to-CPU signal via MTLSharedEvent is an
+    // busy-spin. GPU-to-CPU signal via MTLSharedEvent is an
     // atomic store; polling signaledValue is ~10 ns per read. Avoids
     // the ~50-100 us kernel-mode context switch that nanosleep(1us)
     // actually incurs, which is what made EVENT_SYNC benchmark the
@@ -1224,7 +1224,7 @@ bool ggml_metal_device_supports_op(ggml_metal_device_t dev, const struct ggml_te
         case GGML_OP_ARANGE:
             return true;
         case GGML_OP_DSA_INDEXER_SCORE:
-            // DSA indexer scoring — Phase M2 of .planning/metal_dsa_port.md.
+            // DSA indexer scoring.
             // Gates mirror prefill_llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu.
             return op->src[0]->type == GGML_TYPE_F16
                 && op->src[1]->type == GGML_TYPE_F32
@@ -1233,7 +1233,7 @@ bool ggml_metal_device_supports_op(ggml_metal_device_t dev, const struct ggml_te
                 && op->src[0]->ne[0] == 128
                 && has_simdgroup_reduction;
         case GGML_OP_DSA_INDEXER_TOPK:
-            // DSA indexer top-k — Phase M3.
+            // DSA indexer top-k.
             return op->src[0]->type == GGML_TYPE_F16
                 && op->src[1]->type == GGML_TYPE_F32
                 && op->src[2]->type == GGML_TYPE_F32
@@ -1241,7 +1241,7 @@ bool ggml_metal_device_supports_op(ggml_metal_device_t dev, const struct ggml_te
                 && op->src[0]->ne[0] == 128
                 && has_simdgroup_reduction;
         case GGML_OP_FLASH_ATTN_EXT_SPARSE:
-            // DSA sparse FA — Phase M4. F16 K/V only in this first port; Q8_0
+            // DSA sparse FA. F16 K/V only in this first port; Q8_0
             // K/V will need a dequant path (deferred, gated off here).
             if (op->src[0]->type != GGML_TYPE_F32) return false;
             if (op->src[1]->type != GGML_TYPE_F16) return false;

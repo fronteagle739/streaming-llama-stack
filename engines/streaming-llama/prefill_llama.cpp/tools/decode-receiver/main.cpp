@@ -58,7 +58,7 @@
 // the control socket (kv_port-1); if the hash matches, Mac replies with
 // hit=true and skips the prefill, reusing the existing KV cells.
 //
-// Phase A3 (2026-06-10, plan §3 / §6 A3): the RAM map is now backed by a
+// 3 (plan §3 / §6 A3): the RAM map is now backed by a
 // disk tier so a snapshot survives a receiver restart. Behaviour:
 //   * env LLAMA_PD_CACHE_DIR unset  => RAM-only (byte-identical legacy, no I/O)
 //   * env LLAMA_PD_CACHE_DIR=<dir>  => RAM hot tier (LLAMA_PD_CACHE_HOT, def 4)
@@ -101,7 +101,7 @@ static std::mutex                                g_prefix_cache_mu;
 static std::atomic<uint64_t>                     g_next_session_id{1};
 
 // ---------------------------------------------------------------------------
-// Phase A3: disk tier
+// 3: disk tier
 // ---------------------------------------------------------------------------
 namespace pd_disk {
 
@@ -407,7 +407,7 @@ static uint64_t g_active_prefix_hash = 0;  // 0 = no active snapshot
 static bool     g_active_cache_hit   = false;
 
 // ---------------------------------------------------------------------------
-// Stage 1 (2026-05-29): Mac resident-KV retention. When an incoming KV-artifact
+// Stage 1 Mac resident-KV retention. When an incoming KV-artifact
 // request EXTENDS the resident conversation, reuse the LIVE ctx + its KV instead
 // of recreating the context + re-importing + re-reserving the decode graph (the
 // measured ~6.2s/turn cost: the post-import graph RE-RESERVE; decode itself is
@@ -555,7 +555,7 @@ static bool pd_cache_lookup(uint64_t prefix_hash, uint32_t prefix_len_tokens,
     std::lock_guard<std::mutex> lk(g_prefix_cache_mu);
     auto it = g_prefix_cache.find(prefix_hash);
     if (it == g_prefix_cache.end()) {
-        // RAM miss — Phase A3: consult the disk tier, load + verify, and promote
+        // RAM miss — 3: consult the disk tier, load + verify, and promote
         // into the hot tier so the follow-on CACHE_HIT artifact resolves through
         // the same pd_cache_get_kv() path. Fail-open to a normal miss otherwise.
         KvSnapshot loaded;
@@ -665,7 +665,7 @@ static void pd_cache_update_kv(uint64_t prefix_hash, llama_context * ctx) {
     }
     kv_bytes.resize(written);
 
-    // Update the snapshot, then (Phase A3) write-through to disk while holding a
+    // Update the snapshot, then (3) write-through to disk while holding a
     // complete copy (token IDs + KV payload). The write itself runs OUTSIDE the
     // cache mutex (sequential file I/O can be slow; don't block the control
     // socket lookups). We copy the data we need under the lock, release, write.
@@ -779,7 +779,7 @@ static void pd_cache_insert(uint64_t prefix_hash, uint32_t prefix_len_tokens,
             (unsigned long long) prefix_hash, prefix_len_tokens,
             (unsigned long long) g_prefix_cache[prefix_hash].session_id,
             g_prefix_cache[prefix_hash].kv_data.size(), g_prefix_cache.size());
-    // Phase A3: if this insert already carried a complete KV payload (ctx passed
+    // 3: if this insert already carried a complete KV payload (ctx passed
     // directly), write it through to disk now. The common receiver path inserts
     // with ctx=nullptr (metadata only) and persists later in pd_cache_update_kv,
     // so this branch is NOT on the control-socket hot path — persisting inline
@@ -1408,7 +1408,7 @@ static bool apply_handoff_prompt(
                 // sliding window no longer covers logical_prefix, so the range cannot be dropped
                 // without leaving a hole the cache cannot reconstruct. Ignoring that return value
                 // left the trim silently un-done and handed llama_decode a batch starting BEFORE
-                // the KV's last position -- measured 2026-08-27 on DSV4-flash:
+                // the KV's last position -- on DSV4-flash:
                 //     RESIDENT logical_prefix=11320 ... trim+prefill tail
                 //     ISWA import coverage valid: sliding range [11327,11327]
                 //     init: ... the last position stored ... is X = 11327
@@ -1480,7 +1480,7 @@ static bool apply_handoff_prompt(
                 n_batch = parsed;
             }
         }
-        // Stage 1b (2026-05-29): on the RESIDENT-REUSE path, prefill a SMALL tail via
+        // Stage 1b on the RESIDENT-REUSE path, prefill a SMALL tail via
         // single-token steps (n_batch=1) so the n_tokens=1 decode-graph stays the active
         // reserved graph. A batched (n_tokens=tail) prefill perturbs the scheduler and
         // forces the first REAL decode to re-reserve the decode graph (~6s on the 1T MoE
@@ -1488,7 +1488,7 @@ static bool apply_handoff_prompt(
         // persists on the reused ctx, so single-token tail prefill reuses it with no
         // re-reserve. Only worthwhile for small tails (N*~27ms < ~6s reserve => N<~222);
         // large tails are faster batched (and should route to RTX streaming — Stage 2).
-        // REVERTED 2026-05-29: default 0 (disabled). Measurement showed single-token
+        // REVERTED default 0 (disabled). Measurement showed single-token
         // tail prefill runs at DECODE speed (~6.4 tok/s) — 74 tokens took 11.5s,
         // making the reuse turn WORSE (ttft 7.7s->16.3s). The batched suffix prefill
         // is already 22ms with NO graph reserve (the decode first token is 159-191ms,
@@ -1530,7 +1530,7 @@ static bool apply_handoff_prompt(
         // wait. With the sync after t_end this timer measured how long it took to hand work to the
         // GPU, not how long the GPU took -- and it reported the result as a throughput.
         //
-        // Measured 2026-08-31 on a resident-reuse turn: "prompt suffix prefill 9.4 ms
+        // on a resident-reuse turn: "prompt suffix prefill 9.4 ms
         // (1924.6 tok/s)" for an 18-token suffix, inside an enclosing span
         // [RDS_TIMING after_suffix=3324ms] whose other components were all zero
         // (after_seq_rm=0ms, detokenize=0ms). 1924 tok/s of prefill on a 1T MoE over Metal is not
@@ -1670,7 +1670,7 @@ static int run_prompt_session(llama_context * ctx, llama_model * model,
         // the whole batch --
         //     init: the tokens of sequence 0 ... have inconsistent sequence positions
         //      - the tokens for sequence 0 ... have a starting position of Y = 0
-        // -> "local prefill failed at token 0 (ret=-1)". Measured 2026-08-27: the RTX->Mac loop
+        // -> "local prefill failed at token 0 (ret=-1)". the RTX->Mac loop
         // decoded a 9,728-token KV artifact correctly and then failed EVERY short follow-up prompt,
         // because short prompts route PROMPT-DIRECT (below rtx crossover=3072) and land here.
         //
@@ -1750,7 +1750,7 @@ static int run_prompt_session(llama_context * ctx, llama_model * model,
             g_active_cache_hit   = false;  // this was a miss → we ran real prefill
             // Insert metadata-only snapshot now (kv_data filled by caller after
             // decode). Stash the canonical token IDs so the post-decode disk
-            // write-through (Phase A3) can persist them for token-exact verify.
+            // write-through (3) can persist them for token-exact verify.
             pd_cache_insert(snap_hash, (uint32_t) n_tokens, snap_model_fp, nullptr,
                             token_ids, n_tokens);
         }
@@ -2324,7 +2324,7 @@ static int run_decode_session(llama_context * ctx, llama_model * model,
     // 120 x 2 s is four minutes, and the comment beside it states the assumption it was betting
     // on: "Large KV imports (1.5 GB+) + tail prefill (13k+ tokens) can take 90+ seconds on the
     // Mac." When that work runs past four minutes the client exhausts its retries against a port
-    // that was always going to open, and the turn dies with a 500. Measured 2026-08-31: 120/120
+    // that was always going to open, and the turn dies with a 500. 120/120
     // attempts exhausted on the receiver's token port while it sat at 99% CPU doing precisely
     // the import and prefill that preceded the bind. It is a RACE, so it fails intermittently --
     // which is what made it look like a malformed KV artifact for two debugging sessions.
@@ -2404,7 +2404,7 @@ static int run_decode_session(llama_context * ctx, llama_model * model,
     // Imported KV may land on asynchronous GPU upload paths. Make the first decode consume the
     // fully materialized cache rather than queued copies.
     //
-    // MOVED ABOVE THE TIMER AND THE pos_max READ, 2026-08-31. This sync used to sit below both,
+    // MOVED ABOVE THE TIMER AND THE pos_max READ, . This sync used to sit below both,
     // and the comment explaining WHY it is needed was three lines under a timer that its own
     // reasoning invalidates: if the upload is asynchronous, then stopping the clock before the
     // wait measures the ENQUEUE, and `KV import 7.8 ms, 465267500 bytes` is 59.6 GB/s -- a figure
@@ -3151,7 +3151,7 @@ int main(int argc, char ** argv) {
 
     llama_backend_init();
 
-    // Phase A3: initialise the persistent PD-cache disk tier (no-op unless
+    // 3: initialise the persistent PD-cache disk tier (no-op unless
     // LLAMA_PD_CACHE_DIR is set). Indexes + compacts the dir on boot.
     pd_disk::init();
 
@@ -3192,7 +3192,7 @@ int main(int argc, char ** argv) {
         // prefill side is expected to set LLAMA_PREFILL_MLA_MATCH_LAYOUT=1 so
         // it writes v_trans=0 KV that matches our FA-on layout. Without this
         // default, MLA decode runs with FA off and pays a 17 GB compute buffer
-        // + 4x slower decode at long context (Bug #3, fixed 2026-04-25).
+        // + 4x slower decode at long context (Bug #3, fixed ).
         // Override with -fa or by leaving flash_attn=false explicitly via CLI.
         need_fa = true;
         fprintf(stderr, "[decode-server] Network mode + FA not forced: defaulting FA ENABLED "
@@ -3387,7 +3387,7 @@ int main(int argc, char ** argv) {
                     && g_resident_kv.source_slot_id == meta.source_slot_id
                     && !g_resident_kv.token_ids.empty()) {
                     reuse_n = resident_compute_lcp(g_resident_kv.token_ids, prompt_payload.token_ids);
-                    // 2026-06-01 FIX (multi-request garble root cause): reuse ONLY when the incoming prompt is a
+                    // FIX (multi-request garble root cause): reuse ONLY when the incoming prompt is a
                     // genuine EXTENSION of the resident — i.e. the LCP covers the ENTIRE resident (reuse_n >=
                     // resident token count). Multi-turn turns ARE extensions (resident = prior convo is a full
                     // prefix), so reuse stays fast there. For an UNRELATED new prompt the LCP is a tiny shared
@@ -3395,7 +3395,7 @@ int main(int argc, char ** argv) {
                     // PREFILL the whole 23k divergent tail (slow + diverges from the RTX's shipped KV -> garbage).
                     // Falling back to the import path (resident_reuse=false) uses the RTX's correct shipped KV.
                     const uint32_t resident_len = (uint32_t) g_resident_kv.token_ids.size();
-                    // 2026-08-27: the LCP being a full extension is necessary but NOT sufficient. Reuse
+                    // the LCP being a full extension is necessary but NOT sufficient. Reuse
                     // trims the live KV to reuse_n and prefills the tail, and on an iSWA cache that trim
                     // is REFUSED once the sliding window has moved past reuse_n -- llama_memory_seq_rm
                     // returns false and changes nothing, so the suffix batch then starts BEFORE the KV's

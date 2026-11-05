@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <cstdint>
 
-// 2026-05-29: the multi-ubatch streaming-prefill bug was found+fixed (stale f16 mask per layer-major
+// the multi-ubatch streaming-prefill bug was found+fixed (stale f16 mask per layer-major
 // loop -> LLAMA_PREFILL_F16_MASK_REFRESH in llama-context.cpp; the FA kernel was exonerated). The
 // KIMI_* in-kernel diagnostic printfs (KB0/DENOM/MASKAPPLY/MP8) are DISABLED for production cleanliness.
 // Re-enable for future kernel debugging by defining KIMI_KVMAX_DEBUG 1.
@@ -1014,7 +1014,7 @@ void launch_fattn(
     memcpy(&max_bias,      (const float *) KQV->op_params + 1, sizeof(float));
     memcpy(&logit_softcap, (const float *) KQV->op_params + 2, sizeof(float));
 
-    // Causal block-skip n_past (2026-05-30): op_params[4] is set by the host per-ubatch as
+    // Causal block-skip n_past op_params[4] is set by the host per-ubatch as
     // (pos_base + 1) when LLAMA_FA_CAUSAL_SKIP is enabled, else 0. Decode: 0 => -1 (disabled),
     // v>0 => n_past = v-1. Passed to the FA kernel to cap the K-loop at the tile's causal boundary
     // (race-free; no mask read). Default 0 => disabled => production untouched.
