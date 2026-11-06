@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ggml.h" // ggml_op
+#include "llama.h" // ggml_op and shared-library visibility
 
 #include <string>
 #include <set>
@@ -609,7 +609,7 @@ enum llm_tensor_layer {
 };
 
 struct LLM_KV {
-    LLM_KV(llm_arch arch, const char * suffix = nullptr);
+    LLAMA_API LLM_KV(llm_arch arch, const char * suffix = nullptr);
 
     llm_arch arch;
     const char * suffix;

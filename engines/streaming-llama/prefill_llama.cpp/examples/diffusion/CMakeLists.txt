@@ -1,0 +1,23 @@
+# shared core (the proven entropy-bound + self-conditioning denoiser), compiled once
+add_library(diffusion-core STATIC diffusion-core.cpp diffusion-core.h)
+target_link_libraries(diffusion-core PRIVATE llama common ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(diffusion-core PRIVATE cxx_std_17)
+
+# one-shot CLI (unchanged behavior; DREAM/LLADA masked path + DiffusionGemma entropy-bound)
+set(TARGET llama-diffusion-cli)
+add_executable(${TARGET} diffusion-cli.cpp)
+install(TARGETS ${TARGET} RUNTIME)
+target_link_libraries(${TARGET} PRIVATE diffusion-core llama common ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(${TARGET} PRIVATE cxx_std_17)
+
+# persistent HTTP server for DiffusionGemma (load once, OpenAI-compatible, per-request knobs)
+if (LLAMA_HTTPLIB)
+    set(TARGET llama-diffusion-server)
+    add_executable(${TARGET} diffusion-server.cpp)
+    install(TARGETS ${TARGET} RUNTIME)
+    target_link_libraries(${TARGET} PRIVATE diffusion-core llama common cpp-httplib ${CMAKE_THREAD_LIBS_INIT})
+    target_compile_features(${TARGET} PRIVATE cxx_std_17)
+    if (WIN32)
+        target_link_libraries(${TARGET} PRIVATE ws2_32)
+    endif()
+endif()

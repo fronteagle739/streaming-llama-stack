@@ -34,7 +34,33 @@ python -B scripts/qfn_pinned_build.py --help
 QFN's CMake target is `qfn-engine`, in
 `engines/streaming-llama/prefill_llama.cpp`, with `LLAMA_QFN_ENGINE=ON` and
 `GGML_CUDA=ON`. Supply the JSON, DirectStorage and packed-kernel dependencies
-described in [QFN setup](docs/QFN.md). Build the Mac `ds4-server` target with
+described in [QFN setup](docs/QFN.md). Use the official
+[Microsoft.Direct3D.DirectStorage 1.3.0 NuGet package](https://www.nuget.org/packages/Microsoft.Direct3D.DirectStorage/1.3.0),
+with the version pinned explicitly (using the NuGet CLI):
+
+```powershell
+nuget install Microsoft.Direct3D.DirectStorage -Version 1.3.0 -Source https://api.nuget.org/v3/index.json -OutputDirectory dependencies
+```
+
+From an x64 Native Tools console, pass the extracted package root through the
+CMake flag `-DDS_SDK_DIR`; it must contain `native/include/dstorage.h`,
+`native/lib/x64/dstorage.lib` and `native/bin/x64` runtime DLLs. Headers alone
+cannot complete the link. Run the following commands under the RAM guard with
+explicit physical-memory, commit and available-memory budgets:
+
+```powershell
+cmake -S engines/streaming-llama/prefill_llama.cpp -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLAMA_QFN_ENGINE=ON -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=120 -DDS_SDK_DIR="$((Resolve-Path dependencies/Microsoft.Direct3D.DirectStorage.1.3.0).Path)" -DOPENSSL_ROOT_DIR=OPENSSL_ROOT
+cmake --build build-native --target qfn-engine --parallel 2
+Copy-Item build-native/bin/*.dll bin/
+Copy-Item dependencies/Microsoft.Direct3D.DirectStorage.1.3.0/native/bin/x64/*.dll bin/
+bin/qfn-engine.exe --model MODEL.slpack --host-budget-gib 6 --ctx 100000 --validate-options
+```
+
+Keep the CUDA runtime and cuBLAS DLLs available through the CUDA installation's
+`bin` directory on `PATH`. Replace `OPENSSL_ROOT` with an OpenSSL 3 development
+installation, and keep its runtime DLLs available on `PATH` as well. The native
+option check parses the settings without loading a model or starting a listener.
+Build the Mac `ds4-server` target with
 `DS4_NATIVE_FRONTIER_ENABLE=1` for paired serving. Keep one stable executable
 path and its companion libraries for each engine. The guarded build wrapper
 records all source and link inputs and detects drift before serving.

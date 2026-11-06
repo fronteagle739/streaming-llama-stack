@@ -23,7 +23,9 @@ set `QFN_JSON_INCLUDE_DIR`, `QFN_DSTORAGE_INCLUDE_DIR`, and
 
 Run CMake from an x64 Native Tools console. Set `DS_SDK_DIR` to the complete
 DirectStorage SDK package root, including headers, import libraries and runtime
-DLLs. The QFN include/library defaults and the shared llama target use that
+DLLs. Use the official `Microsoft.Direct3D.DirectStorage` NuGet package pinned
+to **1.3.0**; see the [installation command](../README.md#install-build-and-run).
+The QFN include/library defaults and the shared llama target use that
 same SDK root. Headers alone are insufficient. For example, under the RAM guard:
 
 ```text
@@ -35,9 +37,10 @@ The native grouped kernel exporter under `engines/streaming-llama/flashinfer-sm1
 requires the pinned CUTLASS DSL 4.8.1 and the checked-in FlashInfer source closure.
 Pass explicit workspace, DSL-site, AOT directory and CUTLASS runtime arguments
 to its exporter and build script. Use the existing physical-memory guardian for
-all compilation and engine runs. A fresh source build of this publication
-snapshot has not yet been qualified; the incremental build helper accepts an
-explicit prior Ninja build and native link recipe and is not a fresh-build claim.
+all compilation and engine runs. The CMake target includes its native tokenizer,
+vision and packed-kernel dependencies. The incremental build helper separately
+accepts an explicit prior Ninja build and native link recipe; it does not replace
+the clean CMake build above.
 
 Copy `examples/single-machine/qfn.example.json` to a local config, provide the
 model pack, complete tokenizer GGUF, GPU identity and explicit physical-memory

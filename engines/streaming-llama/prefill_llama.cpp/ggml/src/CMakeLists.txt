@@ -485,6 +485,10 @@ if(CMAKE_SYSTEM_NAME MATCHES "visionOS")
 endif()
 
 if (BUILD_SHARED_LIBS)
+    if (WIN32)
+        # Streamed executors slice graphs across the shared-library boundary.
+        target_sources(ggml-base PRIVATE ggml-exports.def)
+    endif()
     foreach (target ggml-base ggml)
         set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         target_compile_definitions(${target} PRIVATE GGML_BUILD)

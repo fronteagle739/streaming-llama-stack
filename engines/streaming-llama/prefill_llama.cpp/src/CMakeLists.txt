@@ -206,6 +206,12 @@ target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
 
+# The streamed cache uses CUDA virtual-memory driver entry points.
+if (GGML_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(llama PRIVATE CUDA::cuda_driver)
+endif()
+
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llama PRIVATE LLAMA_BUILD)

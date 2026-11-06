@@ -27,7 +27,7 @@ add_executable(qfn-engine qfn-main.cpp qfn-serve.cpp qfn-engine.cpp qfn-pack.cpp
     "${QFN_SRC_DIR}/llama-dsv41-engram-prefetch.cpp"
     "${QFN_SRC_DIR}/llama-dsv41-engram.cpp")
 target_compile_features(qfn-engine PRIVATE cxx_std_17)
-target_compile_definitions(qfn-engine PRIVATE GGML_USE_CUDA=1 LLAMA_DIRECTSTORAGE LLAMA_BUILD WF_STATIC)
+target_compile_definitions(qfn-engine PRIVATE GGML_USE_CUDA=1 LLAMA_DIRECTSTORAGE WF_STATIC)
 target_include_directories(qfn-engine PRIVATE "${QFN_SRC_DIR}" "${PROJECT_SOURCE_DIR}/ggml/src" "${PROJECT_SOURCE_DIR}/include"
     "${PROJECT_SOURCE_DIR}/common" "${QFN_JSON_INCLUDE_DIR}" "${QFN_DSTORAGE_INCLUDE_DIR}")
 target_link_libraries(qfn-engine PRIVATE common llama ggml-base ggml-cpu ggml-cuda ggml CUDA::cudart

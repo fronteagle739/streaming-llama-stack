@@ -6,6 +6,8 @@ config.local.json
 state/
 outputs/
 build/
+/build-native/
+/dependencies/
 *.log
 ds4.lock
 

@@ -68,10 +68,10 @@ struct llama_vocab {
         llama_token_attr attr;
     };
 
-    llama_vocab();
-    ~llama_vocab();
+    LLAMA_API llama_vocab();
+    LLAMA_API ~llama_vocab();
 
-    void load(llama_model_loader & ml, const LLM_KV & kv);
+    LLAMA_API void load(llama_model_loader & ml, const LLM_KV & kv);
 
     std::string get_tokenizer_model() const;
     std::string get_tokenizer_pre() const;
@@ -79,7 +79,7 @@ struct llama_vocab {
     enum llama_vocab_type     get_type()     const;
     enum llama_vocab_pre_type get_pre_type() const;
 
-    uint32_t n_tokens() const;
+    LLAMA_API uint32_t n_tokens() const;
     uint32_t n_token_types() const;
 
     std::string type_name() const;
@@ -149,18 +149,18 @@ struct llama_vocab {
                          bool   add_special,
                          bool   parse_special) const;
 
-    std::vector<llama_token> tokenize(
+    LLAMA_API std::vector<llama_token> tokenize(
             const std::string & raw_text,
                          bool   add_special,
                          bool   parse_special = false) const;
 
     // Optional transformation of ordinary BPE fragments AFTER the existing
     // special-token partition. The original overload and all special handling stay intact.
-    std::vector<llama_token> tokenize(const std::string & raw_text, bool add_special, bool parse_special,
+    LLAMA_API std::vector<llama_token> tokenize(const std::string & raw_text, bool add_special, bool parse_special,
                                     std::string (*normalize_text)(const std::string &)) const;
 
     // does not write null-terminator to buf
-    int32_t token_to_piece(
+    LLAMA_API int32_t token_to_piece(
                   llama_token   token,
                          char * buf,
                       int32_t   length,

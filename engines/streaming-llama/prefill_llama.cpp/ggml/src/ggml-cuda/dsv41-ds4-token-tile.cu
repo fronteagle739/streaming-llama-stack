@@ -32,6 +32,7 @@ SOFTWARE.
 // sees each selected ID once; records for other queries carry disjoint masks.
 #include "dsv41-ds4-token-tile.cuh"
 #include "ggml-dsv41-shared-sparse.h"
+#include "ggml-dsv41-attention-g16.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
